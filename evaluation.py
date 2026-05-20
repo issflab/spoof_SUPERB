@@ -10,6 +10,7 @@ def calculate_EER(cm_scores_file):
     # cm_scores_file =  'score_cm.txt'
 
     # Load CM scores
+    # cm_data = np.genfromtxt(cm_scores_file, dtype=str, skip_header=1)
     cm_data = np.genfromtxt(cm_scores_file, dtype=str)
     cm_utt_id = cm_data[:, 0]
     cm_sources = cm_data[:, 1]

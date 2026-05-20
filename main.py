@@ -1,6 +1,7 @@
 import argparse
 import sys
 import os
+from pathlib import Path
 import numpy as np
 import torch
 from torch import nn
@@ -27,6 +28,13 @@ from tqdm import tqdm
 
 __author__ = "Hashim Ali"
 __email__ = "alhashim@umich.edu"
+
+
+REPO_ROOT = Path(__file__).resolve().parent
+CONFIG_PATH = REPO_ROOT / "configs" / "AASIST.conf"
+OUTPUTS_ROOT = REPO_ROOT / "outputs"
+LOGS_ROOT = OUTPUTS_ROOT / "logs"
+METRICS_ROOT = OUTPUTS_ROOT / "models"
 
 
 def evaluate_accuracy(dev_loader, model, device):
@@ -261,7 +269,7 @@ if __name__ == '__main__':
     if args.model_path:
         cfg.pretrained_checkpoint = args.model_path
 
-    with open("./AASIST.conf", "r") as f_json:
+    with open(CONFIG_PATH, "r") as f_json:
         args_config = json.loads(f_json.read())
 
     optim_config = args_config["optim_config"]
@@ -276,7 +284,8 @@ if __name__ == '__main__':
     if args.comment:
         model_tag = model_tag + '_{}'.format(args.comment)
     
-    writer = SummaryWriter(f'logs/{model_tag}')
+    LOGS_ROOT.mkdir(parents=True, exist_ok=True)
+    writer = SummaryWriter(str(LOGS_ROOT / model_tag))
 
     # prepare save path
     model_save_path = os.path.join(cfg.save_dir, model_tag)
@@ -342,7 +351,7 @@ if __name__ == '__main__':
 
     # optimizer + scheduler
     # load external config if exists
-    with open("./AASIST.conf", "r") as f_json:
+    with open(CONFIG_PATH, "r") as f_json:
         args_config = json.loads(f_json.read())
     optim_config = args_config["optim_config"]
     optim_config["epochs"] = args.num_epochs
@@ -351,10 +360,10 @@ if __name__ == '__main__':
     optimizer_swa = SWA(optimizer)
 
     # make directory for metric logging
-    metric_path = os.path.join(model_tag, "metrics")
-    os.makedirs(metric_path, exist_ok=True)
+    metric_path = METRICS_ROOT / model_tag / "metrics"
+    metric_path.mkdir(parents=True, exist_ok=True)
 
-    os.path.join(metric_path, "dev_score.txt")
+    os.path.join(str(metric_path), "dev_score.txt")
     # train vs eval
     if cfg.mode == 'train':
         best_val_eer = 1
@@ -363,9 +372,15 @@ if __name__ == '__main__':
         for epoch in range(args.num_epochs):
             train_loss = train_epoch(train_loader, model, optimizer, device)
 
-            val_loss = produce_evaluation(dev_loader, model, device, os.path.join(metric_path, "dev_score.txt"), dev_proto)
+            val_loss = produce_evaluation(
+                dev_loader,
+                model,
+                device,
+                os.path.join(str(metric_path), "dev_score.txt"),
+                dev_proto,
+            )
 
-            dev_eer = calculate_EER(cm_scores_file=os.path.join(metric_path, "dev_score.txt"))
+            dev_eer = calculate_EER(cm_scores_file=os.path.join(str(metric_path), "dev_score.txt"))
 
             writer.add_scalar('train_loss', train_loss, epoch)
             writer.add_scalar('val_loss', val_loss, epoch)

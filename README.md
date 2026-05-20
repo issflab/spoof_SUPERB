@@ -8,7 +8,7 @@
 
 Clone this repository to your workspace using the following command:
 ```ruby
-git clone https://github.com/issflab/ASD_SUPERB.git
+git clone https://github.com/issflab/spoof_SUPERB.git
 ```
 
 Create the conda environment from the provided YAML file:
@@ -18,7 +18,7 @@ conda env create -f environment.yaml
 
 Activate the environment:
 ```ruby
-conda activate ASD_SUPERB
+conda activate spoof_SUPERB
 ```
 
 ## Data preparation
