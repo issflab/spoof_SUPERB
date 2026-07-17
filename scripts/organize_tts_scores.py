@@ -63,7 +63,7 @@ DATASET_SCORE_TOKENS = {
 }
 
 DEFAULT_UTT_COLUMNS = {
-    "ASV19": 1,
+    "ASV19": 2,
     "ASV5": 2,
     "FamousFigures": 1,
     "MLAAD-En": 1,
@@ -161,6 +161,25 @@ def sanitize_name(name: str) -> str:
     sanitized = re.sub(r"[^A-Za-z0-9._-]+", "_", str(name).strip())
     sanitized = sanitized.strip("._-")
     return sanitized or "tts_system"
+
+
+def normalize_utterance_id(value: object, keep_attack_prefix: bool = False) -> str:
+    text = "" if value is None else str(value).strip()
+    if not text:
+        return ""
+
+    parts = re.split(r"[\\/]", text)
+    basename = parts[-1]
+    if "." in basename:
+        basename = basename.rsplit(".", 1)[0]
+
+    # For SpoofCeleb, the attack-code directory prefix (e.g. "a15") distinguishes
+    # systems that share the same speaker/utterance base names across all attacks.
+    # Without the prefix, every attack code would resolve to the same utterance set.
+    if keep_attack_prefix and len(parts) >= 2:
+        return parts[0].strip() + "/" + basename.strip()
+
+    return basename.strip()
 
 
 def human_col_to_index(column_number: int) -> int:
@@ -328,7 +347,13 @@ def build_score_index(score_dir: Path) -> dict[str, dict[str, Path]]:
             print(f"[INFO] Skipping unsupported score file extension: {path.name}")
             continue
 
-        dataset, ssl_model = parse_score_filename(path)
+        # dataset, ssl_model = parse_score_filename(path)
+        try:
+            dataset, ssl_model = parse_score_filename(path)
+        except ValueError as exc:
+            print(f"[WARN] Skipping unrecognized score file: {path.name} ({exc})")
+            continue
+
         dataset_map = score_index.setdefault(ssl_model, {})
         if dataset in dataset_map:
             raise ValueError(
@@ -393,12 +418,15 @@ def collect_tts_utterances_for_dataset(
                     f"but lookup requires index {required_max_index}."
                 )
 
-            utterance_id = str(parts[utt_col_index]).strip().split(".")[0]
+            utterance_id = normalize_utterance_id(
+                parts[utt_col_index],
+                keep_attack_prefix=(dataset == "Spoof-Celeb"),
+            )
             protocol_value = str(parts[protocol_col_index]).strip()
 
             if lookup_type == "code":
                 is_match = protocol_value.casefold() == lookup_key.casefold()
-            elif lookup_type == "name":
+            elif lookup_type in {"model_name", "name"}:
                 is_match = normalize_text(protocol_value) in aliases
             else:
                 raise ValueError(
@@ -458,7 +486,7 @@ def build_utterance_index(
     return utterance_index
 
 
-def read_score_file(score_path: Path) -> pd.DataFrame:
+def read_score_file(score_path: Path, dataset: str = "") -> pd.DataFrame:
     try:
         score_df = pd.read_csv(
             score_path,
@@ -478,7 +506,10 @@ def read_score_file(score_path: Path) -> pd.DataFrame:
     if first_row == [column.casefold() for column in SCORE_COLUMNS]:
         score_df = score_df.iloc[1:].reset_index(drop=True)
 
-    score_df["filename"] = score_df["filename"].astype(str).str.strip().str.split(".").str[0]
+    keep_prefix = dataset == "Spoof-Celeb"
+    score_df["filename"] = score_df["filename"].map(
+        lambda v: normalize_utterance_id(v, keep_attack_prefix=keep_prefix)
+    )
     return score_df
 
 
@@ -489,7 +520,7 @@ def filter_score_file(
     tts_normalized: str,
     ssl_model: str,
 ) -> pd.DataFrame:
-    score_df = read_score_file(score_path)
+    score_df = read_score_file(score_path, dataset=dataset)
     if score_df.empty:
         print(f"[WARN] Score file is empty: {score_path}")
         return pd.DataFrame(columns=["dataset", "filename", "key", "score", "tts_normalized", "ssl_model"])
