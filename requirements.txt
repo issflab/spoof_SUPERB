@@ -1,17 +1,59 @@
-numpy
+# ---------------------------------------------------------------------------
+# CUDA / torch stack
+#
+# Host driver is 575.57.08 -> supports CUDA up to 12.9.
+# Do NOT use cu130 wheels (torch >= 2.9): they build against CUDA 13.0 and
+# torch.cuda.is_available() returns False with
+#   "The NVIDIA driver on your system is too old (found version 12090)".
+# This is what broke the spoof_SUPERB env (it had torch 2.11.0+cu130).
+#
+# The pins below match the verified-working ASD_SUPERB env.
+# Install with:
+#   pip install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cu126
+# ---------------------------------------------------------------------------
+--extra-index-url https://download.pytorch.org/whl/cu126
+
+torch==2.7.1
+torchaudio==2.7.1
+
+# Core numeric / audio stack (pinned to the verified-working versions)
+numpy==2.2.6
+scipy==1.15.3
+librosa==0.11.0
+soundfile==0.13.1
+s3prl==0.4.18
+scikit-learn==1.5.1
+pandas==2.3.1
+
+# Training / logging utilities
+tensorboardX==2.6.4
+torchcontrib==0.0.2
+tqdm==4.67.1
+PyYAML==6.0.2
+
+# ---------------------------------------------------------------------------
+# Optional: required only for the SSAST upstream (ssast_frame_base).
+# s3prl hard-requires exactly timm==0.4.5, which in turn imports torchvision.
+# Install with --no-deps so pip cannot re-resolve (and downgrade) torch:
+#   pip install --no-deps timm==0.4.5 torchvision==0.22.1
+# torchvision 0.22.1 is the build matching torch 2.7.1.
+# ---------------------------------------------------------------------------
+# timm==0.4.5
+# torchvision==0.22.1
+
+# ---------------------------------------------------------------------------
+# Optional: the WavLabLM upstream (wavlablm_ek_40k) additionally requires
+# ESPnet, which is a heavy install and can disturb the torch/numpy pins above.
+# Install deliberately and preferably into a dedicated env:
+#   s3prl/external_tools/install_espnet.sh
+# ---------------------------------------------------------------------------
+espnet
+
+# Misc / analysis + plotting (unpinned; not CUDA-sensitive)
 matplotlib
-torch
-torchaudio
-transformers
-librosa
-pandas
-wav2clip
-speechbrain
-s3prl
+seaborn
 plotly
 kaleido
-seaborn
-scikit-learn==1.5.1
-tensorboardX
-torchcontrib
-tqdm
+transformers
+wav2clip
+speechbrain
