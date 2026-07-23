@@ -200,12 +200,7 @@ def main() -> None:
         fontsize=8,
         bbox_to_anchor=(0.5, -0.01),
     )
-    fig.suptitle(
-        "MLAAD v10: per-TTS-system EER (%) across representative SSL models, "
-        "ranked by mean EER (easiest to hardest)",
-        fontsize=12,
-        y=0.995,
-    )
+    # No suptitle: the figure carries a LaTeX caption in the paper.
 
     out_png = OUT_DIR / "eer_by_tts_system_ranked.png"
     out_csv = OUT_DIR / "eer_by_tts_system_ranked.csv"
