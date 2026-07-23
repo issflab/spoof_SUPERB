@@ -179,7 +179,7 @@ def main() -> None:
     fig = plt.figure(figsize=(14.5, 11))
     gs = fig.add_gridspec(
         1, 6,
-        width_ratios=[0.22, 8, 2.6, 0.22, 8, 0.32],
+        width_ratios=[0.22, 8, 1.3, 0.22, 8, 0.32],
         wspace=0.05,
     )
     ax_strip_l = fig.add_subplot(gs[0, 0])
