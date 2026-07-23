@@ -64,6 +64,7 @@ REPRESENTATIVE = [
 ]
 
 VMAX = 50.0  # colour saturates at chance, matching the sibling figures
+Y_TICK_ROTATION = 20  # gentle tilt on the system (row) labels; 0 = horizontal
 
 # Generation-mode strip: colour + fixed legend order.
 MODE_LABEL = {"AR": "AR", "NAR": "NAR", "unknown": "Closed / Undisclosed"}
@@ -126,7 +127,14 @@ def draw_panel(
     ax_strip.set_xticks([0])
     ax_strip.set_xticklabels(["Mode"], fontsize=7, rotation=90)
     ax_strip.set_yticks(range(len(block)))
-    ax_strip.set_yticklabels(block.index, fontsize=6.2)
+    ax_strip.set_yticklabels(
+        block.index,
+        fontsize=6.2,
+        rotation=Y_TICK_ROTATION,
+        ha="right",
+        va="center",
+        rotation_mode="anchor",
+    )
     ax_strip.tick_params(length=0)
     for spine in ax_strip.spines.values():
         spine.set_visible(False)
@@ -168,10 +176,10 @@ def main() -> None:
           f"{mat['Mean'].iloc[-1]:.1f} (hardest: {mat.index[-1]})")
     print(f"split: left panel ranks 1-{half}, right panel {half + 1}-{n}")
 
-    fig = plt.figure(figsize=(13.5, 11))
+    fig = plt.figure(figsize=(14.5, 11))
     gs = fig.add_gridspec(
         1, 6,
-        width_ratios=[0.22, 8, 1.1, 0.22, 8, 0.32],
+        width_ratios=[0.22, 8, 2.6, 0.22, 8, 0.32],
         wspace=0.05,
     )
     ax_strip_l = fig.add_subplot(gs[0, 0])
