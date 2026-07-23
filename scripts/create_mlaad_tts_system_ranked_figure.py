@@ -47,10 +47,14 @@ ARCH_CSV = SCORE_ROOT / "mlaad_v10_tts_architecture_groups.csv"
 OUT_DIR = Path(__file__).resolve().parent.parent / "outputs" / "figures_mlaad_tts"
 EER_CSV = OUT_DIR / "eer_by_tts_system.csv"
 
-# The 7 representative SSL models used in the paper's existing TTS figures,
-# one per performance tier, in a fixed baseline -> best reading order.
+# Representative SSL models, one per performance tier, in a fixed weakest -> best
+# reading order.  FBANK (the handcrafted baseline) is deliberately excluded: it
+# sits at chance for 76 of 91 systems (mean 52.4, std 2.7), so it carries no
+# per-system signal and, being pinned near 50, it compresses the Mean difficulty
+# gradient the figure is built to show -- dropping it widens the spread from
+# 40.7 to 47.4 pp while leaving the ranking essentially unchanged (Spearman
+# 0.998 vs the FBANK-inclusive order).
 REPRESENTATIVE = [
-    "FBANK",
     "APC",
     "wav2vec 2.0 Large",
     "HuBERT Large",
