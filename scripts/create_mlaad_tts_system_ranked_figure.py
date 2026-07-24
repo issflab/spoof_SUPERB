@@ -67,7 +67,7 @@ VMAX = 50.0  # colour saturates at chance, matching the sibling figures
 Y_TICK_ROTATION = 20  # gentle tilt on the system (row) labels; 0 = horizontal
 X_TICK_ROTATION = 20  # SSL model (column) labels; 90 = vertical, lower = flatter
 LEGEND_Y = 0.035      # mode-legend height; raise to tuck it under the labels
-LEGEND_X = 0.02       # mode-legend left edge, as a figure fraction
+LEGEND_X = 0.35       # mode-legend centre, as a figure fraction (0.5 = centred)
 
 # Generation-mode strip: colour + fixed legend order.
 MODE_LABEL = {"AR": "AR", "NAR": "NAR", "unknown": "Closed"}
@@ -200,7 +200,7 @@ def main() -> None:
     mode_legend = [Patch(facecolor=MODE_COLOR[m], label=m) for m in MODE_ORDER]
     fig.legend(
         handles=mode_legend,
-        loc="lower left",
+        loc="lower center",
         ncol=3,
         frameon=False,
         fontsize=8,
