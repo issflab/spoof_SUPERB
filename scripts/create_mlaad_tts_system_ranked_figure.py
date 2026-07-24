@@ -65,7 +65,7 @@ REPRESENTATIVE = [
 
 VMAX = 50.0  # colour saturates at chance, matching the sibling figures
 Y_TICK_ROTATION = 20  # gentle tilt on the system (row) labels; 0 = horizontal
-X_TICK_ROTATION = 30  # SSL model (column) labels; 90 = vertical, lower = flatter
+X_TICK_ROTATION = 20  # SSL model (column) labels; 90 = vertical, lower = flatter
 LEGEND_Y = 0.035      # mode-legend height; raise to tuck it under the labels
 
 # Generation-mode strip: colour + fixed legend order.
