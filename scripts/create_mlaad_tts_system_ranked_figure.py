@@ -69,12 +69,12 @@ X_TICK_ROTATION = 20  # SSL model (column) labels; 90 = vertical, lower = flatte
 LEGEND_Y = 0.035      # mode-legend height; raise to tuck it under the labels
 
 # Generation-mode strip: colour + fixed legend order.
-MODE_LABEL = {"AR": "AR", "NAR": "NAR", "unknown": "Closed / Undisclosed"}
-MODE_ORDER = ["AR", "NAR", "Closed / Undisclosed"]
+MODE_LABEL = {"AR": "AR", "NAR": "NAR", "unknown": "Closed"}
+MODE_ORDER = ["AR", "NAR", "Closed"]
 MODE_COLOR = {
     "AR": "#4C72B0",
     "NAR": "#55A868",
-    "Closed / Undisclosed": "#B0B0B0",
+    "Closed": "#B0B0B0",
 }
 
 
