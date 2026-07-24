@@ -66,6 +66,7 @@ REPRESENTATIVE = [
 VMAX = 50.0  # colour saturates at chance, matching the sibling figures
 Y_TICK_ROTATION = 20  # gentle tilt on the system (row) labels; 0 = horizontal
 X_TICK_ROTATION = 30  # SSL model (column) labels; 90 = vertical, lower = flatter
+LEGEND_Y = 0.035      # mode-legend height; raise to tuck it under the labels
 
 # Generation-mode strip: colour + fixed legend order.
 MODE_LABEL = {"AR": "AR", "NAR": "NAR", "unknown": "Closed / Undisclosed"}
@@ -202,7 +203,7 @@ def main() -> None:
         ncol=3,
         frameon=False,
         fontsize=8,
-        bbox_to_anchor=(0.5, -0.01),
+        bbox_to_anchor=(0.5, LEGEND_Y),
     )
     # No suptitle: the figure carries a LaTeX caption in the paper.
 
