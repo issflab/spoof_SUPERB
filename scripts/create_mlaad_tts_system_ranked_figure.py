@@ -65,6 +65,7 @@ REPRESENTATIVE = [
 
 VMAX = 50.0  # colour saturates at chance, matching the sibling figures
 Y_TICK_ROTATION = 20  # gentle tilt on the system (row) labels; 0 = horizontal
+X_TICK_ROTATION = 45  # SSL model (column) labels; 90 = vertical
 
 # Generation-mode strip: colour + fixed legend order.
 MODE_LABEL = {"AR": "AR", "NAR": "NAR", "unknown": "Closed / Undisclosed"}
@@ -125,7 +126,8 @@ def draw_panel(
     strip_cmap = ListedColormap([MODE_COLOR[m] for m in MODE_ORDER])
     ax_strip.imshow(codes, aspect="auto", cmap=strip_cmap, vmin=0, vmax=len(MODE_ORDER) - 1)
     ax_strip.set_xticks([0])
-    ax_strip.set_xticklabels(["Mode"], fontsize=7, rotation=90)
+    ax_strip.set_xticklabels(
+        ["Mode"], fontsize=7, rotation=X_TICK_ROTATION, ha="right")
     ax_strip.set_yticks(range(len(block)))
     ax_strip.set_yticklabels(
         block.index,
@@ -158,7 +160,9 @@ def draw_panel(
         annot_kws={"size": 5.4},
         yticklabels=False,
     )
-    ax_heat.set_xticklabels(ax_heat.get_xticklabels(), fontsize=7.5, rotation=90)
+    ax_heat.set_xticklabels(
+        ax_heat.get_xticklabels(), fontsize=7.5,
+        rotation=X_TICK_ROTATION, ha="right")
     ax_heat.set_ylabel("")
     ax_heat.set_xlabel("")
     # separate the Mean summary column from the model columns
