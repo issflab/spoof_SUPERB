@@ -75,10 +75,6 @@ MODELS = [
     ("mae_ast_frame", "MAE-AST-FRAME", "Spectrogram"),
 ]
 
-GRID = 25  # relative-depth bins for the common heatmap axis
-MIN_LAYERS_FOR_HEATMAP = 10  # models shallower than this go to the CSV only
-
-
 def load_weights(slug: str) -> np.ndarray | None:
     ck = CKPT_ROOT / f"{PREFIX}{slug}" / "swa.pth"
     if not ck.exists():
@@ -106,20 +102,53 @@ def summarize(w: np.ndarray) -> dict:
     }
 
 
-def to_grid(w: np.ndarray) -> np.ndarray:
-    """Interpolate a length-L weight vector onto GRID points in relative depth,
-    then min-max normalise within the model so the weak tilt is visible."""
-    L = len(w)
-    xs = np.linspace(0, 1, L)
-    g = np.interp(np.linspace(0, 1, GRID), xs, w)
-    rng = g.max() - g.min()
-    return (g - g.min()) / rng if rng > 0 else np.full(GRID, 0.5)
+# Depth panels: models are grouped by layer count so every panel can use a
+# genuine integer layer-number x-axis. Mixing e.g. a 13-layer and a 25-layer
+# model on one integer axis would misplace the shorter model's last layer in the
+# middle of the axis, which is exactly what the relative-depth axis was hiding.
+PANELS = [("Deep models (24--27 layers)", 20, 99),
+          ("Base / spectrogram models (12--13 layers)", 12, 19)]
+ROW_ORDER = ["Contrastive", "Predictive", "Spectrogram", "Generative"]
+
+
+def norm_within(w: np.ndarray) -> np.ndarray:
+    rng = w.max() - w.min()
+    return (w - w.min()) / rng if rng > 0 else np.full(len(w), 0.5)
+
+
+def draw_panel(ax, models, summary, weights, title):
+    """Heatmap: rows = models, x = actual layer index, colour = within-model
+    normalised weight, white dot = peak layer. Shorter models are NaN-padded."""
+    models = sorted(models, key=lambda d: (ROW_ORDER.index(summary[d]["group"]), d))
+    maxL = max(summary[d]["n_layers"] for d in models)
+    mat = np.full((len(models), maxL), np.nan)
+    labels, groups = [], []
+    for r, d in enumerate(models):
+        w = norm_within(weights[d])
+        mat[r, :len(w)] = w
+        labels.append(f"{d}  (L={summary[d]['n_layers']}, sp={summary[d]['spread']:.3f})")
+        groups.append(summary[d]["group"])
+    sns.heatmap(
+        mat, cmap="viridis", ax=ax, yticklabels=labels,
+        xticklabels=list(range(maxL)),
+        cbar_kws={"label": "within-model normalised weight"},
+    )
+    for r, d in enumerate(models):
+        ax.plot(summary[d]["peak_layer"] + 0.5, r + 0.5, "o",
+                color="white", markersize=5, markeredgecolor="black")
+    for r in range(1, len(groups)):
+        if groups[r] != groups[r - 1]:
+            ax.axhline(r, color="black", linewidth=1.5)
+    ax.set_title(title, fontsize=10)
+    ax.set_xlabel("SSL layer index (0 = CNN output; white dot = peak-weight layer)")
+    ax.set_ylabel("")
+    ax.set_xticklabels(ax.get_xticklabels(), fontsize=7, rotation=0)
+    ax.tick_params(axis="y", labelsize=8, rotation=0)
 
 
 def main() -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    summary, heat_rows, heat_labels, heat_groups = {}, [], [], []
-    missing = []
+    summary, weights, missing = {}, {}, []
 
     for slug, disp, group in MODELS:
         w = load_weights(slug)
@@ -129,45 +158,26 @@ def main() -> None:
         s = summarize(w)
         s["group"] = group
         summary[disp] = s
-        if s["n_layers"] >= MIN_LAYERS_FOR_HEATMAP:
-            heat_rows.append(to_grid(w))
-            heat_labels.append(f"{disp}  (L={s['n_layers']}, sp={s['spread']:.3f})")
-            heat_groups.append(group)
+        weights[disp] = w
 
     (OUT_DIR / "layer_weights.json").write_text(json.dumps(summary, indent=2))
     print(f"Extracted weights for {len(summary)} models; no weights for: {missing}")
-    print(f"\n{'model':20s} {'L':>3s} {'CoG(rel)':>8s} {'peak(rel)':>9s} {'spread':>7s}  group")
+    print(f"\n{'model':20s} {'L':>3s} {'peak':>4s} {'spread':>7s}  group")
     for disp, s in summary.items():
-        print(f"{disp:20s} {s['n_layers']:3d} {s['cog_rel']:8.3f} {s['peak_rel']:9.3f} "
+        print(f"{disp:20s} {s['n_layers']:3d} {s['peak_layer']:4d} "
               f"{s['spread']:7.3f}  {s['group']}")
 
-    # --- heatmap: deep models, relative depth, within-model normalised --------
-    order = ["Contrastive", "Predictive", "Spectrogram", "Generative"]
-    zipped = sorted(zip(heat_labels, heat_rows, heat_groups),
-                    key=lambda t: (order.index(t[2]), t[0]))
-    labels = [z[0] for z in zipped]
-    mat = np.array([z[1] for z in zipped])
-    groups = [z[2] for z in zipped]
+    panel_models = [[d for d in summary if lo <= summary[d]["n_layers"] <= hi]
+                    for _, lo, hi in PANELS]
+    used = {d for pm in panel_models for d in pm}
+    print(f"\nShallow models in CSV only (<12 layers): "
+          f"{[d for d in summary if d not in used]}")
 
-    fig, ax = plt.subplots(figsize=(9, 0.42 * len(labels) + 1.2))
-    sns.heatmap(
-        mat, cmap="viridis", ax=ax, yticklabels=labels,
-        xticklabels=[f"{i/(GRID-1):.1f}" for i in range(GRID)],
-        cbar_kws={"label": "within-model normalised layer weight"},
-    )
-    # centre-of-gravity marker per row
-    for r, lab in enumerate(labels):
-        disp = lab.split("  (")[0]
-        ax.plot((summary[disp]["cog_rel"]) * (GRID - 1) + 0.5, r + 0.5,
-                "o", color="white", markersize=4, markeredgecolor="black")
-    # group separators
-    for r in range(1, len(groups)):
-        if groups[r] != groups[r - 1]:
-            ax.axhline(r, color="black", linewidth=1.5)
-    ax.set_xlabel("relative layer depth (0 = first, 1 = last); white dot = centre of gravity")
-    ax.set_ylabel("")
-    ax.set_xticklabels(ax.get_xticklabels(), fontsize=7, rotation=0)
-    ax.tick_params(axis="y", labelsize=8, rotation=0)
+    heights = [0.45 * len(pm) + 1.0 for pm in panel_models]
+    fig, axes = plt.subplots(len(PANELS), 1, figsize=(11, sum(heights)),
+                             gridspec_kw={"height_ratios": heights})
+    for ax, (title, _, _), pm in zip(axes, PANELS, panel_models):
+        draw_panel(ax, pm, summary, weights, title)
     fig.tight_layout()
     fig.savefig(OUT_DIR / "layer_weight_profiles.png", dpi=300, bbox_inches="tight")
     plt.close(fig)
