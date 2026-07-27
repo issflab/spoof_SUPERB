@@ -164,3 +164,8 @@ outputs/
 
 # model directories
 model_*
+
+# runtime control files: read mid-run to steer a batch (e.g. eval_asvld.py
+# re-reads .asvld_skip per condition), so their contents are per-run state
+# rather than something to version.
+.asvld_skip
