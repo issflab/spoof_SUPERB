@@ -50,12 +50,23 @@ def pad(x, max_len=64600):
     return np.tile(x, (1, num_repeats))[:, :max_len][0]
 
 
-def enumerate_mlaad(mlaad_root, data_base):
-    """Return sorted list of utt_ids (relative to data_base) for every fake wav."""
-    fake_root = os.path.join(mlaad_root, "fake")
+def enumerate_wavs(root, data_base):
+    """Return sorted list of utt_ids (relative to data_base) for every wav under root.
+
+    Used for both datasets:
+      MLAAD    -> root=/data/Data/MLAAD/fake   label=spoof
+      M-AILABS -> root=/data/Data/MAILabs      label=bonafide
+    utt_ids are relative to data_base (/data/Data), reproducing the id format of
+    the reference score files.
+    """
     utts = []
-    for dirpath, _, filenames in os.walk(fake_root):
+    for dirpath, _, filenames in os.walk(root):
         for fn in filenames:
+            # Skip macOS AppleDouble sidecars ('._name.wav'): 176-245 byte metadata
+            # stubs, not audio. M-AILABS carries 6 of them and they are absent from
+            # the reference score files, so they are not real utterances.
+            if fn.startswith("._"):
+                continue
             if fn.endswith(".wav"):
                 full = os.path.join(dirpath, fn)
                 utts.append(os.path.relpath(full, data_base))
@@ -75,6 +86,30 @@ def read_restrict_utts(restrict_path):
     return utts
 
 
+def read_protocol_csv(path, attack_col_bonafide="a00"):
+    """Read a SpoofCeleb-style protocol CSV -> [(utt_id, label), ...].
+
+    Header: file,speaker,attack. The utt_id is the 'file' column VERBATIM (it
+    already carries the .flac extension and reproduces the reference ids), and
+    audio lives at {audio_base}/{file}.
+
+    Unlike MLAAD (all spoof) and M-AILABS (all bonafide), SpoofCeleb's label is
+    per-utterance: attack == 'a00' is bonafide, every other attack is spoof.
+    That is why the single --label flag cannot drive this dataset.
+    """
+    import csv
+    pairs = []
+    with open(path, newline="") as f:
+        for row in csv.DictReader(f):
+            fn = (row.get("file") or "").strip()
+            if not fn:
+                continue
+            attack = (row.get("attack") or "").strip()
+            label = "bonafide" if attack == attack_col_bonafide else "spoof"
+            pairs.append((fn, label))
+    return pairs
+
+
 class MLAADDataset(Dataset):
     def __init__(self, utt_ids, data_base, cut=64600, sr=16000):
         self.utt_ids = utt_ids
@@ -89,9 +124,15 @@ class MLAADDataset(Dataset):
         import librosa  # imported in worker to keep fork light
         utt_id = self.utt_ids[index]
         path = os.path.join(self.data_base, utt_id)
-        X, _ = librosa.load(path, sr=self.sr)
-        X_pad = pad(X, self.cut)
-        return Tensor(X_pad), utt_id
+        try:
+            X, _ = librosa.load(path, sr=self.sr)
+            X_pad = pad(X, self.cut)
+            return Tensor(X_pad), utt_id, True
+        except Exception:
+            # An undecodable file must not kill a multi-hour run. Return silence
+            # flagged not-ok; the caller drops these rows so no bogus score is
+            # ever written, and reports how many were skipped.
+            return Tensor(np.zeros(self.cut, dtype=np.float32)), utt_id, False
 
 
 def build_model(ssl_model, model_path, device):
@@ -109,12 +150,27 @@ def main():
     ap.add_argument("--ssl_model", required=True, help="s3prl upstream name (e.g. xls_r_300m)")
     ap.add_argument("--output_file", required=True)
     ap.add_argument("--mlaad_root", default="/data/Data/MLAAD")
+    ap.add_argument("--enumerate_root", default=None,
+                    help="Dir to walk for wavs. Default {mlaad_root}/fake. "
+                         "For M-AILABS pass /data/Data/MAILabs.")
+    ap.add_argument("--label", default="spoof",
+                    help="Ground-truth label written in col 3: 'spoof' for MLAAD fake, "
+                         "'bonafide' for M-AILABS.")
+    ap.add_argument("--restrict_prefix", default="MLAAD/",
+                    help="With --restrict_to, only keep reference utt_ids under this prefix.")
     ap.add_argument("--data_base", default="/data/Data",
                     help="Base dir the utt_id is written relative to (reference uses /data/Data).")
     ap.add_argument("--cuda_device", default="cuda:0")
     ap.add_argument("--restrict_to", default=None,
                     help="Optional reference score file; only score utt_ids present there "
                          "(used for a fast canary/verification against the reference subset).")
+    ap.add_argument("--protocol_csv", default=None,
+                    help="Protocol-driven mode (SpoofCeleb): CSV with columns file,speaker,attack. "
+                         "The eval set and the PER-UTTERANCE label come from this file, so --label "
+                         "is ignored. Requires --audio_base.")
+    ap.add_argument("--audio_base", default=None,
+                    help="With --protocol_csv: dir the 'file' column is relative to, e.g. "
+                         "/data/Data/SpoofCeleb/flac/evaluation")
     ap.add_argument("--limit", type=int, default=0, help="If >0, score only the first N (debug).")
     ap.add_argument("--batch_size", type=int, default=32)
     ap.add_argument("--num_workers", type=int, default=6)
@@ -133,13 +189,31 @@ def main():
     device = args.cuda_device if torch.cuda.is_available() else "cpu"
     print(f"[{args.ssl_model}] device={device}", flush=True)
 
-    if args.restrict_to:
+    enum_root = args.enumerate_root or os.path.join(args.mlaad_root, "fake")
+
+    # label_map is None for the MLAAD/M-AILABS paths (single --label for every row);
+    # protocol mode fills it so each row gets its own ground-truth label.
+    label_map = None
+
+    if args.protocol_csv:
+        if not args.audio_base:
+            print("  [ERROR] --protocol_csv requires --audio_base", flush=True)
+            return 1
+        pairs = read_protocol_csv(args.protocol_csv)
+        args.data_base = args.audio_base
+        eval_list = [u for u, _ in pairs]
+        label_map = dict(pairs)
+        n_bona = sum(1 for _, l in pairs if l == "bonafide")
+        print(f"  protocol {args.protocol_csv}: {len(eval_list)} utts "
+              f"({n_bona} bonafide, {len(eval_list) - n_bona} spoof), "
+              f"audio_base={args.audio_base}", flush=True)
+    elif args.restrict_to:
         restrict = read_restrict_utts(args.restrict_to)
-        # Keep only MLAAD (spoof) ids that exist on disk under data_base.
+        # Keep only ids under the requested prefix that exist on disk.
         eval_list = []
         missing = 0
         for u in restrict:
-            if not u.startswith("MLAAD/"):
+            if not u.startswith(args.restrict_prefix):
                 continue
             if os.path.isfile(os.path.join(args.data_base, u)):
                 eval_list.append(u)
@@ -148,11 +222,11 @@ def main():
         # de-dup while preserving order
         seen = set()
         eval_list = [u for u in eval_list if not (u in seen or seen.add(u))]
-        print(f"  restrict_to reference: {len(eval_list)} MLAAD utts on disk "
+        print(f"  restrict_to reference: {len(eval_list)} {args.restrict_prefix} utts on disk "
               f"({missing} referenced but missing)", flush=True)
     else:
-        eval_list = enumerate_mlaad(args.mlaad_root, args.data_base)
-        print(f"  enumerated {len(eval_list)} MLAAD fake wavs", flush=True)
+        eval_list = enumerate_wavs(enum_root, args.data_base)
+        print(f"  enumerated {len(eval_list)} wavs under {enum_root}", flush=True)
 
     if args.limit and args.limit > 0:
         eval_list = eval_list[: args.limit]
@@ -172,14 +246,24 @@ def main():
 
     use_amp = args.amp and device.startswith("cuda")
     fname_list, score_list = [], []
+    n_unreadable = 0
     with torch.no_grad():
-        for batch_x, utt_id in tqdm(loader, desc=args.ssl_model, mininterval=30.0):
+        for batch_x, utt_id, ok in tqdm(loader, desc=args.ssl_model, mininterval=30.0):
             batch_x = batch_x.to(device)
             with torch.autocast("cuda", dtype=torch.float16, enabled=use_amp):
                 batch_out = model(batch_x)
             batch_score = batch_out[:, 1].float().data.cpu().numpy().ravel().tolist()
-            fname_list.extend(utt_id)
-            score_list.extend(batch_score)
+            ok_list = ok.tolist() if hasattr(ok, "tolist") else list(ok)
+            for u, s, good in zip(utt_id, batch_score, ok_list):
+                if good:
+                    fname_list.append(u)
+                    score_list.append(s)
+                else:
+                    n_unreadable += 1
+
+    if n_unreadable:
+        print(f"  [WARN] {n_unreadable} unreadable audio files skipped (no score written)",
+              flush=True)
 
     assert len(fname_list) == len(score_list), f"{len(fname_list)} != {len(score_list)}"
 
@@ -187,7 +271,8 @@ def main():
     tmp = args.output_file + ".part"
     with open(tmp, "w") as fh:
         for fn, sco in zip(fname_list, score_list):
-            fh.write("{} - spoof {}\n".format(fn, sco))
+            key = label_map[fn] if label_map is not None else args.label
+            fh.write("{} - {} {}\n".format(fn, key, sco))
     os.replace(tmp, args.output_file)
     print(f"  scores saved -> {args.output_file}  ({len(fname_list)} lines)", flush=True)
     return 0

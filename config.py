@@ -18,7 +18,10 @@ Usage:
         print(cfg.model_arch)
 
 Configuration Options:
-    model_arch: Backend Model architecture to use ('aasist', 'sls', 'linear_head').
+    model_arch: Backend Model architecture to use ('aasist', 'sls', 'linear_head',
+                'aasist_raw', 'lfcc_gmm').
+                'aasist_raw' and 'lfcc_gmm' are the non-SSL reference baselines:
+                they take no s3prl upstream and ignore --ssl_model.
     dataset: Name of the dataset(s) used for training. Used for naming conventions.
     database_path: Root directory containing audio data.
     protocols_path: Directory containing protocol files.
@@ -38,6 +41,7 @@ Methods:
 
 Environment Variables:
     SSL_MODEL_ARCH
+    SSL_SAVE_DIR
     SSL_DATABASE_PATH
     SSL_PROTOCOLS_PATH
     SSL_MODE
@@ -53,7 +57,8 @@ import os
 @dataclass
 class Config:
     #'aasist', 'sls', or 'xlsrmamba'
-    model_arch: Literal['aasist', 'sls', 'linear_head'] = 'aasist'
+    # Non-SSL baselines (no s3prl upstream): 'aasist_raw', 'lfcc_gmm'.
+    model_arch: Literal['aasist', 'sls', 'linear_head', 'aasist_raw', 'lfcc_gmm'] = 'aasist'
 
     # Dataset name
     # name this variable based on datasets being used to train the models
@@ -107,6 +112,7 @@ class Config:
 cfg = Config()
 
 cfg.model_arch = os.getenv('SSL_MODEL_ARCH', cfg.model_arch)
+cfg.save_dir = os.getenv('SSL_SAVE_DIR', cfg.save_dir)
 cfg.database_path = os.getenv('SSL_DATABASE_PATH', cfg.database_path)
 cfg.protocols_path = os.getenv('SSL_PROTOCOLS_PATH', cfg.protocols_path)
 cfg.mode = os.getenv('SSL_MODE', cfg.mode)

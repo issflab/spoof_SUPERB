@@ -12,7 +12,7 @@ For the paper we instead:
   - keep ALL 91 systems (TTS diversity is the contribution -- do not subset them),
   - show only the 6 representative SSL models used in the paper's other TTS
     figures (the SSL models are the instrument, not the object of study),
-  - add a `Mean` column = mean EER across those 7 shown models, and SORT systems
+  - add a `Mean` column = mean EER across those 6 shown models, and SORT systems
     by it, so the ordering is visibly explained by the value the reader can see,
   - split the ranked list into two side-by-side panels (a full-width figure*),
     reading left-to-right easiest -> hardest, sharing one colour scale,

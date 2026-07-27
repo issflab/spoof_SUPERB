@@ -28,6 +28,21 @@ PREFIX = "model_weighted_CCE_50_64_linear_head_ASV19_"
 # Models to skip (per user request). mockingjay_960hr is intentionally kept.
 SKIP = {"byol_a_2048", "mockingjay"}
 
+def gpu_uuids():
+    """Map GPU index -> UUID.
+
+    CUDA_VISIBLE_DEVICES by *index* fails to initialise on this host once another
+    process holds a different device ("CUDA driver initialization failed"), which
+    previously sent whole models to CPU. Selecting by UUID is unaffected and lets
+    all three GPUs run concurrently, so every launch pins its device by UUID.
+    """
+    out = subprocess.check_output(
+        ["nvidia-smi", "--query-gpu=uuid", "--format=csv,noheader"]).decode()
+    return [u.strip() for u in out.splitlines() if u.strip()]
+
+
+_GPU_UUIDS = gpu_uuids()
+
 _lock = threading.Lock()
 _results = {}
 
@@ -65,7 +80,7 @@ def run_one(ssl, ckpt, gpu):
         _results[ssl] = {"status": "running", "gpu": gpu, "started": time.time()}
     write_status()
 
-    env = dict(os.environ, CUDA_VISIBLE_DEVICES=str(gpu))
+    env = dict(os.environ, CUDA_VISIBLE_DEVICES=_GPU_UUIDS[gpu])
     cmd = [PY, os.path.join(REPO, "eval_mlaad.py"),
            "--model_path", ckpt, "--ssl_model", ssl,
            "--output_file", out_file, "--cuda_device", "cuda:0",

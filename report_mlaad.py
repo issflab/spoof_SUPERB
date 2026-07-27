@@ -27,7 +27,7 @@ OUT_DIR = "/data/ssl_anti_spoofing/asd_superb_score_files/linear_head_MLAAD_v10"
 REF_DIR = "/data/ssl_anti_spoofing/asd_superb_score_files/linear_head"
 MODELS_ROOT = "/data/ssl_anti_spoofing/asd_superb_models/linear_head_models"
 PREFIX = "model_weighted_CCE_50_64_linear_head_ASV19_"
-EXPECTED_LINES = 456000
+EXPECTED_LINES = 1040006
 
 
 def load(path):
