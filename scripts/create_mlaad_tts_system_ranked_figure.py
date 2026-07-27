@@ -10,7 +10,7 @@ For the paper we instead:
 
   - transpose: 91 systems become ROWS (names stay horizontal and scannable),
   - keep ALL 91 systems (TTS diversity is the contribution -- do not subset them),
-  - show only the 7 representative SSL models used in the paper's other TTS
+  - show only the 6 representative SSL models used in the paper's other TTS
     figures (the SSL models are the instrument, not the object of study),
   - add a `Mean` column = mean EER across those 7 shown models, and SORT systems
     by it, so the ordering is visibly explained by the value the reader can see,
@@ -82,7 +82,7 @@ MODE_COLOR = {
 def load_matrix() -> pd.DataFrame:
     """Return the representative-SSL EER matrix indexed by TTS system.
 
-    Rows = TTS systems, columns = the 7 representative models, plus a Mean
+    Rows = TTS systems, columns = the 6 representative models, plus a Mean
     column, sorted ascending by Mean (easiest first).
     """
     if not EER_CSV.is_file():
