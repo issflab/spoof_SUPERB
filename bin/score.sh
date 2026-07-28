@@ -20,34 +20,28 @@ SSL_MODEL="xls_r_300m"
 # Checkpoint: swa.pth for linear_head / aasist_raw, a GMM DIRECTORY for lfcc_gmm.
 MODEL_PATH="$MODELS_ROOT/${LINEAR_HEAD_PREFIX}${SSL_MODEL}/swa.pth"
 
-# Where the trial list comes from:
-#   benchmark     one of the 10 published sets (uses the reference score file)
-#   asvld         one ASVLD laundering condition (uses the ASVLD protocol)
-#   walk          every wav under a directory   (MLAAD, M-AILABS)
-#   protocol_csv  a file,speaker,attack CSV     (SpoofCeleb)
-SOURCE="benchmark"
+# WHAT TO SCORE. This one setting decides the trial list, the audio root and
+# where the output file is placed. Run `bin/score.sh --list_datasets` to see
+# every dataset and where its trial list comes from.
+#
+#   from the corpus/protocol   spoofceleb  Multilingual  MAILABS  asvspoofLD
+#   from a published score file (needs one present):
+#     eval_2019  asvspoof2021_LA  asvspoof2021_DF  asvspoof5
+#     deepfake_eval_2024  wild  Famous_Figures
+DATASET="spoofceleb"
 
-# --- for SOURCE=benchmark ---------------------------------------------------
-# eval_2019 | asvspoof2021_LA | asvspoof2021_DF | asvspoof5 |
-# deepfake_eval_2024 | wild | Famous_Figures | spoofceleb |
-# Multilingual | asvspoofLD
-DATASET="wild"
+# Override where the trial list comes from. Leave EMPTY to let the dataset
+# decide, which is almost always what you want.
+#   benchmark | asvld | walk | protocol_csv
+SOURCE=""
 
-# --- for SOURCE=asvld -------------------------------------------------------
+# Only for the asvld source: which laundering condition to score.
 # Noise_Addition | Reverberation | Resampling | Recompression | Filtering
 ASVLD_CONDITION="Noise_Addition"
 
-# --- for SOURCE=walk --------------------------------------------------------
-WALK_ROOT="$DATA_ROOT/MLAAD/fake"     # M-AILABS is $DATA_ROOT/MAILabs
-WALK_LABEL="spoof"                    # 'bonafide' for M-AILABS
-
 # --- output -----------------------------------------------------------------
-# Which benchmark set this run represents. Used to place the output in the
-# configured layout (see score_layout in configs/paths.yaml). For SOURCE=walk
-# this is Multilingual for MLAAD and MAILABS for M-AILABS.
-SCORED_DATASET="$DATASET"
-
-# Leave empty to place the file automatically. Set it to write somewhere else.
+# Leave empty to place the file in the configured layout (score_layout in
+# configs/paths.yaml). Set it to write somewhere else.
 OUTPUT_FILE=""
 
 # --- runtime ----------------------------------------------------------------
@@ -61,25 +55,19 @@ USE_AMP="no"        # KEEP THIS "no". fp16 overflow is what produced the NaN.
 
 FRONTEND="none"
 [ "$MODEL" = "linear_head" ] && FRONTEND="$SSL_MODEL"
+
 if [ -z "$OUTPUT_FILE" ]; then
     OUTPUT_FILE=$("$PY" -m spoof_superb.core.scorepath \
-        --system "$MODEL" --dataset "$SCORED_DATASET" --frontend "$FRONTEND")
+        --system "$MODEL" --dataset "$DATASET" --frontend "$FRONTEND")
 fi
 
 ARGS=(--model "$MODEL" --model_path "$MODEL_PATH" --output_file "$OUTPUT_FILE"
-      --source "$SOURCE" --cuda_device "$CUDA_DEVICE"
+      --dataset "$DATASET" --cuda_device "$CUDA_DEVICE"
       --batch_size "$BATCH_SIZE" --num_workers "$NUM_WORKERS" --n_jobs "$N_JOBS")
 
 [ "$MODEL" = "linear_head" ] && ARGS+=(--ssl_model "$SSL_MODEL")
-
-case "$SOURCE" in
-  benchmark)    ARGS+=(--dataset "$DATASET") ;;
-  asvld)        ARGS+=(--asvld_condition "$ASVLD_CONDITION") ;;
-  walk)         ARGS+=(--walk_root "$WALK_ROOT" --label "$WALK_LABEL") ;;
-  protocol_csv) ;;   # protocol and audio base come from configs/paths.yaml
-  *) echo "bin/score.sh: unknown SOURCE '$SOURCE'" >&2; exit 2 ;;
-esac
-
+[ -n "$SOURCE" ] && ARGS+=(--source "$SOURCE")
+[ "$SOURCE" = "asvld" ] && ARGS+=(--asvld_condition "$ASVLD_CONDITION")
 [ "$USE_AMP" = "yes" ] && ARGS+=(--amp)
 
 echo "+ python -m spoof_superb.scoring.driver ${ARGS[*]} $*"

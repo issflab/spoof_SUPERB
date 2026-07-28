@@ -49,6 +49,9 @@ from spoof_superb.core.scorefile import read_reference, read_utt_ids, report_eer
 from spoof_superb.scoring import backends
 from spoof_superb.scoring.datasets import (
     ASVLD_CONDITIONS,
+    SCOREABLE,
+    native_params,
+    native_source,
     ASVLD_ROOT,
     DATA,
     DATASETS,
@@ -79,11 +82,36 @@ DEFAULT_SKIP_CONDITIONS = ("Filtering",)
 DEFAULT_BATCH = {"linear_head": 32, "aasist_raw": 64, "lfcc_gmm": 0}
 
 
+def _apply_dataset_defaults(args):
+    """Let the dataset decide its own trial source and parameters.
+
+    The dataset is the single input: `--dataset spoofceleb` alone determines
+    the trial list, the audio root and the output path. `--source` and the
+    per-source flags stay available as overrides, but nothing has to be kept
+    in agreement by hand.
+    """
+    if args.dataset and args.dataset not in SCOREABLE:
+        print(f"[ERROR] unknown dataset {args.dataset!r}. Known: "
+              f"{', '.join(SCOREABLE)}")
+        return False
+
+    if args.source is None:
+        args.source = native_source(args.dataset) if args.dataset else "benchmark"
+
+    # Only fill parameters the caller did not set explicitly.
+    if args.dataset and args.source == native_source(args.dataset):
+        for key, value in native_params(args.dataset).items():
+            if getattr(args, key, None) in (None, "", 0):
+                setattr(args, key, value)
+    return True
+
+
 def _resolve_trials(args):
     """-> (utts, keys, resolve) for the selected source, or (None, None, None)."""
     if args.source == "benchmark":
         if args.dataset not in DATASETS:
-            print(f"[ERROR] unknown dataset {args.dataset!r}. Known: {', '.join(DATASETS)}")
+            print(f"[ERROR] {args.dataset!r} has no published reference score "
+                  f"file. Benchmark columns: {', '.join(DATASETS)}")
             return None, None, None
         spec = DATASETS[args.dataset]
         paths = ([args.reference_file] if args.reference_file
@@ -250,9 +278,10 @@ def build_parser():
                     help="s3prl upstream name; required for --model linear_head")
     ap.add_argument("--output_file")
 
-    ap.add_argument("--source", choices=SOURCES, default="benchmark",
-                    help="where the trial list and labels come from")
-    ap.add_argument("--dataset", help="benchmark source: one of " + ", ".join(DATASETS))
+    ap.add_argument("--source", choices=SOURCES, default=None,
+                    help="override where the trial list comes from; by default "
+                         "the dataset decides")
+    ap.add_argument("--dataset", help="one of " + ", ".join(SCOREABLE))
     ap.add_argument("--reference_ssl", default=DEFAULT_REFERENCE_SSL,
                     help="SSL model whose score file defines the trial list")
     ap.add_argument("--reference_file", default=None,
@@ -260,24 +289,22 @@ def build_parser():
 
     ap.add_argument("--asvld_condition", choices=ASVLD_CONDITIONS,
                     help="asvld source: which laundering condition to score")
-    ap.add_argument("--protocols_dir", default=os.path.join(ASVLD_ROOT, "protocols"))
-    ap.add_argument("--audio_base_dir", default=ASVLD_ROOT,
+    ap.add_argument("--protocols_dir", default=None)
+    ap.add_argument("--audio_base_dir", default=None,
                     help="asvld source: dir containing {condition}/flac/*.flac")
     ap.add_argument("--skip_conditions", nargs="*", default=list(DEFAULT_SKIP_CONDITIONS),
                     help="ASVLD conditions to treat as a no-op")
 
-    ap.add_argument("--walk_root", default=os.path.join(MLAAD_ROOT, "fake"),
-                    help="walk source: dir to enumerate wavs under "
-                         f"(M-AILABS is {MAILABS_ROOT})")
-    ap.add_argument("--data_base", default=DATA,
+    ap.add_argument("--walk_root", default=None,
+                    help="walk source: dir to enumerate wavs under")
+    ap.add_argument("--data_base", default=None,
                     help="walk source: base dir utt_ids are written relative to")
-    ap.add_argument("--label", default="spoof",
-                    help="walk source: key for every row ('spoof' for MLAAD fake, "
-                         "'bonafide' for M-AILABS)")
+    ap.add_argument("--label", default=None,
+                    help="walk source: key for every row")
 
-    ap.add_argument("--protocol_csv", default=SPOOFCELEB_PROTOCOL,
+    ap.add_argument("--protocol_csv", default=None,
                     help="protocol_csv source: CSV with columns file,speaker,attack")
-    ap.add_argument("--audio_base", default=SPOOFCELEB_AUDIO,
+    ap.add_argument("--audio_base", default=None,
                     help="protocol_csv source: dir the 'file' column is relative to")
 
     ap.add_argument("--restrict_to", default=None,
@@ -303,16 +330,22 @@ def main(argv=None):
     args = ap.parse_args(argv)
 
     if args.list_datasets:
-        for k in DATASETS:
-            refs = reference_paths(k, args.reference_ssl)
-            n = sum(sum(1 for _ in open(r)) for r in refs if os.path.isfile(r))
-            names = " + ".join(os.path.basename(r) for r in refs)
-            print(f"{k:22s} trials={n:>9} ref={names}")
+        for k in SCOREABLE:
+            src = native_source(k)
+            if src == "benchmark":
+                refs = reference_paths(k, args.reference_ssl)
+                n = sum(sum(1 for _ in open(r)) for r in refs if os.path.isfile(r))
+                names = " + ".join(os.path.basename(r) for r in refs)
+                print(f"{k:22s} source={src:12s} trials={n:>9} ref={names}")
+            else:
+                print(f"{k:22s} source={src:12s} (from the corpus/protocol)")
         return 0
 
     for req in ("model", "model_path", "output_file"):
         if not getattr(args, req):
             ap.error(f"--{req} is required")
+    if not _apply_dataset_defaults(args):
+        return 2
     if args.source == "benchmark" and not args.dataset:
         ap.error("--dataset is required for --source benchmark")
     if args.source == "asvld" and not args.asvld_condition:

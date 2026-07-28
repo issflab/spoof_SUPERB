@@ -204,11 +204,73 @@ DATASETS = {
 }
 
 
+# ---------------------------------------------------------------------------
+# Native trial sources
+#
+# A dataset's identity and its definition must be one input, not two. Before
+# this, `--dataset spoofceleb --source protocol_csv` took the id list from a
+# hardcoded SpoofCeleb path while the output was filed under whatever
+# --dataset said -- nothing stopped those disagreeing, and a mismatch was
+# silent. Now the dataset decides its own trial source and parameters, and
+# --source is only an override.
+#
+# `native` is the source used when --source is not given. Corpus- or
+# protocol-driven wherever one exists; `benchmark` (read the published score
+# file) only where the trial list survives nowhere else. See RP-7.
+NATIVE_TRIALS = {
+    "spoofceleb":   dict(source="protocol_csv",
+                         protocol_csv=SPOOFCELEB_PROTOCOL,
+                         audio_base=SPOOFCELEB_AUDIO),
+    "Multilingual": dict(source="walk",
+                         walk_root=os.path.join(MLAAD_ROOT, "fake"),
+                         data_base=DATA, label="spoof"),
+    "MAILABS":      dict(source="walk",
+                         walk_root=MAILABS_ROOT,
+                         data_base=DATA, label="bonafide"),
+    "asvspoofLD":   dict(source="asvld",
+                         protocols_dir=os.path.join(ASVLD_ROOT, "protocols"),
+                         audio_base_dir=ASVLD_ROOT),
+}
+
+#: Scoreable but not a published benchmark column: the bonafide counterpart to
+#: MLAAD, scored separately and merged in afterwards.
+NON_BENCHMARK = {"MAILABS"}
+
+#: Every dataset that can be scored, benchmark column or not.
+SCOREABLE = list(DATASETS) + ["MAILABS"]
+
+
+def native_source(dataset):
+    """The trial source a dataset uses when --source is not given."""
+    spec = NATIVE_TRIALS.get(dataset)
+    return spec["source"] if spec else "benchmark"
+
+
+def native_params(dataset):
+    """Trial-source parameters for a dataset (protocol path, walk root, ...)."""
+    spec = NATIVE_TRIALS.get(dataset, {})
+    return {k: v for k, v in spec.items() if k != "source"}
+
+
+def has_reference(dataset):
+    """True if a published score file defines this dataset's trial list."""
+    spec = DATASETS.get(dataset)
+    return bool(spec) and ("ref" in spec or "ref_abs" in spec)
+
+
 def reference_paths(dataset, reference_ssl):
     """Absolute reference score file(s) defining a dataset's trial list."""
-    spec = DATASETS[dataset]
+    spec = DATASETS.get(dataset)
+    if spec is None:
+        raise KeyError(f"unknown dataset {dataset!r}; known: "
+                       f"{', '.join(SCOREABLE)}")
     if "ref_abs" in spec:
         return [t.format(ssl=reference_ssl) for t in spec["ref_abs"]]
+    if "ref" not in spec:
+        raise KeyError(
+            f"{dataset} has no published reference score file; it is scored "
+            f"from its own protocol (source={native_source(dataset)!r}). "
+            f"--source benchmark does not apply to it.")
     return [os.path.join(REFERENCE_DIR, spec["ref"].format(ssl=reference_ssl))]
 
 

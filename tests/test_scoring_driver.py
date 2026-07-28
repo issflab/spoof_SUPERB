@@ -25,6 +25,10 @@ parts are pure Python and are tested here without a GPU or a corpus.
   S9  The ASVLD skip list still contains Filtering -- the behaviour the
       untracked `.asvld_skip` sentinel used to carry.
 
+  D1-D5  The dataset is the single input: it resolves its own trial source and
+      parameters, explicit flags still override, and an unknown dataset is
+      rejected rather than silently mis-filed.
+
 Run:  pytest tests/test_scoring_driver.py
 """
 
@@ -155,6 +159,83 @@ def test_s9_filtering_is_still_skipped_by_default():
     args = build_parser().parse_args(
         ["--model", "linear_head", "--model_path", "m", "--output_file", "o"])
     assert "Filtering" in args.skip_conditions
+
+
+
+# ---------------------------------------------------------------------------
+# The dataset is the single input
+#
+#   D1  A dataset with a native protocol resolves its own source and
+#       parameters. `--dataset spoofceleb` alone is enough.
+#   D2  Explicit flags still override, so unusual runs stay possible.
+#   D3  A dataset with no native protocol falls back to the published
+#       reference score file (see RP-7).
+#   D4  An unknown dataset is rejected rather than silently mis-filed.
+#   D5  MAILABS is scoreable but is not a benchmark column, and asking for its
+#       reference file is an error rather than a wrong path.
+# ---------------------------------------------------------------------------
+
+from spoof_superb.scoring.datasets import (           # noqa: E402
+    SCOREABLE, has_reference, native_source, reference_paths,
+)
+from spoof_superb.scoring.driver import _apply_dataset_defaults   # noqa: E402
+
+
+def _args(**kw):
+    base = ["--model", "linear_head", "--model_path", "m", "--output_file", "o"]
+    for k, v in kw.items():
+        base += [f"--{k}", str(v)]
+    return build_parser().parse_args(base)
+
+
+def test_d1_dataset_resolves_its_own_source_and_parameters():
+    a = _args(dataset="spoofceleb")
+    assert a.source is None and a.protocol_csv is None
+    assert _apply_dataset_defaults(a)
+    assert a.source == "protocol_csv"
+    assert a.protocol_csv.endswith("SpoofCeleb/metadata/evaluation.csv")
+    assert a.audio_base.endswith("SpoofCeleb/flac/evaluation")
+
+    b = _args(dataset="MAILABS")
+    assert _apply_dataset_defaults(b)
+    assert b.source == "walk" and b.label == "bonafide"
+    assert b.walk_root.endswith("MAILabs")
+
+    c = _args(dataset="Multilingual")
+    assert _apply_dataset_defaults(c)
+    assert c.source == "walk" and c.label == "spoof"
+    assert c.walk_root.endswith(os.path.join("MLAAD", "fake"))
+
+
+def test_d2_explicit_flags_still_override():
+    a = _args(dataset="spoofceleb", protocol_csv="/tmp/mine.csv")
+    assert _apply_dataset_defaults(a)
+    assert a.protocol_csv == "/tmp/mine.csv", "an explicit flag must win"
+
+    b = _args(dataset="spoofceleb", source="benchmark")
+    assert _apply_dataset_defaults(b)
+    assert b.source == "benchmark"
+
+
+def test_d3_datasets_without_a_native_protocol_use_the_reference_file():
+    a = _args(dataset="wild")
+    assert _apply_dataset_defaults(a)
+    assert a.source == "benchmark", (
+        "wild has no corpus-derived trial list yet; see RP-7"
+    )
+
+
+def test_d4_unknown_dataset_is_rejected():
+    a = _args(dataset="not_a_dataset")
+    assert not _apply_dataset_defaults(a)
+
+
+def test_d5_mailabs_is_scoreable_but_not_a_benchmark_column():
+    assert "MAILABS" in SCOREABLE
+    assert not has_reference("MAILABS")
+    assert native_source("MAILABS") == "walk"
+    with pytest.raises(KeyError):
+        reference_paths("MAILABS", "xls_r_300m")
 
 
 if __name__ == "__main__":

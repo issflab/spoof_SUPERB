@@ -44,7 +44,44 @@ python -m spoof_superb.scoring.driver --model linear_head --ssl_model xls_r_300m
 `GaussianMixture.score` returns the mean per-frame log-likelihood, so the LLR is
 already length-normalised. The crop is an AASIST-side choice.
 
-## Choose a trial source
+## The dataset decides its own trial source
+
+`--dataset` is the single input. It determines the trial list, the audio root
+and where the output file is placed:
+
+```bash
+bin/score.sh          # DATASET="spoofceleb" is enough
+```
+
+```bash
+bin/score.sh --list_datasets
+```
+
+```
+spoofceleb             source=protocol_csv (from the corpus/protocol)
+Multilingual           source=walk         (from the corpus/protocol)
+MAILABS                source=walk         (from the corpus/protocol)
+asvspoofLD             source=asvld        (from the corpus/protocol)
+wild                   source=benchmark    trials=31779 ref=linear_head_wild_...
+```
+
+Datasets with their own protocol are scored from it. The seven that show
+`source=benchmark` have no corpus-derived trial list yet and read the published
+score file instead -- see RP-7 in `humanpending.md`.
+
+Setting the dataset and the protocol separately used to be possible, and they
+could disagree silently: `--dataset wild --source protocol_csv` scored
+SpoofCeleb audio and filed it under `in_the_wild`. The dataset now carries its
+own parameters, so that state cannot be constructed.
+
+`--source` and the per-source flags remain as overrides for unusual runs, and
+an explicit flag always wins:
+
+```bash
+bin/score.sh --protocol_csv /path/to/my_subset.csv
+```
+
+## Trial sources in detail
 
 ### `--source benchmark` (default) -- a published column
 
