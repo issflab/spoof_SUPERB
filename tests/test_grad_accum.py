@@ -20,20 +20,19 @@ provably behaviour-preserving:
       into batches -- it is batch-size-dependent in the ORIGINAL loop too, so
       requiring it to be invariant would be asserting something false.
 
+  A2-guard  A naive micro-batch WITHOUT accumulation must NOT match batch 64.
+      Without this, A2 could pass vacuously.
+
 A toy linear model is used deliberately: the contract under test is the
 optimizer-stepping logic in train_epoch, not any particular architecture.
 
-Run:  python tests/test_grad_accum.py
+Run:  pytest tests/test_grad_accum.py       (or: python tests/test_grad_accum.py)
 """
 
-import os
-import sys
-
+import pytest
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, Dataset
-
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from main import train_epoch  # noqa: E402
 
@@ -99,50 +98,31 @@ def run_case(batch, accum, use_original=False):
     return weights(model), loss
 
 
-def main():
-    failures = []
-
-    # A1 -- accum_steps=1 == the original loop
+def test_a1_accum_one_is_identical_to_original_loop():
     w_orig, l_orig = run_case(64, 1, use_original=True)
     w_new, l_new = run_case(64, 1)
     d = max_diff(w_orig, w_new)
-    if d == 0.0 and abs(l_orig - l_new) < 1e-12:
-        print(f"ok   A1 accum_steps=1 identical to original loop (max|dW|={d})")
-    else:
-        print(f"FAIL A1 max|dW|={d}, loss {l_orig} vs {l_new}")
-        failures.append("A1")
+    assert d == 0.0, f"max|dW| = {d}, expected exactly 0"
+    assert abs(l_orig - l_new) < 1e-12, f"loss {l_orig} vs {l_new}"
 
-    # A2 -- micro-batch 16 x accum 4 == single batch 64
-    w_ref, l_ref = run_case(64, 1)
-    w_acc, l_acc = run_case(16, 4)
+
+def test_a2_micro16_x_accum4_matches_batch64_weights():
+    w_ref, _ = run_case(64, 1)
+    w_acc, _ = run_case(16, 4)
     d = max_diff(w_ref, w_acc)
-    if d < 1e-6:
-        print(f"ok   A2 micro16 x accum4 == batch64 weights (max|dW|={d:.2e}, "
-              f"float32 eps~1.2e-7)")
-        print(f"     (reported loss {l_ref:.6f} vs {l_acc:.6f} -- mean-of-means, "
-              f"batch-grouping dependent by design; not a contract)")
-    else:
-        print(f"FAIL A2 max|dW|={d:.3e}")
-        failures.append("A2")
+    assert d < 1e-6, f"max|dW| = {d:.3e} (float32 eps ~1.2e-7)"
 
-    # Guard: a naive micro-batch WITHOUT accumulation must NOT match -- proves
-    # A2 is testing something real and not trivially satisfied.
+
+def test_a2_guard_unaccumulated_micro_batch_must_differ():
+    """Proves A2 is testing something real and not trivially satisfied."""
+    w_ref, _ = run_case(64, 1)
     w_naive, _ = run_case(16, 1)
     d_naive = max_diff(w_ref, w_naive)
-    if d_naive > 1e-6:
-        print(f"ok   A2-guard un-accumulated batch16 differs as expected "
-              f"(max|dW|={d_naive:.2e})")
-    else:
-        print(f"FAIL A2-guard batch16 without accumulation matched batch64 -- "
-              f"test is vacuous")
-        failures.append("A2-guard")
-
-    if failures:
-        print(f"\nFAILED: {failures}")
-        return 1
-    print("\nPASS: gradient accumulation is behaviour-preserving")
-    return 0
+    assert d_naive > 1e-6, (
+        f"batch16 without accumulation matched batch64 (max|dW| = {d_naive:.2e}) "
+        f"-- the A2 contract is vacuous"
+    )
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(pytest.main([__file__, "-v"]))

@@ -23,15 +23,11 @@ Contracts for the standalone AASIST baseline (aasist_raw_model.Model):
       no-SSL baseline; if an SSL encoder crept in, the param count and the
       "baseline" claim are both void.
 
-Run:  python tests/test_aasist_raw.py
+Run:  pytest tests/test_aasist_raw.py       (or: python tests/test_aasist_raw.py)
 """
 
-import os
-import sys
-
+import pytest
 import torch
-
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from aasist_raw_model import Model  # noqa: E402
 
@@ -39,44 +35,44 @@ PUBLISHED_NB_PARAMS = 297_866
 CROP = 64600
 
 
-def main():
-    failures = []
-    device = "cpu"
+@pytest.fixture
+def model():
+    """A fresh eval-mode model per test.
+
+    Deliberately function-scoped: C4 runs backward(), and a shared instance
+    would let that mutation leak into whichever test happened to run next.
+    """
     torch.manual_seed(1234)
+    m = Model(args=None, device="cpu").to("cpu")
+    m.eval()
+    return m
 
-    model = Model(args=None, device=device).to(device)
-    model.eval()
 
-    # C2 -- parameter count
+def test_c2_param_count_matches_published_aasist(model):
     nb = sum(p.numel() for p in model.parameters())
-    if nb == PUBLISHED_NB_PARAMS:
-        print(f"ok   C2 param count = {nb} (matches published AASIST)")
-    else:
-        print(f"FAIL C2 param count = {nb}, expected {PUBLISHED_NB_PARAMS} "
-              f"(diff {nb - PUBLISHED_NB_PARAMS:+d})")
-        failures.append("C2")
+    assert nb == PUBLISHED_NB_PARAMS, (
+        f"param count = {nb}, expected {PUBLISHED_NB_PARAMS} "
+        f"(diff {nb - PUBLISHED_NB_PARAMS:+d})"
+    )
 
-    # C5 -- no SSL upstream anywhere in the module tree
-    ssl_like = [n for n, _ in model.named_modules()
-                if "s3prl" in type(_).__module__.lower() or n.endswith("ssl_model")]
-    if not ssl_like:
-        print("ok   C5 no s3prl/SSL submodule present")
-    else:
-        print(f"FAIL C5 SSL submodules found: {ssl_like}")
-        failures.append("C5")
 
-    # C1 -- forward shape
-    for bs in (1, 4):
-        x = torch.randn(bs, CROP)
-        with torch.no_grad():
-            out = model(x)
-        if tuple(out.shape) == (bs, 2):
-            print(f"ok   C1 forward({bs}, {CROP}) -> {tuple(out.shape)}")
-        else:
-            print(f"FAIL C1 forward({bs}, {CROP}) -> {tuple(out.shape)}, expected ({bs}, 2)")
-            failures.append("C1")
+def test_c5_no_ssl_upstream_present(model):
+    ssl_like = [n for n, mod in model.named_modules()
+                if "s3prl" in type(mod).__module__.lower() or n.endswith("ssl_model")]
+    assert not ssl_like, f"SSL submodules found in the no-SSL baseline: {ssl_like}"
 
-    # C3 -- spectral node count matches pos_S
+
+@pytest.mark.parametrize("bs", [1, 4])
+def test_c1_forward_shape(model, bs):
+    x = torch.randn(bs, CROP)
+    with torch.no_grad():
+        out = model(x)
+    assert tuple(out.shape) == (bs, 2), (
+        f"forward({bs}, {CROP}) -> {tuple(out.shape)}, expected ({bs}, 2)"
+    )
+
+
+def test_c3_spectral_node_count_matches_pos_s(model):
     with torch.no_grad():
         x = torch.randn(2, CROP).unsqueeze(1)
         h = model.conv_time(x, mask=False).unsqueeze(1)
@@ -84,38 +80,27 @@ def main():
         h = model.selu(model.first_bn(h))
         e = model.encoder(h)
     n_spec = e.shape[2]
-    if n_spec == model.pos_S.shape[1] == 23:
-        print(f"ok   C3 encoder output {tuple(e.shape)} -> {n_spec} spectral nodes == pos_S")
-    else:
-        print(f"FAIL C3 encoder gives {n_spec} spectral nodes, pos_S has {model.pos_S.shape[1]}")
-        failures.append("C3")
+    assert n_spec == model.pos_S.shape[1] == 23, (
+        f"encoder gives {n_spec} spectral nodes, pos_S has {model.pos_S.shape[1]}"
+    )
 
-    # C4 -- gradients flow; sinc filterbank is fixed
+
+def test_c4_gradients_reach_the_graph_backend(model):
     model.train()
     x = torch.randn(2, CROP)
     y = torch.tensor([0, 1])
     loss = torch.nn.functional.cross_entropy(model(x), y)
     loss.backward()
 
-    n_with_grad = sum(1 for p in model.parameters() if p.grad is not None and p.grad.abs().sum() > 0)
-    if n_with_grad > 20:
-        print(f"ok   C4 gradients reach {n_with_grad} parameter tensors")
-    else:
-        print(f"FAIL C4 only {n_with_grad} parameter tensors received gradient")
-        failures.append("C4")
+    n_with_grad = sum(1 for p in model.parameters()
+                      if p.grad is not None and p.grad.abs().sum() > 0)
+    assert n_with_grad > 20, f"only {n_with_grad} parameter tensors received gradient"
 
-    if any(n == "conv_time.band_pass" for n, _ in model.named_parameters()):
-        print("FAIL C4 sinc filterbank is a trainable parameter (should be a fixed buffer)")
-        failures.append("C4")
-    else:
-        print("ok   C4 sinc filterbank is a fixed buffer, not trainable")
 
-    if failures:
-        print(f"\nFAILED: {sorted(set(failures))}")
-        return 1
-    print("\nPASS: all aasist_raw contracts hold")
-    return 0
+def test_c4_sinc_filterbank_is_a_fixed_buffer(model):
+    trainable = [n for n, _ in model.named_parameters() if n == "conv_time.band_pass"]
+    assert not trainable, "sinc filterbank is a trainable parameter (should be a fixed buffer)"
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(pytest.main([__file__, "-v"]))

@@ -14,23 +14,28 @@ the SER env (spafe 0.3.3). This test shells out to the SER interpreter to
 compute reference features with the genuine spafe code path, then compares
 against the local port in-process.
 
-Run:  python tests/test_lfcc_frontend.py
+External dependencies (SER interpreter, Rob-ASD checkout, ASV19 audio) are
+SKIP conditions, not failures: on a machine without them this contract cannot
+be evaluated either way, and a red test there would be noise rather than
+signal.
+
+Run:  pytest tests/test_lfcc_frontend.py    (or: python tests/test_lfcc_frontend.py)
 """
 
 import os
 import subprocess
-import sys
 import tempfile
 
 import numpy as np
-
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import pytest
 
 from lfcc_frontend import extract_lfcc  # noqa: E402
 
 SER_PYTHON = "/home/alhashim/.conda/envs/SER/bin/python"
 ASD_ML_DIR = "/home/alhashim/Rob-ASD/ASD_ML"
 FLAC_DIR = "/data/Data/ASVSpoofData_2019/train/LA/ASVspoof2019_LA_train/flac"
+
+N_UTTERANCES = 5
 
 # Tolerance: the two environments differ in numpy (2.2.6 vs 1.23.5) and scipy
 # (1.15.3 vs 1.10.1), so exact equality is not required -- but anything above
@@ -86,17 +91,20 @@ print("REFERENCE_OK", len(out), "spafe", __import__("spafe").__version__ if hasa
 '''
 
 
-def main():
+@pytest.fixture(scope="module")
+def reference_features():
+    """(flac_names, {name: reference_lfcc}) computed by the genuine spafe path."""
     if not os.path.isfile(SER_PYTHON):
-        print(f"SKIP: reference interpreter not found: {SER_PYTHON}")
-        return 1
+        pytest.skip(f"reference interpreter not found: {SER_PYTHON}")
+    if not os.path.isdir(ASD_ML_DIR):
+        pytest.skip(f"reference implementation not found: {ASD_ML_DIR}")
+    if not os.path.isdir(FLAC_DIR):
+        pytest.skip(f"ASV19 train audio not found: {FLAC_DIR}")
 
-    flacs = sorted(f for f in os.listdir(FLAC_DIR) if f.endswith(".flac"))[:5]
+    flacs = sorted(f for f in os.listdir(FLAC_DIR) if f.endswith(".flac"))[:N_UTTERANCES]
     if not flacs:
-        print(f"FAIL: no audio under {FLAC_DIR}")
-        return 1
+        pytest.skip(f"no audio under {FLAC_DIR}")
     paths = [os.path.join(FLAC_DIR, f) for f in flacs]
-    print(f"comparing on {len(paths)} real ASV19 train utterances")
 
     with tempfile.TemporaryDirectory() as td:
         script = os.path.join(td, "ref.py")
@@ -108,41 +116,37 @@ def main():
             [SER_PYTHON, script, ASD_ML_DIR, npz] + paths,
             capture_output=True, text=True,
         )
-        if proc.returncode != 0:
-            print("FAIL: reference generation failed")
-            print(proc.stdout[-3000:])
-            print(proc.stderr[-3000:])
-            return 1
-        print(proc.stdout.strip().splitlines()[-1])
+        assert proc.returncode == 0, (
+            "reference generation failed\n"
+            f"stdout: {proc.stdout[-3000:]}\nstderr: {proc.stderr[-3000:]}"
+        )
+        loaded = np.load(npz)
+        return flacs, {name: loaded[name] for name in flacs}
 
-        ref = np.load(npz)
 
-        n_fail = 0
-        import librosa
-        for name in flacs:
-            data, sr = librosa.load(os.path.join(FLAC_DIR, name), sr=None)
-            got = extract_lfcc(data, sr)
-            want = ref[name]
+def test_local_lfcc_matches_spafe_reference(reference_features):
+    import librosa
 
-            if got.shape != want.shape:
-                print(f"  FAIL {name}: shape {got.shape} != reference {want.shape}")
-                n_fail += 1
-                continue
+    flacs, ref = reference_features
+    mismatches = []
+    for name in flacs:
+        data, sr = librosa.load(os.path.join(FLAC_DIR, name), sr=None)
+        got = extract_lfcc(data, sr)
+        want = ref[name]
 
-            max_abs = np.max(np.abs(got - want))
-            ok = np.allclose(got, want, atol=ATOL, rtol=RTOL)
-            print(f"  {'ok  ' if ok else 'FAIL'} {name}  shape={got.shape}  max|diff|={max_abs:.3e}")
-            if not ok:
-                n_fail += 1
+        if got.shape != want.shape:
+            mismatches.append(f"{name}: shape {got.shape} != reference {want.shape}")
+            continue
+        if not np.allclose(got, want, atol=ATOL, rtol=RTOL):
+            mismatches.append(
+                f"{name}: max|diff| = {np.max(np.abs(got - want)):.3e} (atol={ATOL})"
+            )
 
-    if n_fail:
-        print(f"\nFAILED: {n_fail}/{len(flacs)} utterances diverge from the reference front-end")
-        return 1
-
-    print(f"\nPASS: local LFCC front-end matches spafe reference on all "
-          f"{len(flacs)} utterances (atol={ATOL})")
-    return 0
+    assert not mismatches, (
+        f"{len(mismatches)}/{len(flacs)} utterances diverge from the reference "
+        f"front-end:\n  " + "\n  ".join(mismatches)
+    )
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(pytest.main([__file__, "-v"]))
