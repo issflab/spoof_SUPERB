@@ -132,7 +132,7 @@ def read_scores(path):
 def eer_from_file(path):
     """EER (%) for a 4-column score file, bonafide = target."""
     import numpy as np
-    from evaluation import compute_eer
+    from spoof_superb.core.metrics import compute_eer
 
     labels, scores = read_scores(path)
     labels = np.asarray(labels, dtype=object)
@@ -267,7 +267,7 @@ def report(models, datasets, reference_ssl=DEFAULT_REFERENCE_SSL):
              not reproduce the published column.
     """
     import numpy as np
-    from evaluation import compute_eer
+    from spoof_superb.core.metrics import compute_eer
 
     print("\n" + "=" * 96)
     print("BASELINE EER (%) -- trained on ASVspoof2019 LA train")

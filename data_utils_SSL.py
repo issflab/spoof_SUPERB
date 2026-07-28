@@ -5,7 +5,7 @@ import torch.nn as nn
 from torch import Tensor
 import librosa
 from torch.utils.data import Dataset
-from RawBoost import ISD_additive_noise,LnL_convolutive_noise,SSI_additive_noise,normWav
+from spoof_superb.frontends.rawboost import ISD_additive_noise,LnL_convolutive_noise,SSI_additive_noise,normWav
 from random import randrange
 import random
 

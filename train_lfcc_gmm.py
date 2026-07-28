@@ -27,7 +27,7 @@ import sys
 import time
 
 from data_utils_SSL import genSpoof_list
-from lfcc_gmm import INIT_STRIDE, N_COMPONENTS, extract_many, train_gmm
+from spoof_superb.models.lfcc_gmm import INIT_STRIDE, N_COMPONENTS, extract_many, train_gmm
 
 DEFAULT_OUT_DIR = "/data/ssl_anti_spoofing/asd_superb_models/baselines/lfcc_gmm"
 CLASSES = ("bonafide", "spoof")

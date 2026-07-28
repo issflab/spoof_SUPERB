@@ -38,7 +38,7 @@ import pandas as pd
 import seaborn as sns
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from evaluation import compute_eer  # noqa: E402
+from spoof_superb.core.metrics import compute_eer  # noqa: E402
 
 SCORE_ROOT = Path("/data/ssl_anti_spoofing/asd_superb_score_files")
 TSV_DIR = SCORE_ROOT / "linear_head_MLAAD_v10" / "tsv"

@@ -96,7 +96,7 @@ def main():
             # non-determinism produces a few large per-utterance outliers that do
             # not move the metric, so we gate on EER + correlation instead.
             import numpy as np
-            from evaluation import calculate_EER
+            from spoof_superb.core.metrics import calculate_EER
             ks = list(common)
             a = np.array([new[u][1] for u in ks])
             b = np.array([ref[u][1] for u in ks])

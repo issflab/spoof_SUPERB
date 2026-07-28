@@ -9,7 +9,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from evaluation import calculate_EER
+from spoof_superb.core.metrics import calculate_EER
 
 
 VALID_SCORE_SUFFIXES = {".txt", ".tsv", ".score", ""}

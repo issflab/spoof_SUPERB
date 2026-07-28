@@ -32,7 +32,7 @@ from torch import Tensor
 from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 
-from linear_model import UtteranceLevel as LinearHead
+from spoof_superb.models.linear_head import UtteranceLevel as LinearHead
 
 
 PROTOCOL_TEMPLATE = "ASVspoofLauneredDatabase_{condition}.txt"  # note upstream misspelling "Launered"

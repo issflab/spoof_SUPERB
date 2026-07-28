@@ -10,13 +10,13 @@ from torch.utils.data import DataLoader
 from torchcontrib.optim import SWA
 import yaml
 from data_utils_SSL import genSpoof_list, Dataset_ASVspoof2019_train, Dataset_ASVspoof2021_eval
-from aasist_model import Model as aasist_model
+from spoof_superb.models.aasist import Model as aasist_model
 # from sls_model import Model as sls_model
-from linear_model import UtteranceLevel as LinearHead
-from aasist_raw_model import Model as aasist_raw_model
+from spoof_superb.models.linear_head import UtteranceLevel as LinearHead
+from spoof_superb.models.aasist_raw import Model as aasist_raw_model
 from config import cfg
-from utils import create_optimizer, seed_worker, set_seed, str_to_bool
-from evaluation import calculate_EER
+from spoof_superb.core.utils import create_optimizer, seed_worker, set_seed, str_to_bool
+from spoof_superb.core.metrics import calculate_EER
 
 from s3prl import hub
 

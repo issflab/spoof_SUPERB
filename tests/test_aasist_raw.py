@@ -29,7 +29,7 @@ Run:  pytest tests/test_aasist_raw.py       (or: python tests/test_aasist_raw.py
 import pytest
 import torch
 
-from aasist_raw_model import Model  # noqa: E402
+from spoof_superb.models.aasist_raw import Model  # noqa: E402
 
 PUBLISHED_NB_PARAMS = 297_866
 CROP = 64600

@@ -34,7 +34,7 @@ import numpy as np
 from scipy.special import logsumexp
 from sklearn.mixture import GaussianMixture
 
-from lfcc_frontend import extract_lfcc
+from spoof_superb.frontends.lfcc import extract_lfcc
 
 
 def limit_blas_threads(n=1):

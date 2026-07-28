@@ -292,7 +292,7 @@ class WavDataset(Dataset):
 
 
 def score_aasist_raw(items, model_path, device, batch_size=64, num_workers=6, amp=False):
-    from aasist_raw_model import Model as AasistRaw
+    from spoof_superb.models.aasist_raw import Model as AasistRaw
 
     model = AasistRaw(args=None, device=device).to(device)
     state = torch.load(model_path, map_location=device)
@@ -330,14 +330,14 @@ _GMM = {}
 
 
 def _gmm_init(model_dir):
-    from lfcc_gmm import limit_blas_threads, load_gmm
+    from spoof_superb.models.lfcc_gmm import limit_blas_threads, load_gmm
     limit_blas_threads(1)   # see lfcc_gmm.limit_blas_threads: 58x on this host
     _GMM["bona"] = load_gmm(os.path.join(model_dir, "bonafide", "gmm_final.pkl"))
     _GMM["spoof"] = load_gmm(os.path.join(model_dir, "spoof", "gmm_final.pkl"))
 
 
 def _gmm_score_one(item):
-    from lfcc_gmm import llr_score, load_lfcc
+    from spoof_superb.models.lfcc_gmm import llr_score, load_lfcc
     utt, path = item
     try:
         Tx = load_lfcc(path)
@@ -467,7 +467,7 @@ def run(model, model_path, dataset, output_file, reference_ssl=DEFAULT_REFERENCE
         bona = np.array([s for u, s in scored if keys[u] == "bonafide"])
         spoof = np.array([s for u, s in scored if keys[u] == "spoof"])
         if len(bona) and len(spoof):
-            from evaluation import compute_eer
+            from spoof_superb.core.metrics import compute_eer
             print(f"  EER = {compute_eer(bona, spoof)[0]*100:.4f} %", flush=True)
         else:
             print(f"  [WARN] single-class output ({len(bona)} bona / {len(spoof)} spoof)")

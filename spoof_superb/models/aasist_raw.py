@@ -43,10 +43,12 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor
 
-from aasist_model import GraphAttentionLayer, GraphPool, HtrgGraphAttentionLayer
+from spoof_superb import CONFIGS_DIR
+from spoof_superb.models.aasist import GraphAttentionLayer, GraphPool, HtrgGraphAttentionLayer
 
-CONFIG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                           "configs", "AASIST.conf")
+# Anchored at the repo root, not at this module: the file's depth inside the
+# package must not decide where configs/ is looked for.
+CONFIG_PATH = str(CONFIGS_DIR / "AASIST.conf")
 
 
 class CONV(nn.Module):

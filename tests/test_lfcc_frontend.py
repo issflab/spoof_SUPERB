@@ -29,7 +29,7 @@ import tempfile
 import numpy as np
 import pytest
 
-from lfcc_frontend import extract_lfcc  # noqa: E402
+from spoof_superb.frontends.lfcc import extract_lfcc  # noqa: E402
 
 SER_PYTHON = "/home/alhashim/.conda/envs/SER/bin/python"
 ASD_ML_DIR = "/home/alhashim/Rob-ASD/ASD_ML"

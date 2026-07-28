@@ -44,7 +44,7 @@ import pandas as pd
 
 # Import compute_eer from the parent package
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from evaluation import compute_eer
+from spoof_superb.core.metrics import compute_eer
 
 # ---------------------------------------------------------------------------
 # Architecture tags — one entry per TTS system directory name.
