@@ -15,6 +15,7 @@ Read these in order if you are new. Each one stands alone if you are not.
 | 9 | [Analysis: tables and figures](09-analysis.md) | you want to regenerate a table or figure |
 | 10 | [Tests](10-testing.md) | you changed the code |
 | 11 | [Troubleshooting](11-troubleshooting.md) | something broke |
+| 12 | [Building the score files from scratch](12-building-score-files.md) | you are rebuilding `scores_root` yourself |
 
 ## The 60-second version
 
