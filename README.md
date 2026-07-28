@@ -50,7 +50,6 @@ Full instructions: [Installation](docs/01-installation.md) →
 | 9 | [Analysis](docs/09-analysis.md) | you want to regenerate a table or figure |
 | 10 | [Tests](docs/10-testing.md) | you changed the code |
 | 11 | [Troubleshooting](docs/11-troubleshooting.md) | something broke |
-| 12 | [Building the score files from scratch](docs/12-building-score-files.md) | you are rebuilding `scores_root` yourself |
 
 Also: `humanpending.md` (open items needing a decision) and `REORG_PLAN.md`
 (the audit the current layout came from).

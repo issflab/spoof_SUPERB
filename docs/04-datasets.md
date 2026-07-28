@@ -32,7 +32,12 @@ if this document and the code ever disagree.
 │   ├── Recompression/flac/
 │   └── Filtering/flac/
 ├── ds_wild/release_in_the_wild/            In-the-Wild, .wav
-├── Deepfake_Eval_2024/audio-data/          mixed .mp3 / .m4a / .mp4 / .wav
+├── Deepfake_Eval_2024/
+│   ├── audio-data/                         mixed .mp3 / .m4a / .mp4 / .wav
+│   ├── audio-metadata-publish.csv
+│   └── segmented/                          built by us, see below
+│       ├── wav/
+│       └── protocol.txt
 ├── famousfigures/{Speaker}/{Source}/*.wav
 ├── MLAAD/fake/{lang}/{tts_system}/*.wav
 ├── MAILabs/                                bonafide counterpart to MLAAD
@@ -109,9 +114,12 @@ Re-deriving these lists would
 silently score a different trial set and produce EERs that cannot go in the same
 table.
 
-## Protocols we had to construct
+## Protocols and preparation we had to build
 
-Two corpora did not ship a protocol we could use.
+Three corpora did not ship something we could use directly: MLAAD has no
+combined protocol, M-AILABS has none at all, and Deepfake-Eval needs
+segmenting before its audio is reachable. SpoofCeleb is included for
+contrast -- it ships a protocol that works as-is.
 
 ### MLAAD
 
@@ -175,6 +183,55 @@ MLAAD score file that looks complete. Always `--dry-run` first.
 
 The published MLAAD column samples ~26.4% of M-AILABS to balance the spoof
 count; `balance_mailabs.py` produces that balanced variant.
+
+### Deepfake-Eval 2024 (segmented)
+
+Deepfake-Eval ships whole recordings of wildly varying length, from seconds to
+minutes. The models read a fixed 4.0375 s window (`CROP` = 64,600 samples at
+16 kHz), so a long recording contributes exactly one scored window and the rest
+of its audio is never seen. Segmenting first turns each recording into several
+trials and makes the whole corpus reachable.
+
+The segmentation is **our artifact** -- it does not ship with the dataset -- so
+it is regenerated from the two things that do:
+
+```bash
+python -m spoof_superb.data.prep.segment_deepfake_eval --dry-run   # expect 1,980
+python -m spoof_superb.data.prep.segment_deepfake_eval --limit 20 --jobs 8
+python -m spoof_superb.data.prep.segment_deepfake_eval --jobs 16
+```
+
+Writes:
+
+```
+{data_root}/Deepfake_Eval_2024/segmented/wav/{stem}_seg{N}.wav
+{data_root}/Deepfake_Eval_2024/segmented/protocol.txt
+```
+
+4 s segments, 16 kHz mono PCM, flat -- no train/test split. Trailing fragments
+under 1 s are discarded. The protocol is tab-separated:
+`segment_id, source_file, label, start_s, duration_s`.
+
+Check it:
+
+```bash
+wc -l {data_root}/Deepfake_Eval_2024/segmented/protocol.txt
+ls {data_root}/Deepfake_Eval_2024/segmented/wav | wc -l      # = protocol rows - 1
+```
+
+Two decisions worth knowing:
+
+* **wav, not mp3.** 91% of the sources are already mp3, and codec compression
+  is one of the degradation conditions this benchmark measures. Re-encoding
+  mp3 to mp3 would inject the artifact under study into the clean condition.
+  `--format mp3` exists if you want the smaller files anyway.
+* **All 1,980 recordings are used, not 1,976.** The four the published run
+  dropped carry a `.dat` extension but are really MP4 containers: librosa
+  cannot open them, ffmpeg can. They yield 122 segments.
+
+The pre-existing `Deepfake_Eval_2024/data/` tree is a separate local artifact
+with its own train/test and duration splits. This script never reads or writes
+it, and the benchmark does not use it.
 
 ### SpoofCeleb
 

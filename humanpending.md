@@ -396,3 +396,33 @@ and must not be moved.
 
 Proposed layout and migration constraints are in the reorg discussion; the work
 is deferred by request.
+
+### RP-6  Scoring the segmented Deepfake-Eval set -- needs a registry entry
+`spoof_superb/data/prep/segment_deepfake_eval.py` produces
+`{data_root}/Deepfake_Eval_2024/segmented/{wav/,protocol.txt}`, but nothing can
+score it yet: there is no `DATASETS` entry and no trial source that reads that
+tab-separated protocol.
+
+Needs, in `spoof_superb/scoring/datasets.py`: a `trials_from_segment_protocol()`
+reader, a resolver mapping `segment_id -> segmented/wav/{segment_id}`, and a
+registry entry. The four existing trial sources are the template.
+
+### RP-7  Full ASV21 DF and Famous Figures -- needs a protocol-to-trial-list tool
+Decision taken 2026-07-28: score the FULL protocols rather than the published
+subsets (ASV21 DF 152,955 -> 611,829; Famous Figures 346,471 -> 348,135).
+
+**Those two columns will stop matching the published paper.** Recommended: add
+them as new columns (`asvspoof2021_DF_full`, `Famous_Figures_full`) alongside
+the published ones rather than overwriting, so the two are directly comparable
+and the delta can be stated.
+
+Missing: nothing converts a raw protocol into a trial list. `bin/reproduce_table5.sh`
+will fail once this lands, correctly; re-capture `tests/baseline_table5.json`
+only when the new numbers are the intended ones.
+
+### RP-8  No orchestrator job sweeps the reference-driven columns for SSL models
+`JOBS` covers mlaad, mailabs, spoofceleb and baselines. The seven
+reference-driven columns (eval_2019, asvspoof2021_LA, asvspoof2021_DF,
+asvspoof5, deepfake_eval_2024, wild, Famous_Figures) are only swept for the two
+non-SSL baselines. Rebuilding them for every linear head currently means
+looping `bin/score.sh` by hand.

@@ -152,6 +152,75 @@ A tab-separated `.tsv` twin is written automatically when any utt_id contains a
 space, because `numpy.genfromtxt` -- and therefore `calculate_EER` -- cannot
 parse those rows. MLAAD v10 needs it; most sets do not.
 
+## Building score files from scratch
+
+If `scores_root` is empty, most columns cannot be scored yet: seven of the ten
+take their trial list from a published score file. Those files are an **input**
+to a rebuild, not an output -- see
+[where trial lists come from](04-datasets.md#where-trial-lists-come-from).
+
+Only `asvspoofLD`, `Multilingual` and `spoofceleb` (plus M-AILABS) can be built
+with no prior score files, because their trial lists come from a protocol or
+from the corpus itself.
+
+**Step 1 -- seed the reference files.**
+
+```bash
+OLD=/data/ssl_anti_spoofing/asd_superb_score_files
+NEW=$(python -c "from spoof_superb.config import cfg; print(cfg.scores_root)")
+
+mkdir -p "$NEW/linear_head"
+for ds in eval_2019 asvspoof2021_LA asvspoof2021_DF asvspoof5 \
+          deepfake_eval_2024 wild Famous_Figures spoofceleb; do
+    cp "$OLD/linear_head/linear_head_${ds}_xls_r_300m.txt" "$NEW/linear_head/"
+done
+
+cp "$OLD/linear_head/linear_head_asvspoofLD_xls_r_300m.txt" "$NEW/linear_head/"
+mkdir -p "$NEW/asvld_rerun/Recompression" "$NEW/linear_head_MLAAD_v10"
+cp "$OLD/asvld_rerun/Recompression/linear_head_Recompression_xls_r_300m.txt" \
+   "$NEW/asvld_rerun/Recompression/"
+cp "$OLD/linear_head_MLAAD_v10/linear_head_MLAAD_v10_xls_r_300m.txt" \
+   "$NEW/linear_head_MLAAD_v10/"
+```
+
+Check: `bin/score.sh --list_datasets` must show a non-zero trial count on all
+ten rows.
+
+| | | | |
+|---|---|---|---|
+| eval_2019 | 71,237 | asvspoof5 | 680,774 |
+| asvspoof2021_LA | 181,566 | deepfake_eval_2024 | 1,976 |
+| asvspoof2021_DF | 152,955 | wild | 31,779 |
+| Famous_Figures | 346,471 | spoofceleb | 91,130 |
+| Multilingual | 1,040,006 | asvspoofLD | 1,634,931 |
+
+A count of 0 means that file did not copy.
+
+**Step 2 -- prove the path on one cheap run** before starting any sweep. Use
+`lfcc_gmm` on `deepfake_eval_2024`, which needs no GPU and takes about a
+minute:
+
+```bash
+bin/score.sh --limit 300          # MODEL="lfcc_gmm", DATASET="deepfake_eval_2024"
+bin/verify.sh --check mlaad --new outputs/scores/smoke.txt \
+    --ref $OLD/baselines/lfcc_gmm/lfcc_gmm_deepfake_eval_2024.txt
+```
+
+Expect `-> PASS` with `r=1.0000`. A failure here is paths or environment, not
+the sweep -- fix it before going further.
+
+**Step 3 -- sweep.** See [orchestration](06-orchestration.md). Then merge
+M-AILABS into MLAAD and check the tables:
+
+```bash
+python -m spoof_superb.data.prep.append_mailabs --dry-run
+python -m spoof_superb.data.prep.append_mailabs
+bin/reproduce_table5.sh
+```
+
+A `MANIFEST.csv` over the finished tree, if you want one, is generated last by
+walking it. It is never a prerequisite.
+
 ## Scoring many models
 
 Do not loop over `bin/score.sh` by hand for a full sweep. See
