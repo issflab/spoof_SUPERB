@@ -30,7 +30,9 @@ ASVLD_CONDITIONS = ["Noise_Addition", "Reverberation", "Resampling",
 # note the upstream misspelling "Launered"
 ASVLD_PROTOCOL_TEMPLATE = "ASVspoofLauneredDatabase_{condition}.txt"
 
-DFEVAL_AUDIO = os.path.join(DATA, "Deepfake_Eval_2024", "audio-data")
+DFEVAL_ROOT = os.path.join(DATA, "Deepfake_Eval_2024")
+DFEVAL_AUDIO = os.path.join(DFEVAL_ROOT, "audio-data")
+DFEVAL_SEGMENTED = os.path.join(DFEVAL_ROOT, "segmented")
 FF_NFS_PREFIX = "/nfs/turbo/umd-hafiz/issf_server_data/famousfigures/"
 FF_LOCAL_ROOT = os.path.join(DATA, "famousfigures")
 
@@ -107,6 +109,11 @@ def _r_itw(utt):
 
 def _r_dfeval(utt):
     return _dfeval_stem_index().get(os.path.splitext(utt)[0])
+
+
+def _r_dfeval_segmented(utt):
+    """Segment ids are filenames under segmented/wav/, written by us."""
+    return os.path.join(DFEVAL_SEGMENTED, "wav", utt)
 
 
 def _r_famous(utt):
@@ -195,6 +202,13 @@ DATASETS = {
                                   SCORES_ROOT, "linear_head_MLAAD_v10",
                                   "linear_head_MLAAD_v10_{ssl}.txt")],
                                resolve=_r_mlaad),
+    # Scoreable but NOT a published benchmark column: Deepfake-Eval cut into
+    # fixed 4 s segments, so a long recording contributes more than the single
+    # window the model would otherwise see. Built by
+    # data.prep.segment_deepfake_eval; no `ref`, so --source benchmark is
+    # refused for it.
+    "deepfake_eval_2024_segmented": dict(resolve=_r_dfeval_segmented),
+
     # Scoreable but NOT a published benchmark column: the bonafide counterpart
     # to MLAAD, scored separately and merged in afterwards. No `ref`, so
     # has_reference() is False and --source benchmark is refused for it.
@@ -221,9 +235,16 @@ DATASETS = {
 # `native` is the source used when --source is not given. Corpus- or
 # protocol-driven wherever one exists; `benchmark` (read the published score
 # file) only where the trial list survives nowhere else. See RP-7.
-#: How each protocol file is laid out. `protocol` is the file; the rest are
+#: How each protocol file is laid out. `protocol` is the file, `built_by` names
+#: the tool that writes it when the corpus ships none, and the rest are
 #: arguments to trials_from_protocol.
 PROTOCOL_SPECS = {
+    # Written by data.prep.segment_deepfake_eval:
+    #   segment_id, source_file, label, start_s, duration_s
+    "deepfake_eval_2024_segmented": dict(
+        protocol=os.path.join(DFEVAL_SEGMENTED, "protocol.txt"),
+        built_by="python -m spoof_superb.data.prep.segment_deepfake_eval",
+        delimiter="\t", header=True, utt_col=0, label_col=2),
     "spoofceleb": dict(
         protocol=SPOOFCELEB_PROTOCOL,
         delimiter=",", header=True, utt_col=0, label_col=2, bonafide_when="a00"),
@@ -232,12 +253,15 @@ PROTOCOL_SPECS = {
         delimiter=",", header=True, utt_col=0, label_col=2, strip_ext=True),
     "Multilingual": dict(
         protocol=os.path.join(MLAAD_ROOT, "combined_meta_all.txt"),
+        built_by="python -m spoof_superb.analysis.create_combined_mlaad_meta_all",
         delimiter="|", header=True, utt_col=1, label_const="spoof", rel_to=DATA),
     "MAILABS": dict(
         protocol=os.path.join(MAILABS_ROOT, "protocol.txt"),
+        built_by="python -m spoof_superb.data.prep.build_protocols mailabs",
         delimiter="\t", header=True, utt_col=0, label_col=1),
     "asvspoofLD": dict(
         protocol=os.path.join(ASVLD_ROOT, "protocol.txt"),
+        built_by="python -m spoof_superb.data.prep.build_protocols asvld",
         delimiter="\t", header=True, utt_col=0, label_col=1),
 
     # --- the columns that were reference-driven until now (RP-7) -------------
@@ -283,13 +307,14 @@ NATIVE_TRIALS = {
     "asvspoof2021_LA":    dict(source="protocol"),
     "asvspoof2021_DF":    dict(source="protocol"),
     "asvspoof5":          dict(source="protocol"),
-    "deepfake_eval_2024": dict(source="protocol"),
+    "deepfake_eval_2024":  dict(source="protocol"),
+    "deepfake_eval_2024_segmented": dict(source="protocol"),
     "Famous_Figures":     dict(source="protocol"),
 }
 
 #: Scoreable but not a published benchmark column: the bonafide counterpart to
 #: MLAAD, scored separately and merged in afterwards.
-NON_BENCHMARK = {"MAILABS"}
+NON_BENCHMARK = {"MAILABS", "deepfake_eval_2024_segmented"}
 
 #: Every dataset that can be scored, benchmark column or not.
 SCOREABLE = list(DATASETS)

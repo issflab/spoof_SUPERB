@@ -132,13 +132,14 @@ def _resolve_trials(args):
         spec = dict(PROTOCOL_SPECS.get(args.dataset, {}))
         path = args.protocol or spec.pop("protocol", None)
         spec.pop("protocol", None)
+        built_by = spec.pop("built_by", None)
         if not path:
             print(f"[ERROR] no protocol declared for {args.dataset!r}; pass --protocol")
             return None, None, None
         if not os.path.isfile(path):
-            print(f"[ERROR] protocol not found: {path}\n"
-                  f"        some are built once -- see "
-                  f"spoof_superb.data.prep.build_protocols")
+            print(f"[ERROR] protocol not found: {path}")
+            if built_by:
+                print(f"        build it with:  {built_by}")
             return None, None, None
         utts, keys = trials_from_protocol(path, **spec)
         n_bona = sum(1 for u in utts if keys[u] == "bonafide")

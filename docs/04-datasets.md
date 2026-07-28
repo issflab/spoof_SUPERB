@@ -229,6 +229,17 @@ Two decisions worth knowing:
   dropped carry a `.dat` extension but are really MP4 containers: librosa
   cannot open them, ffmpeg can. They yield 122 segments.
 
+Once built, it is a dataset like any other:
+
+```bash
+bin/score.sh    # DATASET="deepfake_eval_2024_segmented"
+```
+
+It is marked non-benchmark -- a derived set, not a published column -- so
+`--source benchmark` is refused for it and it is absent from the release
+manifest. The unsegmented `deepfake_eval_2024` column is untouched, so the two
+can be compared directly.
+
 The pre-existing `Deepfake_Eval_2024/data/` tree is a separate local artifact
 with its own train/test and duration splits. This script never reads or writes
 it, and the benchmark does not use it.

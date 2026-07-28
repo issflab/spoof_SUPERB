@@ -397,7 +397,14 @@ and must not be moved.
 Proposed layout and migration constraints are in the reorg discussion; the work
 is deferred by request.
 
-### RP-6  Scoring the segmented Deepfake-Eval set -- needs a registry entry
+### RP-6  Scoring the segmented Deepfake-Eval set  [CLOSED 2026-07-28]
+Registered as `deepfake_eval_2024_segmented`: protocol spec, resolver, registry
+entry and layout directory. Marked non-benchmark -- it is a derived set, not a
+published column, so `--source benchmark` is refused for it. The protocol is
+written by `python -m spoof_superb.data.prep.segment_deepfake_eval`, and the
+driver names that command if the file is missing. Original note follows.
+
+#### (original)
 `spoof_superb/data/prep/segment_deepfake_eval.py` produces
 `{data_root}/Deepfake_Eval_2024/segmented/{wav/,protocol.txt}`, but nothing can
 score it yet: there is no `DATASETS` entry and no trial source that reads that

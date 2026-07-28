@@ -43,7 +43,7 @@ import numpy as np
 
 from spoof_superb import REPO_ROOT
 from spoof_superb.core.metrics import compute_eer
-from spoof_superb.scoring.datasets import DATASETS, reference_paths
+from spoof_superb.scoring.datasets import DATASETS, has_reference, reference_paths
 
 QUANTILES = [0.0, 0.25, 0.5, 0.75, 1.0]
 
@@ -64,6 +64,8 @@ def discover_models(dataset, placeholder="\x00"):
     split out reliably, which is the ambiguity that helped the old eval scripts
     diverge in the first place.
     """
+    if not has_reference(dataset):
+        return []          # no published score file: nothing to index
     template = reference_paths(dataset, placeholder)[0]
     prefix, suffix = template.split(placeholder)
     names = []

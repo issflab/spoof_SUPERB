@@ -343,3 +343,23 @@ def test_t8_whitespace_delimited_and_crlf_protocols_parse(tmp_path):
                                       utt_col=4, label_col=3, rel_to="/root")
     assert utts == ["a.wav"], "carriage return leaked into the id"
     assert keys["a.wav"] == "spoof"
+
+
+def test_t9_segmented_deepfake_eval_is_registered():
+    """RP-6: the segmented set is scoreable like any other dataset."""
+    from spoof_superb.scoring.datasets import DATASETS, NON_BENCHMARK, has_reference
+    ds = "deepfake_eval_2024_segmented"
+    assert ds in SCOREABLE and ds in PROTOCOL_SPECS
+    assert native_source(ds) == "protocol"
+    assert callable(DATASETS[ds]["resolve"])
+    assert DATASETS[ds]["resolve"]("x_seg1.wav").endswith(
+        os.path.join("segmented", "wav", "x_seg1.wav"))
+    # It is a derived set, not a published column.
+    assert ds in NON_BENCHMARK and not has_reference(ds)
+
+
+def test_t10_generated_protocols_say_how_to_build_them():
+    """A missing protocol must name the tool that writes it."""
+    for dataset in ("MAILABS", "asvspoofLD", "deepfake_eval_2024_segmented"):
+        assert "built_by" in PROTOCOL_SPECS[dataset], dataset
+        assert PROTOCOL_SPECS[dataset]["built_by"].startswith("python -m ")

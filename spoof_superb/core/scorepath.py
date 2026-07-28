@@ -58,6 +58,7 @@ DATASET_DIRS = {
     "asvspoof2021_DF":    "asvspoof2021_df",
     "asvspoof5":          "asvspoof5",
     "deepfake_eval_2024": "deepfake_eval_2024",
+    "deepfake_eval_2024_segmented": "deepfake_eval_2024_segmented",
     "wild":               "in_the_wild",
     "Famous_Figures":     "famous_figures",
     "spoofceleb":         "spoofceleb",
