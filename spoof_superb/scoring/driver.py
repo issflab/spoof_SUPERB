@@ -51,6 +51,7 @@ from spoof_superb.scoring.datasets import (
     ASVLD_CONDITIONS,
     PROTOCOL_SPECS,
     SCOREABLE,
+    has_reference,
     native_params,
     native_source,
     ASVLD_ROOT,
@@ -111,7 +112,7 @@ def _apply_dataset_defaults(args):
 def _resolve_trials(args):
     """-> (utts, keys, resolve) for the selected source, or (None, None, None)."""
     if args.source == "benchmark":
-        if args.dataset not in DATASETS:
+        if not has_reference(args.dataset):
             print(f"[ERROR] {args.dataset!r} has no published reference score "
                   f"file. Benchmark columns: {', '.join(DATASETS)}")
             return None, None, None
@@ -354,7 +355,7 @@ def main(argv=None):
     if args.list_datasets:
         for k in SCOREABLE:
             src = native_source(k)
-            if src == "benchmark":
+            if src == "benchmark" and has_reference(k):
                 refs = reference_paths(k, args.reference_ssl)
                 n = sum(sum(1 for _ in open(r)) for r in refs if os.path.isfile(r))
                 names = " + ".join(os.path.basename(r) for r in refs)

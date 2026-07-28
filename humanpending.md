@@ -407,7 +407,12 @@ Needs, in `spoof_superb/scoring/datasets.py`: a `trials_from_segment_protocol()`
 reader, a resolver mapping `segment_id -> segmented/wav/{segment_id}`, and a
 registry entry. The four existing trial sources are the template.
 
-### RP-7  Full ASV21 DF and Famous Figures -- needs a protocol-to-trial-list tool
+### RP-7  Full ASV21 DF and Famous Figures  [CLOSED 2026-07-28]
+Every dataset now reads its trial list from a protocol file; the full protocols
+are the default and the published subsets are reachable via --source benchmark.
+Original note follows.
+
+#### (original)
 Decision taken 2026-07-28: score the FULL protocols rather than the published
 subsets (ASV21 DF 152,955 -> 611,829; Famous Figures 346,471 -> 348,135).
 

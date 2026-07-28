@@ -190,11 +190,9 @@ def _args(**kw):
 
 def test_d1_dataset_resolves_its_own_source_and_parameters():
     a = _args(dataset="spoofceleb")
-    assert a.source is None and a.protocol_csv is None
+    assert a.source is None
     assert _apply_dataset_defaults(a)
-    assert a.source == "protocol_csv"
-    assert a.protocol_csv.endswith("SpoofCeleb/metadata/evaluation.csv")
-    assert a.audio_base.endswith("SpoofCeleb/flac/evaluation")
+    assert a.source == "protocol"
 
     for dataset in ("MAILABS", "Multilingual", "wild", "asvspoofLD"):
         a = _args(dataset=dataset)
@@ -203,21 +201,27 @@ def test_d1_dataset_resolves_its_own_source_and_parameters():
 
 
 def test_d2_explicit_flags_still_override():
-    a = _args(dataset="spoofceleb", protocol_csv="/tmp/mine.csv")
+    a = _args(dataset="spoofceleb", protocol="/tmp/mine.tsv")
     assert _apply_dataset_defaults(a)
-    assert a.protocol_csv == "/tmp/mine.csv", "an explicit flag must win"
+    assert a.protocol == "/tmp/mine.tsv", "an explicit flag must win"
 
     b = _args(dataset="spoofceleb", source="benchmark")
     assert _apply_dataset_defaults(b)
     assert b.source == "benchmark"
 
 
-def test_d3_datasets_without_a_native_protocol_use_the_reference_file():
-    """The remaining reference-driven columns; see RP-7."""
-    for dataset in ("eval_2019", "asvspoof2021_DF", "Famous_Figures"):
-        a = _args(dataset=dataset)
-        assert _apply_dataset_defaults(a)
-        assert a.source == "benchmark", dataset
+def test_d1b_spoofceleb_attack_column_maps_to_labels():
+    a = _args(dataset="spoofceleb")
+    assert _apply_dataset_defaults(a)
+    assert a.source == "protocol"
+
+
+def test_d3_benchmark_remains_available_as_an_override():
+    """Every dataset now reads a protocol, but the published trial list is
+    still reachable for reproducing a paper column exactly."""
+    a = _args(dataset="asvspoof2021_DF", source="benchmark")
+    assert _apply_dataset_defaults(a)
+    assert a.source == "benchmark"
 
 
 def test_d4_unknown_dataset_is_rejected():
@@ -293,3 +297,49 @@ def test_t4_declared_protocol_specs_are_well_formed():
         assert "protocol" in spec, f"{dataset} declares no protocol file"
         assert ("label_col" in spec) or ("label_const" in spec), (
             f"{dataset} declares neither a label column nor a constant label")
+
+
+def test_t5_every_dataset_reads_a_protocol():
+    """RP-7 closed: no column depends on a published score file any more."""
+    for dataset in SCOREABLE:
+        assert native_source(dataset) == "protocol", (
+            f"{dataset} still resolves its trials from {native_source(dataset)!r}"
+        )
+        assert dataset in PROTOCOL_SPECS, f"{dataset} declares no protocol"
+
+
+def test_t6_every_protocol_spec_has_a_resolver():
+    """A protocol id is useless if nothing maps it to audio."""
+    from spoof_superb.scoring.datasets import DATASETS
+    for dataset in PROTOCOL_SPECS:
+        assert callable(DATASETS[dataset]["resolve"]), dataset
+
+
+def test_t7_extension_handling_matches_the_published_ids(tmp_path):
+    """ASV19 protocol ids are bare; the published score ids carry .flac."""
+    p = tmp_path / "trl.txt"
+    p.write_text("LA_0039 LA_E_2834763 - A11 spoof\n")
+    utts, _ = trials_from_protocol(str(p), delimiter=None, header=False,
+                                   utt_col=1, label_col=4, add_ext=".flac")
+    assert utts == ["LA_E_2834763.flac"]
+    # idempotent: an id that already carries it is not doubled
+    p.write_text("LA_0039 LA_E_2834763.flac - A11 spoof\n")
+    utts, _ = trials_from_protocol(str(p), delimiter=None, header=False,
+                                   utt_col=1, label_col=4, add_ext=".flac")
+    assert utts == ["LA_E_2834763.flac"]
+
+
+def test_t8_whitespace_delimited_and_crlf_protocols_parse(tmp_path):
+    """ASVspoof5 ships a space-delimited .tsv; Famous Figures ships CRLF."""
+    p = tmp_path / "ws.txt"
+    p.write_text("E_1607 E_0009538969 M C05 2 E_0009486171 AC1 A26 spoof -\n")
+    utts, keys = trials_from_protocol(str(p), delimiter=None, header=False,
+                                      utt_col=1, label_col=8)
+    assert utts == ["E_0009538969"] and keys[utts[0]] == "spoof"
+
+    p = tmp_path / "crlf.tsv"
+    p.write_bytes(b"A\tB\tC\tLabel\tPath\r\nn\ts\tsrc\tspoof\t/root/a.wav\r\n")
+    utts, keys = trials_from_protocol(str(p), delimiter="\t", header=True,
+                                      utt_col=4, label_col=3, rel_to="/root")
+    assert utts == ["a.wav"], "carriage return leaked into the id"
+    assert keys["a.wav"] == "spoof"

@@ -195,6 +195,10 @@ DATASETS = {
                                   SCORES_ROOT, "linear_head_MLAAD_v10",
                                   "linear_head_MLAAD_v10_{ssl}.txt")],
                                resolve=_r_mlaad),
+    # Scoreable but NOT a published benchmark column: the bonafide counterpart
+    # to MLAAD, scored separately and merged in afterwards. No `ref`, so
+    # has_reference() is False and --source benchmark is refused for it.
+    "MAILABS":            dict(resolve=_r_mlaad),
     "asvspoofLD":         dict(ref_abs=[os.path.join(REFERENCE_DIR,
                                             "linear_head_asvspoofLD_{ssl}.txt"),
                                         os.path.join(
@@ -220,6 +224,9 @@ DATASETS = {
 #: How each protocol file is laid out. `protocol` is the file; the rest are
 #: arguments to trials_from_protocol.
 PROTOCOL_SPECS = {
+    "spoofceleb": dict(
+        protocol=SPOOFCELEB_PROTOCOL,
+        delimiter=",", header=True, utt_col=0, label_col=2, bonafide_when="a00"),
     "wild": dict(
         protocol=os.path.join(DATA, "ds_wild/protocols/meta.csv"),
         delimiter=",", header=True, utt_col=0, label_col=2, strip_ext=True),
@@ -232,16 +239,52 @@ PROTOCOL_SPECS = {
     "asvspoofLD": dict(
         protocol=os.path.join(ASVLD_ROOT, "protocol.txt"),
         delimiter="\t", header=True, utt_col=0, label_col=1),
+
+    # --- the columns that were reference-driven until now (RP-7) -------------
+    # These read the FULL protocol, not the published subset. Where the two
+    # differ, the coverage line in verification reports it; see docs/08.
+    "eval_2019": dict(
+        protocol=os.path.join(
+            DATA, "ASVSpoofData_2019/train/LA/ASVspoof2019_LA_cm_protocols",
+            "ASVspoof2019.LA.cm.eval.trl.txt"),
+        delimiter=None, header=False, utt_col=1, label_col=4, add_ext=".flac"),
+    "asvspoof2021_LA": dict(
+        protocol=os.path.join(
+            DATA, "ASVSpoof2021_complete/LA/ASVspoof2021_LA_eval/trial_metadata.txt"),
+        delimiter=None, header=False, utt_col=1, label_col=5),
+    "asvspoof2021_DF": dict(
+        protocol=os.path.join(
+            DATA, "ASVSpoof2021_complete/DF/ASVspoof2021_DF_eval/trial_metadata.txt"),
+        delimiter=None, header=False, utt_col=1, label_col=5),
+    # Named .tsv but space-delimited.
+    "asvspoof5": dict(
+        protocol=os.path.join(DATA, "ASVSpoof5/protocols/ASVspoof5.eval.track_1.tsv"),
+        delimiter=None, header=False, utt_col=1, label_col=8),
+    # Ground Truth is Real/Fake; LABEL_ALIASES maps it.
+    "deepfake_eval_2024": dict(
+        protocol=os.path.join(DATA, "Deepfake_Eval_2024/audio-metadata-publish.csv"),
+        delimiter=",", header=True, utt_col=0, label_col=2, strip_ext=True),
+    # AudioPath is absolute under the local root; ids are made relative to it,
+    # so they no longer carry the retired NFS mount prefix the published files
+    # were written with.
+    "Famous_Figures": dict(
+        protocol=os.path.join(DATA, "famousfigures/protocol.txt"),
+        delimiter="\t", header=True, utt_col=4, label_col=3,
+        rel_to=os.path.join(DATA, "famousfigures")),
 }
 
 NATIVE_TRIALS = {
-    "spoofceleb":   dict(source="protocol_csv",
-                         protocol_csv=SPOOFCELEB_PROTOCOL,
-                         audio_base=SPOOFCELEB_AUDIO),
-    "wild":         dict(source="protocol"),
-    "Multilingual": dict(source="protocol"),
-    "MAILABS":      dict(source="protocol"),
-    "asvspoofLD":   dict(source="protocol"),
+    "spoofceleb":         dict(source="protocol"),
+    "wild":               dict(source="protocol"),
+    "Multilingual":       dict(source="protocol"),
+    "MAILABS":            dict(source="protocol"),
+    "asvspoofLD":         dict(source="protocol"),
+    "eval_2019":          dict(source="protocol"),
+    "asvspoof2021_LA":    dict(source="protocol"),
+    "asvspoof2021_DF":    dict(source="protocol"),
+    "asvspoof5":          dict(source="protocol"),
+    "deepfake_eval_2024": dict(source="protocol"),
+    "Famous_Figures":     dict(source="protocol"),
 }
 
 #: Scoreable but not a published benchmark column: the bonafide counterpart to
@@ -249,7 +292,7 @@ NATIVE_TRIALS = {
 NON_BENCHMARK = {"MAILABS"}
 
 #: Every dataset that can be scored, benchmark column or not.
-SCOREABLE = list(DATASETS) + ["MAILABS"]
+SCOREABLE = list(DATASETS)
 
 
 def native_source(dataset):
@@ -359,18 +402,24 @@ def normalise_label(raw):
 
 
 def trials_from_protocol(path, delimiter="\t", header=True, utt_col=0,
-                         label_col=1, label_const=None, strip_ext=False,
-                         rel_to=None):
+                         label_col=1, label_const=None, bonafide_when=None,
+                         strip_ext=False, add_ext=None, rel_to=None):
     """([utt_id], {utt_id: label}) from a delimited protocol file.
 
     One reader for every corpus that ships (or was given) a protocol, so the
     per-corpus differences are declared as parameters instead of written as
     separate functions.
 
-      delimiter/header   the corpus's own format
+      delimiter          the corpus's own separator; None splits on any
+                         whitespace, which several "tsv" files actually use
+      header             whether to skip a first line
       utt_col/label_col  which columns carry the id and the ground truth
       label_const        for corpora that are entirely one class
+      bonafide_when      when the column holds an attack id rather than a
+                         label: this value means bonafide, anything else spoof
+                         (SpoofCeleb's 'a00')
       strip_ext          when the score-file id drops the extension
+      add_ext            when the score-file id carries one the protocol omits
       rel_to             when the protocol stores an absolute path but the id
                          is relative to a root
     """
@@ -379,10 +428,10 @@ def trials_from_protocol(path, delimiter="\t", header=True, utt_col=0,
         if header:
             next(f, None)
         for line in f:
-            line = line.rstrip("\n")
+            line = line.rstrip("\r\n")     # Famous Figures ships CRLF
             if not line:
                 continue
-            parts = line.split(delimiter)
+            parts = line.split() if delimiter is None else line.split(delimiter)
             if len(parts) <= utt_col:
                 continue
             utt = parts[utt_col].strip()
@@ -392,12 +441,16 @@ def trials_from_protocol(path, delimiter="\t", header=True, utt_col=0,
                 utt = os.path.relpath(utt, rel_to)
             if strip_ext:
                 utt = os.path.splitext(utt)[0]
+            if add_ext and not utt.endswith(add_ext):
+                utt += add_ext
             if label_const is not None:
                 raw = label_const
             elif len(parts) > label_col:
                 raw = parts[label_col]
             else:
                 continue
+            if bonafide_when is not None:
+                raw = "bonafide" if raw.strip() == bonafide_when else "spoof"
             try:
                 label = normalise_label(raw)
             except ValueError as exc:
