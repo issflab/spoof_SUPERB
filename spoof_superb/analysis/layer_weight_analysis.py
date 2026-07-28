@@ -23,7 +23,7 @@ layer weights and are skipped.
 
 Usage
 -----
-    python3 scripts/layer_weight_analysis.py
+    python -m spoof_superb.analysis.layer_weight_analysis
 """
 
 from __future__ import annotations

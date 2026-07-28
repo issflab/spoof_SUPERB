@@ -9,8 +9,6 @@ import pandas as pd
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
 
 from spoof_superb.core.metrics import calculate_EER
 
@@ -261,12 +259,12 @@ if __name__ == "__main__":
 
 
 # Single file:
-# python3 scripts/evaluate_score_file.py \
+# python -m spoof_superb.analysis.evaluate_score_file \
 #   --score_filepath /path/to/score.txt \
 #   --score_file_has_keys
 #
 # One dataset inside a score directory:
-# python3 scripts/evaluate_score_file.py \
+# python -m spoof_superb.analysis.evaluate_score_file \
 #   --score_dir /data/ssl_anti_spoofing/asd_superb_score_files/linear_head \
 #   --dataset_name asvspoofLD \
 #   --score_file_has_keys \

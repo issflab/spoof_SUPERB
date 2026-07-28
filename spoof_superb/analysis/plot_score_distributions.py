@@ -14,7 +14,7 @@ Selected models: XLS-R, UniSpeech-SAT, WavLM Large, wav2vec 2.0 Large
 
 Usage
 -----
-    python3 scripts/plot_score_distributions.py \\
+    python -m spoof_superb.analysis.plot_score_distributions \\
         --linear_head_dir      /data/ssl_anti_spoofing/asd_superb_score_files/linear_head \\
         --linear_head_norm_dir /data/ssl_anti_spoofing/asd_superb_score_files/linear_head_normalized_scores \\
         --out_dir              spoof_SUPERB/outputs/figures_dist

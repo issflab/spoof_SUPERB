@@ -14,7 +14,7 @@ from spoof_superb.models.aasist import Model as aasist_model
 # from sls_model import Model as sls_model
 from spoof_superb.models.linear_head import UtteranceLevel as LinearHead
 from spoof_superb.models.aasist_raw import Model as aasist_raw_model
-from config import cfg
+from spoof_superb.config import cfg
 from spoof_superb.core.utils import create_optimizer, seed_worker, set_seed, str_to_bool
 from spoof_superb.core.metrics import calculate_EER
 
@@ -246,6 +246,15 @@ if __name__ == '__main__':
                         '''.format(upstreams))
 
     # Hyperparameters
+    parser.add_argument('--model_arch', type=str, default=None,
+                        choices=['aasist', 'sls', 'linear_head', 'aasist_raw', 'lfcc_gmm'],
+                        help='Backend architecture. Previously settable only via the '
+                             'SSL_MODEL_ARCH environment variable.')
+    parser.add_argument('--mode', type=str, default=None, choices=['train', 'eval'],
+                        help='Previously settable only via SSL_MODE.')
+    parser.add_argument('--train_dataset', type=str, default=None,
+                        help='Training-set tag used to name the checkpoint '
+                             '(cfg.dataset). Previously settable only via SSL_DATASET.')
     parser.add_argument('--batch_size', type=int, default=14)
     # Effective batch stays --batch_size; this only splits it into smaller
     # forward/backward chunks so a memory-heavy model fits. 0 = disabled
@@ -356,6 +365,12 @@ if __name__ == '__main__':
         cfg.protocols_path = args.protocols_path
     if args.model_path:
         cfg.pretrained_checkpoint = args.model_path
+    if args.model_arch:
+        cfg.model_arch = args.model_arch
+    if args.mode:
+        cfg.mode = args.mode
+    if args.train_dataset:
+        cfg.dataset = args.train_dataset
 
     with open(CONFIG_PATH, "r") as f_json:
         args_config = json.loads(f_json.read())
@@ -375,6 +390,8 @@ if __name__ == '__main__':
     if args.comment:
         model_tag = model_tag + '_{}'.format(args.comment)
     
+    # config.py no longer creates directories as an import side effect.
+    cfg.prepare_dirs()
     LOGS_ROOT.mkdir(parents=True, exist_ok=True)
     writer = SummaryWriter(str(LOGS_ROOT / model_tag))
 

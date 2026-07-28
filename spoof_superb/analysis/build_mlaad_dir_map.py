@@ -26,7 +26,7 @@ Output: ``scripts/mlaad_v10_dir_to_system.csv`` with columns
 
 Usage
 -----
-    python3 scripts/build_mlaad_dir_map.py
+    python -m spoof_superb.analysis.build_mlaad_dir_map
 """
 
 from __future__ import annotations

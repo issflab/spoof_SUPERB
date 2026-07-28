@@ -321,3 +321,76 @@ LLASA samples in all 19 SSL columns. Any per-system analysis that reports LLASA
 separately is attributing 2.23% inaudible fragments to LLASA's detectability, and nearly
 8% for Joe_Biden. Cleaning that would require excluding them from the FF protocol for
 every model and re-scoring the SSL columns.
+
+---
+
+## Reorganisation (2026-07-28) -- deferred items
+
+Raised during the flat-to-package reorganisation. None is a refactor blocker;
+each needs a decision that changes results or touches data.
+
+### RP-1  Two conda environments disagree on `soxr` -- BLOCKING for provenance
+`soxr` is librosa's resampler, and `verify_mlaad.py` already attributed the
+reference-vs-rerun logit offset to exactly this class of drift.
+
+    spoof_SUPERB : librosa 0.11.0  soxr 1.0.0        numpy 2.2.6  torch 2.7.1+cu126
+    ASD_SUPERB   : librosa 0.11.0  soxr 0.5.0.post1  numpy 2.2.6  torch 2.7.1+cu126
+
+Before the reorg, `run_asvld_model.sh` and `run_recompression.sh` launched the
+ASD_SUPERB interpreter while the MLAAD/SpoofCeleb orchestrators launched
+spoof_SUPERB. **Score files for any dataset whose audio is resampled to 16 kHz
+were therefore produced by two different resamplers.** SpoofCeleb is natively
+16 kHz and unaffected.
+
+The reorg removed the four hardcoded interpreter paths -- everything now uses
+`cfg.python`, defaulting to the running interpreter -- so new runs are at least
+self-consistent. It does NOT retroactively fix existing score files.
+
+Decision needed: pin one environment, then decide whether any published column
+must be re-scored under it. Quantify first by re-scoring one model on one
+resampled dataset under each interpreter and comparing.
+
+### RP-2  `create_combined_mlaad_meta.py` still drops rows
+`analysis/create_combined_mlaad_meta_all.py` sets `csv.field_size_limit` and
+`QUOTE_NONE` with a comment naming the failure it fixes: `ja/kokoro` silently
+loses 53 of 1000 rows under default quoting. Its older sibling
+`analysis/create_combined_mlaad_meta.py` still uses plain `delimiter="|"` and
+still has the bug.
+
+Its output is consumed as the MLAAD protocol by `analysis/organize_tts_scores.py`
+and `analysis/verify_tts_protocols.py`.
+
+Decision needed: fixing it could change downstream results, so it wants its own
+change with a before/after comparison rather than being folded into a
+structural refactor.
+
+### RP-3  Is `Filtering` still meant to be skipped?
+The untracked `.asvld_skip` sentinel contained `Filtering`, so every ASVLD run
+silently no-op'd that condition. It is now
+`scoring/driver.py::DEFAULT_SKIP_CONDITIONS`, visible and test-pinned, with the
+same content -- current behaviour preserved exactly.
+
+`Filtering` is excluded from the published ASVLD column, so this is probably
+correct. Confirm, and if it should be scored, drop it from the default.
+
+### RP-4  Duplicated aggregation between the two TTS matrix builders
+`analysis/compute_far_matrix.py` and `analysis/compute_eer_tts.py` are the same
+program over the same 56-system tree; their `pooled_*`, `*_by_tag` and
+`build_*_matrix` functions are line-for-line equivalent, differing only in the
+inner metric call. FAR itself has no home in `core/metrics.py` -- it is defined
+inside the matrix builder.
+
+Not done here: merging them changes figure-producing code, which is a separate
+blast radius from the structural reorg. Note also that "Overall Mean" in both is
+a mean of per-system means, not a pooled recomputation over utterances.
+
+### RP-5  Score directory `/data/ssl_anti_spoofing/asd_superb_score_files`
+Audited but deliberately untouched. 49 GB, 32 top-level entries, 2,509 score
+files, zero symlinks; roughly 19 GB is duplicated or regenerable (every "view"
+is a physical copy -- `scores_by_acoustic_degradation/Reverberation` is
+byte-identical to `scores_by_category_augmented/Reverberation`). `asv19`,
+`asv5`, `linear_head` and `scores_by_category` are owned by root or by `adupa`
+and must not be moved.
+
+Proposed layout and migration constraints are in the reorg discussion; the work
+is deferred by request.

@@ -39,7 +39,7 @@ polarity bug and is reported as a FAIL rather than silently resolved.
 
 Usage
 -----
-    python3 scripts/recompute_table5_mlaad_v10.py \
+    python -m spoof_superb.analysis.recompute_table5_mlaad_v10 \
         --out_dir scripts/verification_out
 """
 
@@ -51,8 +51,6 @@ from pathlib import Path
 import numpy as np
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
 
 from spoof_superb.core.metrics import compute_eer  # type: ignore
 

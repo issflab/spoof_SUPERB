@@ -12,7 +12,7 @@ Run this script on the OUTPUT of verify_and_split_condition_scores.py --output_d
 
 Usage
 -----
-    python3 scripts/check_condition_composition.py \\
+    python -m spoof_superb.analysis.check_condition_composition \\
         --asv19_protocol   /data/Data/ASVSpoofData_2019/train/LA/ASVspoof2019_LA_cm_protocols/ASVspoof2019.LA.cm.eval.trl.txt \\
         --asv21_la_protocol /data/Data/ASVSpoof2021_complete/LA/ASVspoof2021_LA_eval/trial_metadata.txt \\
         --asv21_df_protocol /data/Data/ASVSpoof2021_complete/DF/ASVspoof2021_DF_eval/trial_metadata.txt \\

@@ -14,8 +14,10 @@ Recompression & Filtering have no reference -> reported as GENERATED-ONLY.
 import os
 import statistics as st
 
-RERUN = "/data/ssl_anti_spoofing/asd_superb_score_files/asvld_rerun"
-REF   = "/data/ssl_anti_spoofing/asd_superb_score_files/scores_by_category"
+from spoof_superb.config import cfg
+
+RERUN = os.path.join(cfg.scores_root, "asvld_rerun")
+REF   = os.path.join(cfg.scores_root, "scores_by_category")
 
 MODELS = ["xls_r_300m", "unispeech_sat_large", "wav2vec2_large_ll60k"]
 

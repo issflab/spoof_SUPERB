@@ -14,7 +14,7 @@ Produces five figures:
 
 Usage
 -----
-    python3 scripts/create_tts_eer_heatmaps.py \\
+    python -m spoof_superb.analysis.create_tts_eer_heatmaps \\
         --eer_dir /data/ssl_anti_spoofing/asd_superb_score_files/eer_results_pooled_bonafide \\
         --out_dir outputs/figures_eer_pooled
 """

@@ -24,7 +24,7 @@ TTS dataset name mapping (TTS score files → linear_head dataset stem):
 
 Usage
 -----
-    python3 scripts/apply_zscore_and_pool.py \\
+    python -m spoof_superb.analysis.apply_zscore_and_pool \\
         --linear_head_dir /data/ssl_anti_spoofing/asd_superb_score_files/linear_head \\
         --tts_dir         /data/ssl_anti_spoofing/asd_superb_score_files/scores_by_TTS \\
         --out_base        /data/ssl_anti_spoofing/asd_superb_score_files

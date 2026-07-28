@@ -27,7 +27,7 @@ Outputs (parallel structure to FAR outputs)
 
 Usage
 -----
-    python3 scripts/compute_eer_tts.py \\
+    python -m spoof_superb.analysis.compute_eer_tts \\
         --norm_dir  /data/ssl_anti_spoofing/asd_superb_score_files/linear_head_normalized_scores \\
         --tts_dir   /data/ssl_anti_spoofing/asd_superb_score_files/scores_by_TTS_norm \\
         --out_dir   /data/ssl_anti_spoofing/asd_superb_score_files/eer_results_pooled_bonafide
@@ -44,8 +44,6 @@ import numpy as np
 import pandas as pd
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
 
 from spoof_superb.core.metrics import compute_eer  # type: ignore
 

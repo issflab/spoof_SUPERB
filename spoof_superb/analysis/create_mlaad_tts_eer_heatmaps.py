@@ -20,7 +20,7 @@ Four figures, rows = SSL models, each with its raw EER matrix as CSV:
 
 Usage
 -----
-    python3 scripts/create_mlaad_tts_eer_heatmaps.py
+    python -m spoof_superb.analysis.create_mlaad_tts_eer_heatmaps
 """
 
 from __future__ import annotations
@@ -37,7 +37,6 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from spoof_superb.core.metrics import compute_eer  # noqa: E402
 
 SCORE_ROOT = Path("/data/ssl_anti_spoofing/asd_superb_score_files")

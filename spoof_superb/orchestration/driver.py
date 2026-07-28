@@ -24,6 +24,7 @@ import sys
 import threading
 import time
 
+from spoof_superb.config import cfg
 from spoof_superb.orchestration import cuda
 from spoof_superb.orchestration.jobs import JOBS
 
@@ -209,7 +210,7 @@ def main(argv=None):
     ap.add_argument("--gpus", nargs="*", type=int, default=None)
     ap.add_argument("--force", action="store_true", help="re-score even if the output is complete")
     ap.add_argument("--list", action="store_true", help="list tasks and exit")
-    ap.add_argument("--python", default=sys.executable,
+    ap.add_argument("--python", default=cfg.python,
                     help="interpreter for the scoring subprocesses")
     args = ap.parse_args(argv)
 

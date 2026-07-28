@@ -24,7 +24,7 @@ Outputs (saved to --out_dir):
 
 Usage
 -----
-    python3 scripts/analyze_benchmark_distribution.py \\
+    python -m spoof_superb.analysis.analyze_benchmark_distribution \\
         --combined_dir /data/ssl_anti_spoofing/asd_superb_score_files/scores_by_ssl_model \\
         --asv19_protocol /data/LA/ASVspoof2019_LA_cm_protocols/ASVspoof2019.LA.cm.eval.trl.txt \\
         --tts_dir /data/ssl_anti_spoofing/asd_superb_score_files/scores_by_TTS \\
@@ -43,7 +43,6 @@ import numpy as np
 import pandas as pd
 
 # Import compute_eer from the parent package
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from spoof_superb.core.metrics import compute_eer
 
 # ---------------------------------------------------------------------------

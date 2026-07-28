@@ -20,7 +20,9 @@ import glob
 import os
 import sys
 
-BASE = "/data/ssl_anti_spoofing/asd_superb_score_files/linear_head_MLAAD_v10"
+from spoof_superb.config import cfg
+
+BASE = os.path.join(cfg.scores_root, "linear_head_MLAAD_v10")
 STAGE = os.path.join(BASE, "mailabs")
 EXPECT_MLAAD = 456000
 EXPECT_MAILABS = 584006

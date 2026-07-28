@@ -6,8 +6,6 @@ from pathlib import Path
 import sys
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
 
 from spoof_superb.core.metrics import calculate_EER
 
@@ -162,6 +160,6 @@ if __name__ == "__main__":
     main()
 
 
-# python3 scripts/evaluate_score_directory.py \
+# python -m spoof_superb.analysis.evaluate_score_directory \
 #   --input_dir /data/ssl_anti_spoofing/asd_superb_score_files/linear_head \
 #   --output_dir /tmp/linear_head_combined_scores

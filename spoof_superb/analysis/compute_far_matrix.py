@@ -19,7 +19,7 @@ Systems with multiple arch tags / vocoders count in each relevant group.
 
 Usage
 -----
-    python3 scripts/compute_far_matrix.py \\
+    python -m spoof_superb.analysis.compute_far_matrix \\
         --tts_dir      /data/ssl_anti_spoofing/asd_superb_score_files/scores_by_TTS_norm \\
         --combined_dir /data/ssl_anti_spoofing/asd_superb_score_files/normalized_scores_by_ssl_model \\
         --out_dir      /data/ssl_anti_spoofing/asd_superb_score_files/far_results_zscore
@@ -36,8 +36,6 @@ import numpy as np
 import pandas as pd
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
 
 from spoof_superb.core.metrics import compute_eer  # type: ignore
 

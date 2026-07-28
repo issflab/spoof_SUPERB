@@ -16,7 +16,7 @@ Reads the raw EER matrices already written by create_mlaad_tts_eer_heatmaps.py
 
 Usage
 -----
-    python3 scripts/create_mlaad_group_ranked_figures.py
+    python -m spoof_superb.analysis.create_mlaad_group_ranked_figures
 """
 
 from __future__ import annotations

@@ -12,7 +12,7 @@ Output: ``/data/Data/MLAAD/combined_meta_all.txt``, pipe-delimited, header
 
 Usage
 -----
-    python3 scripts/create_combined_mlaad_meta_all.py
+    python -m spoof_superb.analysis.create_combined_mlaad_meta_all
 """
 
 from __future__ import annotations

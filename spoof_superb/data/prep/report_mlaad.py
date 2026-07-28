@@ -23,9 +23,11 @@ import sys
 
 import numpy as np
 
-OUT_DIR = "/data/ssl_anti_spoofing/asd_superb_score_files/linear_head_MLAAD_v10"
-REF_DIR = "/data/ssl_anti_spoofing/asd_superb_score_files/linear_head"
-MODELS_ROOT = "/data/ssl_anti_spoofing/asd_superb_models/linear_head_models"
+from spoof_superb.config import cfg
+
+OUT_DIR = os.path.join(cfg.scores_root, "linear_head_MLAAD_v10")
+REF_DIR = cfg.reference_dir
+MODELS_ROOT = cfg.models_root
 PREFIX = "model_weighted_CCE_50_64_linear_head_ASV19_"
 EXPECTED_LINES = 1040006
 

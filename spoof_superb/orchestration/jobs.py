@@ -16,6 +16,7 @@ import os
 from dataclasses import dataclass, field
 from typing import Callable, Optional, Sequence
 
+from spoof_superb.config import cfg
 from spoof_superb.scoring.datasets import (
     DATASETS,
     MAILABS_ROOT,
@@ -24,9 +25,9 @@ from spoof_superb.scoring.datasets import (
     SPOOFCELEB_PROTOCOL,
 )
 
-MODELS_ROOT = "/data/ssl_anti_spoofing/asd_superb_models/linear_head_models"
-BASELINE_MODELS_ROOT = "/data/ssl_anti_spoofing/asd_superb_models/baselines"
-LINEAR_HEAD_PREFIX = "model_weighted_CCE_50_64_linear_head_ASV19_"
+MODELS_ROOT = cfg.models_root
+BASELINE_MODELS_ROOT = cfg.baseline_models_root
+LINEAR_HEAD_PREFIX = cfg.linear_head_prefix
 
 DRIVER = ("-m", "spoof_superb.scoring.driver")
 

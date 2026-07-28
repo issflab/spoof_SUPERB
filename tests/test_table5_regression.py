@@ -5,7 +5,7 @@ Contract: the reorganisation must not move a single published number.
 
 tests/baseline_table5.json is the output of
 
-    python scripts/recompute_table5_mlaad_v10.py --out_dir <tmp>
+    python -m spoof_superb.analysis.recompute_table5_mlaad_v10 --out_dir <tmp>
 
 captured on the pre-reorg tree at commit 018115d, with that script's own
 "REPRODUCTION GATE (untouched columns)" passing. Every per-model, per-dataset
@@ -35,7 +35,7 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 BASELINE = Path(__file__).resolve().parent / "baseline_table5.json"
-RECOMPUTE = REPO_ROOT / "scripts" / "recompute_table5_mlaad_v10.py"
+RECOMPUTE = REPO_ROOT / "spoof_superb" / "analysis" / "recompute_table5_mlaad_v10.py"
 
 TOL = 0.0
 
@@ -51,9 +51,14 @@ def fresh_payload():
     if not RECOMPUTE.is_file():
         pytest.skip(f"reproducer not found: {RECOMPUTE}")
     with tempfile.TemporaryDirectory() as td:
+        # Run as a module, not by file path: the analysis scripts are package
+        # modules now and no longer inject the repo root into sys.path
+        # themselves. PYTHONPATH makes that work from any cwd.
+        env = dict(os.environ, PYTHONPATH=f"{REPO_ROOT}:{os.environ.get('PYTHONPATH', '')}")
         proc = subprocess.run(
-            [sys.executable, str(RECOMPUTE), "--out_dir", td],
-            capture_output=True, text=True, cwd=str(REPO_ROOT),
+            [sys.executable, "-m", "spoof_superb.analysis.recompute_table5_mlaad_v10",
+             "--out_dir", td],
+            capture_output=True, text=True, cwd=str(REPO_ROOT), env=env,
         )
         assert proc.returncode == 0, (
             f"reproducer failed rc={proc.returncode}\n"

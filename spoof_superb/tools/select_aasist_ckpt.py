@@ -26,12 +26,12 @@ import torch
 from torch.utils.data import DataLoader
 
 from spoof_superb.models.aasist_raw import Model as AasistRaw
-from config import cfg
+from spoof_superb.config import cfg
 from spoof_superb.data.datasets_ssl import Dataset_ASVspoof2019_train, genSpoof_list
 from spoof_superb.core.metrics import compute_eer
 
-RUN_DIR = ("/data/ssl_anti_spoofing/asd_superb_models/baselines/"
-           "model_weighted_CCE_50_64_aasist_raw_ASV19_none")
+RUN_DIR = os.path.join(cfg.baseline_models_root,
+                       "model_weighted_CCE_50_64_aasist_raw_ASV19_none")
 
 
 def score_dev(ckpt, device, batch_size=64, num_workers=8):

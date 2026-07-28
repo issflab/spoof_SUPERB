@@ -10,7 +10,7 @@ Produces five figures:
 
 Usage
 -----
-    python3 scripts/create_tts_heatmaps.py \\
+    python -m spoof_superb.analysis.create_tts_heatmaps \\
         --far_dir /data/ssl_anti_spoofing/asd_superb_score_files/far_results \\
         --out_dir outputs/figures
 """

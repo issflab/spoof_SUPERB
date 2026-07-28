@@ -18,7 +18,7 @@ the figure labelling (these systems are undisclosed, not unmeasured).
 
 Usage
 -----
-    python3 scripts/organize_mlaad_scores.py
+    python -m spoof_superb.analysis.organize_mlaad_scores
 """
 
 from __future__ import annotations

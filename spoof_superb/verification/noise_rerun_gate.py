@@ -57,7 +57,9 @@ import pandas as pd
 from spoof_superb import REPO_ROOT  # noqa: F401  (kept for path-relative reporting)
 from spoof_superb.core.metrics import compute_eer
 
-ROOT = "/data/ssl_anti_spoofing/asd_superb_score_files/asvld_rerun"
+from spoof_superb.config import cfg
+
+ROOT = os.path.join(cfg.scores_root, "asvld_rerun")
 OLD_DIR = os.path.join(ROOT, "Noise_Addition")
 NEW_DIR = os.path.join(ROOT, "Noise_Addition_new")
 BACKUP_DIR = os.path.join(ROOT, "Noise_Addition_fp16_backup")

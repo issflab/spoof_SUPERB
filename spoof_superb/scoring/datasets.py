@@ -8,17 +8,19 @@ Every benchmark set differs in exactly three ways, and nothing else:
 
 Isolating those three makes one scoring driver sufficient for all of them.
 
-Paths here are still module constants; they move into config in a later step.
+Corpus roots come from spoof_superb.config; nothing here is hardcoded.
 """
 
 import csv
 import os
 from functools import lru_cache
 
-DATA = "/data/Data"
-SCORES_ROOT = "/data/ssl_anti_spoofing/asd_superb_score_files"
-REFERENCE_DIR = os.path.join(SCORES_ROOT, "linear_head")
-DEFAULT_REFERENCE_SSL = "xls_r_300m"
+from spoof_superb.config import cfg
+
+DATA = cfg.data_root
+SCORES_ROOT = cfg.scores_root
+REFERENCE_DIR = cfg.reference_dir
+DEFAULT_REFERENCE_SSL = cfg.reference_ssl
 
 CROP = 64600  # ~4 s at 16 kHz, as in data/datasets_ssl.py
 

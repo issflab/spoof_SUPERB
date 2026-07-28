@@ -11,7 +11,7 @@ but are missing ASV21 LA:C1.  This script:
 
 Usage
 -----
-    python3 scripts/merge_asv21la_into_hashim_baseline.py \
+    python -m spoof_superb.analysis.merge_asv21la_into_hashim_baseline \
         --hashim_dir   /data/ssl_anti_spoofing/asd_superb_score_files/Baseline_by_Hashim/ \
         --la_dir       /data/ssl_anti_spoofing/asd_superb_score_files/linear_head/ \
         --asv21_la_protocol /data/Data/ASVSpoof2021_complete/LA/ASVspoof2021_LA_eval/trial_metadata.txt \

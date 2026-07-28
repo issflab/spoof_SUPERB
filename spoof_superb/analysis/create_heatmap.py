@@ -10,7 +10,7 @@ Two output figures:
 
 Usage
 -----
-    python3 scripts/create_heatmap.py \\
+    python -m spoof_superb.analysis.create_heatmap \\
         --csv /data/ssl_anti_spoofing/asd_superb_score_files/scores_by_category_augmented/eer_matrix.csv \\
         --out_dir outputs/figures
 """

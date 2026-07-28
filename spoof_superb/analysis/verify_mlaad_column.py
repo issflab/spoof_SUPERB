@@ -16,7 +16,7 @@ Three checks:
 
 Usage
 -----
-    python3 scripts/verify_mlaad_column.py --tex ../spoof_SUPERB_IEEE_ACCESS/access.tex
+    python -m spoof_superb.analysis.verify_mlaad_column --tex ../spoof_SUPERB_IEEE_ACCESS/access.tex
 """
 
 import argparse
@@ -30,8 +30,6 @@ from scipy.interpolate import interp1d
 from sklearn.metrics import roc_curve
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
 
 from spoof_superb.core.metrics import compute_eer as repo_compute_eer  # type: ignore
 

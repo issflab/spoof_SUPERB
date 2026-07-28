@@ -25,7 +25,9 @@ import random
 import sys
 from collections import defaultdict
 
-BASE = "/data/ssl_anti_spoofing/asd_superb_score_files/linear_head_MLAAD_v10"
+from spoof_superb.config import cfg
+
+BASE = os.path.join(cfg.scores_root, "linear_head_MLAAD_v10")
 OUT = os.path.join(BASE, "balanced")
 MANIFEST = os.path.join(OUT, "bonafide_keep_manifest.txt")
 TARGET = 456000          # match the MLAAD v10 spoof count

@@ -9,7 +9,7 @@ Edits files in-place. Reports lines removed per system.
 
 Usage
 -----
-    python3 scripts/strip_bonafide_from_tts.py --base_dir /data/ssl_anti_spoofing/asd_superb_score_files
+    python -m spoof_superb.analysis.strip_bonafide_from_tts --base_dir /data/ssl_anti_spoofing/asd_superb_score_files
 """
 
 import argparse

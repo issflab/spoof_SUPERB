@@ -7,8 +7,8 @@ Why: the reference score format is '<utt_id> - <label> <score>', space-delimited
 MLAAD v10 introduces vendor directories whose names contain spaces
 ('Cartesia.ai (Sonic-3)', 'OpenAI TTS-1 HD', ...), so ~8.6% of v10 utt_ids
 contain spaces. Any consumer that splits on whitespace -- e.g.
-scripts/evaluate_score_file.py (pd.read_csv sep=r"\\s+") and
-scripts/compute_eer_matrix.py (line.split()) -- mis-parses those rows.
+analysis/evaluate_score_file.py (pd.read_csv sep=r"\\s+") and
+analysis/compute_eer_matrix.py (line.split()) -- mis-parses those rows.
 
 The .txt files stay exactly as produced (reference-format compatible). This
 writes a parallel .tsv with three tab-separated columns:
@@ -20,7 +20,9 @@ import glob
 import os
 import sys
 
-OUT_DIR = "/data/ssl_anti_spoofing/asd_superb_score_files/linear_head_MLAAD_v10"
+from spoof_superb.config import cfg
+
+OUT_DIR = os.path.join(cfg.scores_root, "linear_head_MLAAD_v10")
 TSV_DIR = os.path.join(OUT_DIR, "tsv")
 
 

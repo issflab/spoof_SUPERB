@@ -24,7 +24,7 @@ so it does not recompute EERs.
 
 Usage
 -----
-    python3 scripts/create_mlaad_tts_system_ranked_figure.py
+    python -m spoof_superb.analysis.create_mlaad_tts_system_ranked_figure
 """
 
 from __future__ import annotations
