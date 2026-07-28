@@ -50,6 +50,49 @@ reasoning above.
 `REF_UNUSABLE` means the *reference* is more than 50% NaN -- the broken side is
 theirs, your output is finite, and it exits 0. It is a report, not a failure.
 
+## 1b. Against the shipped reference pack (no large download)
+
+The full score files are ~6 GB, so they are not in the repo. What *is* in the
+repo is a few-MB pack that answers the same questions:
+
+```
+trials/published/{dataset}.tsv.gz        the trial list the benchmark used
+reference/summary.json                   per (dataset, model): counts, EER, sha256
+reference/subsample/{dataset}/{model}.tsv.gz   2,000 reference scores
+```
+
+```bash
+python -m spoof_superb.verification.driver --check spoofceleb --pack \
+    --dataset spoofceleb --model xls_r_300m --new my_scores.txt
+```
+
+```
+[coverage] spoofceleb/xls_r_300m  scored 91130  published 91130  overlap 91130
+           published-not-scored 0  scored-not-published 0
+[ranking ] on 2000 subsample rows: ... spearman=1.0000 ... -> PASS
+[expected] published EER = 1.2340% over 91130 rows
+```
+
+Three separate answers: **coverage** (did you score the right trials?),
+**ranking** (do your scores order them the same way?), and **expected** (is
+your headline EER where it should be?).
+
+Grading ranking on 2,000 rows is not a compromise: a 2,000-row subsample
+reproduces the full-file Spearman to within about 3e-6, against a 0.99 pass
+threshold.
+
+**Coverage is reported, never enforced.** Scoring the full protocol where the
+published column used a subset is a deliberate, legitimate difference; the
+point is that it appears as a line of output rather than silently changing what
+gets compared.
+
+Regenerate the pack from a full score tree with:
+
+```bash
+python -m spoof_superb.tools.build_reference_pack --dry-run
+python -m spoof_superb.tools.build_reference_pack
+```
+
 ## 2. The fp32 ASVLD noise re-run promotion gate
 
 ```bash

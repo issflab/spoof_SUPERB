@@ -18,6 +18,8 @@ Output is one line, in the same shape the orchestrators parse:
 
 import argparse
 
+from spoof_superb import REPO_ROOT
+from spoof_superb.verification.pack import check_against_pack, format_report
 from spoof_superb.verification.policies import POLICIES, grade
 from spoof_superb.verification.stats import compare
 
@@ -27,8 +29,30 @@ def main(argv=None):
     ap.add_argument("--check", choices=sorted(POLICIES), required=True,
                     help="grade policy to apply")
     ap.add_argument("--new", required=True, help="freshly produced score file")
-    ap.add_argument("--ref", required=True, help="reference score file")
+    ap.add_argument("--ref", default=None, help="reference score file")
+    ap.add_argument("--pack", nargs="?", const=str(REPO_ROOT), default=None,
+                    metavar="PACK_ROOT",
+                    help="verify against the shipped reference pack instead of a "
+                         "full reference file; requires --dataset and --model")
+    ap.add_argument("--dataset", default=None, help="with --pack")
+    ap.add_argument("--model", default=None, help="with --pack")
     args = ap.parse_args(argv)
+
+    if args.pack:
+        if not (args.dataset and args.model):
+            ap.error("--pack requires --dataset and --model")
+        cov, cmp_, expected = check_against_pack(
+            args.new, args.dataset, args.model, args.pack)
+        if cmp_.n_shared == 0:
+            print(format_report(args.dataset, args.model, cov, cmp_, expected))
+            print("[verdict ] NO_OVERLAP (no subsample utt_ids found in your file)")
+            return 1
+        v = grade(args.check, cmp_)
+        print(format_report(args.dataset, args.model, cov, cmp_, expected, v))
+        return v.returncode
+
+    if not args.ref:
+        ap.error("--ref is required unless --pack is used")
 
     c = compare(args.new, args.ref)
     if c.n_shared == 0:
