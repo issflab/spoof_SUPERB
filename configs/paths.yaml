@@ -1,0 +1,55 @@
+# ---------------------------------------------------------------------------
+# Spoof-SUPERB settings.  EDIT THIS FILE to point the repo at your data.
+#
+# This is the only configuration file you need to touch. It is loaded
+# automatically. spoof_superb/config.py is the schema and the loader -- code,
+# not settings; you should not need to edit it.
+#
+# Anything you leave out falls back to the default in config.py.
+# Check what is actually in effect with:
+#
+#     python -m spoof_superb.config
+#
+# For a one-off override without editing anything, use an environment
+# variable, e.g.  SPOOF_SUPERB_SCORES_ROOT=/tmp/x python -m ...
+# To keep several of these files (one per machine), point at one with
+#     SPOOF_SUPERB_CONFIG=/path/to/other.yaml
+# ---------------------------------------------------------------------------
+
+# --- where the corpora live -------------------------------------------------
+# Expected sub-directory layout is documented in docs/04-datasets.md.
+data_root: /data/Data
+
+# --- where score files are read from and written to -------------------------
+# Reproducing the published tables reads from here.
+scores_root: /data/ssl_anti_spoofing/asd_superb_score_files
+
+# --- where trained checkpoints live -----------------------------------------
+# models_root holds one directory per SSL model, each containing swa.pth,
+# named "{linear_head_prefix}{ssl_model}".
+models_root: /data/ssl_anti_spoofing/asd_superb_models/linear_head_models
+linear_head_prefix: model_weighted_CCE_50_64_linear_head_ASV19_
+
+# aasist_raw and lfcc_gmm checkpoints.
+baseline_models_root: /data/ssl_anti_spoofing/asd_superb_models/baselines
+
+# --- training ---------------------------------------------------------------
+# Where new training runs write checkpoints and logs.
+save_dir: /data/ssl_anti_spoofing/asd_superb/
+
+# Training corpus (ASVspoof2019 LA by default).
+database_path: /data/Data/ASVSpoofData_2019/train/LA/
+protocols_path: /data/Data/ASVSpoofData_2019/train/LA/ASVspoof2019_LA_cm_protocols/
+train_protocol: ASVspoof2019.LA.cm.train.trn.txt
+dev_protocol: ASVspoof2019.LA.cm.dev.trl.txt
+
+# --- defaults for the tools -------------------------------------------------
+# The SSL model whose published score file defines a dataset's trial list.
+reference_ssl: xls_r_300m
+
+cuda_device: cuda:0
+
+# Interpreter the orchestrator launches scoring subprocesses with.
+# Leave unset to use whichever python is running -- recommended, so a run
+# cannot silently mix environments (see humanpending.md RP-1).
+# python: /home/alhashim/miniconda3/envs/spoof_SUPERB/bin/python
