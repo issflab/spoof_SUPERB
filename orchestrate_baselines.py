@@ -26,7 +26,7 @@ import subprocess
 import sys
 import time
 
-from eval_baselines import DATASETS, DEFAULT_REFERENCE_SSL, reference_paths
+from spoof_superb.scoring.datasets import DATASETS, DEFAULT_REFERENCE_SSL, reference_paths
 
 PY = sys.executable
 REPO = os.path.dirname(os.path.abspath(__file__))
@@ -221,7 +221,7 @@ def run_one(model, dataset, device, n_jobs, batch_size, force=False):
     os.makedirs(LOG_DIR, exist_ok=True)
     log = os.path.join(LOG_DIR, f"{model}_{dataset}.log")
 
-    cmd = [PY, "-u", os.path.join(REPO, "eval_baselines.py"),
+    cmd = [PY, "-u", "-m", "spoof_superb.scoring.driver",
            "--model", model, "--model_path", MODEL_PATHS[model],
            "--dataset", dataset, "--output_file", out,
            "--n_jobs", str(n_jobs), "--batch_size", str(batch_size),

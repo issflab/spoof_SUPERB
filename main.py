@@ -277,7 +277,7 @@ if __name__ == '__main__':
     parser.add_argument('--eval_dataset', type=str, default=None,
                         help='Benchmark dataset key for the non-SSL baselines, '
                              'e.g. eval_2019, asvspoof2021_DF, wild. '
-                             'See eval_baselines.py --list_datasets.')
+                             'See `python -m spoof_superb.scoring.driver --list_datasets`.')
     parser.add_argument('--n_jobs', type=int, default=8,
                         help='Worker processes for LFCC feature extraction (lfcc_gmm only).')
     parser.add_argument('--is_eval', action='store_true', default=False,help='eval database')
@@ -404,7 +404,7 @@ if __name__ == '__main__':
     # ------------------------------------------------------------------ #
     if cfg.model_arch in ('lfcc_gmm', 'aasist_raw'):
         if cfg.mode == 'eval':
-            from eval_baselines import run_eval_from_main
+            from spoof_superb.scoring.driver import run_eval_from_main
             raise SystemExit(run_eval_from_main(args, cfg, device))
         if cfg.model_arch == 'lfcc_gmm':
             from train_lfcc_gmm import run_train_from_main

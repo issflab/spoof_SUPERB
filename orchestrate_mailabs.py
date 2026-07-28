@@ -99,9 +99,10 @@ def run_one(ssl, ckpt, gpu):
     write_status()
 
     env = dict(os.environ, CUDA_VISIBLE_DEVICES=_GPU_UUIDS[gpu])
-    cmd = [PY, os.path.join(REPO, "eval_mlaad.py"),
+    cmd = [PY, "-m", "spoof_superb.scoring.driver",
+           "--model", "linear_head", "--source", "walk",
            "--model_path", ckpt, "--ssl_model", ssl,
-           "--enumerate_root", MAILABS_ROOT, "--label", "bonafide",
+           "--walk_root", MAILABS_ROOT, "--label", "bonafide",
            "--output_file", out_file, "--cuda_device", "cuda:0",
            "--batch_size", "32", "--num_workers", "6"]
 

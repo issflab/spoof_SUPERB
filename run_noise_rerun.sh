@@ -22,6 +22,10 @@ GPU=$1; shift
 
 PY=/home/alhashim/miniconda3/envs/spoof_SUPERB/bin/python
 REPO=/home/alhashim/ASD_SUPERB/spoof_SUPERB
+# `python -m spoof_superb...` needs the package importable; exporting
+# PYTHONPATH rather than cd-ing keeps every relative path in this script
+# resolving exactly as before.
+export PYTHONPATH="$REPO:${PYTHONPATH:-}"
 PROTO=/data/Data/ASVSpoofLaunderedDatabase/ASVspoofLD/protocols
 AUDIO=/data/Data/ASVSpoofLaunderedDatabase/ASVspoofLD
 MODELS=/data/ssl_anti_spoofing/asd_superb_models/linear_head_models
@@ -40,8 +44,9 @@ for M in "$@"; do
   if [ ! -f "$REF" ]; then echo "[WARN] no archived score file for $M -- skipping"; continue; fi
 
   echo "=== $(date '+%F %T') START $M (gpu $GPU) ==="
-  CUDA_VISIBLE_DEVICES=$GPU $PY "$REPO/eval_asvld.py" \
-      --model_path "$CK" --ssl_model "$M" --condition Noise_Addition \
+  CUDA_VISIBLE_DEVICES=$GPU $PY -m spoof_superb.scoring.driver \
+      --model linear_head --source asvld \
+      --model_path "$CK" --ssl_model "$M" --asvld_condition Noise_Addition \
       --output_file "$OF" --protocols_dir "$PROTO" --audio_base_dir "$AUDIO" \
       --cuda_device cuda:0 --restrict_to "$REF" \
       --batch_size 32 --num_workers 8

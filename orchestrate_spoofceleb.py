@@ -143,7 +143,8 @@ def output_is_complete(out_file):
 
 def _launch(ssl, ckpt, gpu, out_file, log_file):
     env = dict(os.environ, CUDA_VISIBLE_DEVICES=_GPU_UUIDS[gpu])
-    cmd = [PY, os.path.join(REPO, "eval_mlaad.py"),
+    cmd = [PY, "-m", "spoof_superb.scoring.driver",
+           "--model", "linear_head", "--source", "protocol_csv",
            "--model_path", ckpt, "--ssl_model", ssl,
            "--output_file", out_file, "--cuda_device", "cuda:0",
            "--protocol_csv", PROTOCOL, "--audio_base", AUDIO_BASE,

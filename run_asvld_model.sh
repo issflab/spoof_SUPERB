@@ -9,6 +9,10 @@ GPU=$2
 
 PY=/home/alhashim/.conda/envs/ASD_SUPERB/bin/python
 REPO=/home/alhashim/ASD_SUPERB/spoof_SUPERB
+# `python -m spoof_superb...` needs the package importable; exporting
+# PYTHONPATH rather than cd-ing keeps every relative path in this script
+# resolving exactly as before.
+export PYTHONPATH="$REPO:${PYTHONPATH:-}"
 PROTO=/data/Data/ASVSpoofLaunderedDatabase/ASVspoofLD/protocols
 AUDIO=/data/Data/ASVSpoofLaunderedDatabase/ASVspoofLD
 CKPT=/data/ssl_anti_spoofing/asd_superb_models/linear_head_models/model_weighted_CCE_50_64_linear_head_ASV19_${MODEL}/swa.pth
@@ -26,11 +30,12 @@ run() {  # COND  RESTRICT(optional)
   local COND=$1; local RESTRICT=${2:-}
   local OF=$OUT/$COND/linear_head_${COND}_${MODEL}.txt
   echo "=== $(date '+%F %T') START $MODEL / $COND (gpu $GPU) ==="
-  local args=(--model_path "$CKPT" --ssl_model "$MODEL" --condition "$COND"
+  local args=(--model linear_head --source asvld
+              --model_path "$CKPT" --ssl_model "$MODEL" --asvld_condition "$COND"
               --output_file "$OF" --protocols_dir "$PROTO" --audio_base_dir "$AUDIO"
               --cuda_device "cuda:$GPU")
   [ -n "$RESTRICT" ] && args+=(--restrict_to "$RESTRICT")
-  $PY "$REPO/eval_asvld.py" "${args[@]}"
+  $PY -m spoof_superb.scoring.driver "${args[@]}"
   echo "=== $(date '+%F %T') END   $MODEL / $COND rc=$? ==="
 }
 

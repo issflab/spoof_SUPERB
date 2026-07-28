@@ -1,0 +1,276 @@
+"""Dataset registry: how a trial list, its labels, and its audio paths are found.
+
+Every benchmark set differs in exactly three ways, and nothing else:
+
+  * where the trial list comes from      (reference score file / protocol / walk)
+  * where the ground-truth key comes from (a column / a constant / a CSV)
+  * how a utt_id maps to a file on disk   (the ``resolve`` callables below)
+
+Isolating those three makes one scoring driver sufficient for all of them.
+
+Paths here are still module constants; they move into config in a later step.
+"""
+
+import csv
+import os
+from functools import lru_cache
+
+DATA = "/data/Data"
+SCORES_ROOT = "/data/ssl_anti_spoofing/asd_superb_score_files"
+REFERENCE_DIR = os.path.join(SCORES_ROOT, "linear_head")
+DEFAULT_REFERENCE_SSL = "xls_r_300m"
+
+CROP = 64600  # ~4 s at 16 kHz, as in data/datasets_ssl.py
+
+ASVLD_ROOT = os.path.join(DATA, "ASVSpoofLaunderedDatabase", "ASVspoofLD")
+ASVLD_CONDITIONS = ["Noise_Addition", "Reverberation", "Resampling",
+                    "Recompression", "Filtering"]
+# note the upstream misspelling "Launered"
+ASVLD_PROTOCOL_TEMPLATE = "ASVspoofLauneredDatabase_{condition}.txt"
+
+DFEVAL_AUDIO = os.path.join(DATA, "Deepfake_Eval_2024", "audio-data")
+FF_NFS_PREFIX = "/nfs/turbo/umd-hafiz/issf_server_data/famousfigures/"
+FF_LOCAL_ROOT = os.path.join(DATA, "famousfigures")
+
+MLAAD_ROOT = os.path.join(DATA, "MLAAD")
+MAILABS_ROOT = os.path.join(DATA, "MAILabs")
+SPOOFCELEB_PROTOCOL = os.path.join(DATA, "SpoofCeleb/metadata/evaluation.csv")
+SPOOFCELEB_AUDIO = os.path.join(DATA, "SpoofCeleb/flac/evaluation")
+
+
+# ===========================================================================
+# utt_id -> audio path
+# ===========================================================================
+
+@lru_cache(maxsize=1)
+def _asvld_condition_index():
+    """utt_id -> condition, parsed from the 5 ASVLD protocols.
+
+    Needed because ASVLD audio lives at {root}/{condition}/flac/{utt}.flac but
+    the pooled reference score file carries no condition column.
+    """
+    index = {}
+    proto_dir = os.path.join(ASVLD_ROOT, "protocols")
+    for cond in ASVLD_CONDITIONS:
+        path = os.path.join(proto_dir, ASVLD_PROTOCOL_TEMPLATE.format(condition=cond))
+        if not os.path.isfile(path):
+            print(f"  [WARN] ASVLD protocol missing: {path}")
+            continue
+        with open(path) as f:
+            for line in f:
+                parts = line.split()
+                if len(parts) >= 4:
+                    index[parts[1]] = cond
+    print(f"  ASVLD condition index: {len(index)} utt_ids")
+    return index
+
+
+@lru_cache(maxsize=1)
+def _dfeval_stem_index():
+    """basename-without-extension -> real path.
+
+    DFEval24 score files write every id with a .wav extension, but on disk the
+    files are .mp3 / .m4a / .mp4 / .wav. Match on the stem.
+    """
+    index = {}
+    if not os.path.isdir(DFEVAL_AUDIO):
+        print(f"  [WARN] DFEval24 audio dir missing: {DFEVAL_AUDIO}")
+        return index
+    for fn in os.listdir(DFEVAL_AUDIO):
+        stem = os.path.splitext(fn)[0]
+        index.setdefault(stem, os.path.join(DFEVAL_AUDIO, fn))
+    print(f"  DFEval24 stem index: {len(index)} files")
+    return index
+
+
+def _r_asv19(utt):      # utt already carries '.flac'
+    return os.path.join(DATA, "ASVSpoofData_2019/train/LA/ASVspoof2019_LA_eval/flac", utt)
+
+
+def _r_asv21_la(utt):
+    return os.path.join(DATA, "ASVSpoof2021_complete/LA/ASVspoof2021_LA_eval/flac", utt + ".flac")
+
+
+def _r_asv21_df(utt):
+    return os.path.join(DATA, "ASVSpoof2021_complete/DF/ASVspoof2021_DF_eval/flac", utt + ".flac")
+
+
+def _r_asv5(utt):
+    return os.path.join(DATA, "ASVSpoof5/No_Laundering_eval/flac", utt + ".flac")
+
+
+def _r_itw(utt):
+    return os.path.join(DATA, "ds_wild/release_in_the_wild", utt + ".wav")
+
+
+def _r_dfeval(utt):
+    return _dfeval_stem_index().get(os.path.splitext(utt)[0])
+
+
+def _r_famous(utt):
+    """Famous Figures: {root}/{Speaker}/{Source}/{name}.wav
+
+    Two rewrites are needed, both verified against the full reference file:
+      1. Reference ids are absolute paths under a stale NFS mount that does not
+         exist on this host; the same tree is present under /data/Data.
+      2. Bonafide rows carry the protocol's empty Source field as the literal
+         directory '-', but on disk they live under 'Bonafide'. All 49,945
+         '/-/' rows are key=bonafide and all 49,945 resolve after this remap;
+         without it the dataset would score zero bonafide trials and its EER
+         would be undefined.
+    """
+    if utt.startswith(FF_NFS_PREFIX):
+        rel = utt[len(FF_NFS_PREFIX):]
+    elif utt.startswith("/"):
+        rel = os.path.relpath(utt, FF_LOCAL_ROOT)
+    else:
+        rel = utt
+
+    parts = rel.split("/")
+    if len(parts) >= 3 and parts[1] == "-":
+        parts[1] = "Bonafide"
+        rel = "/".join(parts)
+
+    return os.path.join(FF_LOCAL_ROOT, rel)
+
+
+def _r_spoofceleb(utt):
+    return os.path.join(SPOOFCELEB_AUDIO, utt)
+
+
+def _r_mlaad(utt):      # ids are relative to /data/Data and carry the extension
+    return os.path.join(DATA, utt)
+
+
+def _r_asvld(utt):
+    cond = _asvld_condition_index().get(utt)
+    if cond is None:
+        return None
+    return os.path.join(ASVLD_ROOT, cond, "flac", utt + ".flac")
+
+
+def asvld_condition_resolver(audio_base_dir, condition):
+    """Resolver for a single-condition ASVLD run (audio path is known upfront)."""
+    flac_dir = os.path.join(audio_base_dir, condition, "flac")
+    return lambda utt: os.path.join(flac_dir, utt + ".flac")
+
+
+def relative_resolver(base_dir):
+    """Resolver for id-is-a-relative-path datasets (MLAAD, M-AILABS, SpoofCeleb)."""
+    return lambda utt: os.path.join(base_dir, utt)
+
+
+# ===========================================================================
+# Benchmark registry -- reference-score-file driven (the 10 published columns)
+# ===========================================================================
+
+# `ref` is resolved relative to REFERENCE_DIR; `ref_abs` is an absolute template
+# for columns whose published source lives outside linear_head/. A list means the
+# paper's column is the POOL of those files, and it is assembled in that order.
+#
+# Sources here must match analysis/recompute_table5_mlaad_v10.py, which is the
+# authority for what Table 5 actually reports. Two columns are NOT the obvious
+# linear_head/ file:
+#   MLAAD  -> the v10 re-run (1,040,006 rows), not legacy linear_head_Multilingual
+#             (307,998). Different corpus scale entirely.
+#   ASVLD  -> linear_head_asvspoofLD (1,207,509: noise x10, reverb x3, resample x4)
+#             POOLED WITH asvld_rerun/Recompression (427,422 = 71,237 x 6 bitrates),
+#             folded in by commit 6bf39a0. Reading only the first file silently
+#             reproduces a pre-6bf39a0 column.
+# SpoofCeleb legacy vs the linear_head_SpoofCeleb re-run were verified to have
+# identical utt sets and labels, so either supplies the same trials; the legacy
+# path is kept.
+DATASETS = {
+    "eval_2019":          dict(ref="linear_head_eval_2019_{ssl}.txt",          resolve=_r_asv19),
+    "asvspoof2021_LA":    dict(ref="linear_head_asvspoof2021_LA_{ssl}.txt",    resolve=_r_asv21_la),
+    "asvspoof2021_DF":    dict(ref="linear_head_asvspoof2021_DF_{ssl}.txt",    resolve=_r_asv21_df),
+    "asvspoof5":          dict(ref="linear_head_asvspoof5_{ssl}.txt",          resolve=_r_asv5),
+    "deepfake_eval_2024": dict(ref="linear_head_deepfake_eval_2024_{ssl}.txt", resolve=_r_dfeval),
+    "wild":               dict(ref="linear_head_wild_{ssl}.txt",               resolve=_r_itw),
+    "Famous_Figures":     dict(ref="linear_head_Famous_Figures_{ssl}.txt",     resolve=_r_famous),
+    "spoofceleb":         dict(ref="linear_head_spoofceleb_{ssl}.txt",         resolve=_r_spoofceleb),
+    "Multilingual":       dict(ref_abs=[os.path.join(
+                                  SCORES_ROOT, "linear_head_MLAAD_v10",
+                                  "linear_head_MLAAD_v10_{ssl}.txt")],
+                               resolve=_r_mlaad),
+    "asvspoofLD":         dict(ref_abs=[os.path.join(REFERENCE_DIR,
+                                            "linear_head_asvspoofLD_{ssl}.txt"),
+                                        os.path.join(
+                                  SCORES_ROOT, "asvld_rerun", "Recompression",
+                                  "linear_head_Recompression_{ssl}.txt")],
+                               resolve=_r_asvld),
+}
+
+
+def reference_paths(dataset, reference_ssl):
+    """Absolute reference score file(s) defining a dataset's trial list."""
+    spec = DATASETS[dataset]
+    if "ref_abs" in spec:
+        return [t.format(ssl=reference_ssl) for t in spec["ref_abs"]]
+    return [os.path.join(REFERENCE_DIR, spec["ref"].format(ssl=reference_ssl))]
+
+
+# ===========================================================================
+# Trial-list sources
+# ===========================================================================
+
+def trials_from_asvld_protocol(protocols_dir, condition):
+    """([utt_id], {utt_id: key}) from a 6-column ASVLD protocol.
+
+    Columns: speaker utt_id attack_id key condition variant
+    """
+    path = os.path.join(protocols_dir, ASVLD_PROTOCOL_TEMPLATE.format(condition=condition))
+    if not os.path.isfile(path):
+        return None, None
+
+    utts, keys = [], {}
+    with open(path) as f:
+        for line in f:
+            parts = line.strip().split()
+            if len(parts) < 4:
+                print(f"[WARN] skipping malformed protocol line: {line.strip()!r}")
+                continue
+            utts.append(parts[1])
+            keys[parts[1]] = parts[3]
+    return utts, keys
+
+
+def trials_from_walk(root, data_base, label):
+    """([utt_id], {utt_id: label}) for every wav under `root`.
+
+    Used for MLAAD (all spoof) and M-AILABS (all bonafide). utt_ids are
+    relative to `data_base`, reproducing the id format of the reference score
+    files.
+    """
+    utts = []
+    for dirpath, _, filenames in os.walk(root):
+        for fn in filenames:
+            # Skip macOS AppleDouble sidecars ('._name.wav'): 176-245 byte
+            # metadata stubs, not audio. M-AILABS carries 6 of them and they are
+            # absent from the reference score files, so they are not utterances.
+            if fn.startswith("._"):
+                continue
+            if fn.endswith(".wav"):
+                utts.append(os.path.relpath(os.path.join(dirpath, fn), data_base))
+    utts.sort()
+    return utts, {u: label for u in utts}
+
+
+def trials_from_protocol_csv(path, bonafide_attack="a00"):
+    """([utt_id], {utt_id: key}) from a SpoofCeleb-style CSV (file,speaker,attack).
+
+    The utt_id is the 'file' column VERBATIM -- it already carries the .flac
+    extension and reproduces the reference ids. Unlike MLAAD (all spoof) and
+    M-AILABS (all bonafide), the label is per-utterance: attack == 'a00' is
+    bonafide, every other attack is spoof.
+    """
+    utts, keys = [], {}
+    with open(path, newline="") as f:
+        for row in csv.DictReader(f):
+            fn = (row.get("file") or "").strip()
+            if not fn:
+                continue
+            attack = (row.get("attack") or "").strip()
+            utts.append(fn)
+            keys[fn] = "bonafide" if attack == bonafide_attack else "spoof"
+    return utts, keys
