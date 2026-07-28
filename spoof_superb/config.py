@@ -83,6 +83,11 @@ class Config:
     baseline_models_root: str = '/data/ssl_anti_spoofing/asd_superb_models/baselines'
     save_dir: str = '/data/ssl_anti_spoofing/asd_superb/'
 
+    # Score-file directory layout. 'legacy' reproduces the pre-reorg paths;
+    # 'v2' is raw/{system}/{dataset}/{frontend}.txt. Default is legacy so an
+    # existing tree keeps working; set v2 in configs/paths.yaml for a new one.
+    score_layout: Literal['legacy', 'v2'] = 'legacy'
+
     linear_head_prefix: str = 'model_weighted_CCE_50_64_linear_head_ASV19_'
     reference_ssl: str = 'xls_r_300m'
 
@@ -137,6 +142,7 @@ _ENV_MAP = {
     'models_root': 'SPOOF_SUPERB_MODELS_ROOT',
     'baseline_models_root': 'SPOOF_SUPERB_BASELINE_MODELS_ROOT',
     'python': 'SPOOF_SUPERB_PYTHON',
+    'score_layout': 'SPOOF_SUPERB_SCORE_LAYOUT',
 }
 
 

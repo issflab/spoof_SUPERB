@@ -17,6 +17,7 @@ from dataclasses import dataclass, field
 from typing import Callable, Optional, Sequence
 
 from spoof_superb.config import cfg
+from spoof_superb.core.scorepath import score_path
 from spoof_superb.scoring.datasets import (
     DATASETS,
     MAILABS_ROOT,
@@ -104,10 +105,15 @@ def resolve_baseline_model(model):
 # Task enumeration, one function per job shape
 # ===========================================================================
 
-def _linear_head_tasks(job, only, source_argv, out_name, ref_name):
+def _linear_head_tasks(job, only, source_argv, dataset, ref_name):
+    """Tasks for one linear-head sweep.
+
+    Output paths come from core.scorepath, so the on-disk layout is decided in
+    one place and follows cfg.score_layout.
+    """
     tasks = []
     for ssl, ckpt in discover_linear_heads(only=only, skip=job.skip):
-        out_file = os.path.join(job.out_dir, out_name.format(ssl=ssl))
+        out_file = score_path("linear_head", dataset, ssl)
         ref_file = (os.path.join(job.ref_dir, ref_name.format(ssl=ssl))
                     if job.ref_dir and ref_name else None)
         argv = [*DRIVER, "--model", "linear_head",
@@ -123,14 +129,14 @@ def _linear_head_tasks(job, only, source_argv, out_name, ref_name):
 def mlaad_tasks(job, only=None):
     return _linear_head_tasks(
         job, only, ["--source", "walk"],
-        "linear_head_MLAAD_v10_{ssl}.txt", "linear_head_Multilingual_{ssl}.txt")
+        "Multilingual", "linear_head_Multilingual_{ssl}.txt")
 
 
 def mailabs_tasks(job, only=None):
     return _linear_head_tasks(
         job, only, ["--source", "walk", "--walk_root", MAILABS_ROOT,
                     "--label", "bonafide"],
-        "linear_head_MAILABS_{ssl}.txt", "linear_head_Multilingual_{ssl}.txt")
+        "MAILABS", "linear_head_Multilingual_{ssl}.txt")
 
 
 def spoofceleb_tasks(job, only=None):
@@ -138,7 +144,7 @@ def spoofceleb_tasks(job, only=None):
         job, only, ["--source", "protocol_csv",
                     "--protocol_csv", SPOOFCELEB_PROTOCOL,
                     "--audio_base", SPOOFCELEB_AUDIO],
-        "linear_head_SpoofCeleb_{ssl}.txt", "linear_head_spoofceleb_{ssl}.txt")
+        "spoofceleb", "linear_head_spoofceleb_{ssl}.txt")
 
 
 # Smallest-first, so a failure surfaces in seconds rather than after the 1.6M-row
@@ -158,7 +164,7 @@ def baseline_tasks(job, only=None):
         for ds in datasets:
             if ds not in DATASETS or (only and ds not in only):
                 continue
-            out_file = os.path.join(job.out_dir, model, f"{model}_{ds}.txt")
+            out_file = score_path(model, ds, "none")
             argv = [*DRIVER, "--model", model, "--model_path", ckpt,
                     "--dataset", ds, "--output_file", out_file,
                     "--cuda_device", "cuda:0",
