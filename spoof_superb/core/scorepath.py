@@ -126,3 +126,29 @@ def score_path(system, dataset, frontend="none", scores_root=None,
 def score_dir(system, dataset, scores_root=None, layout=None):
     """Directory holding every frontend's score file for one (system, dataset)."""
     return os.path.dirname(score_path(system, dataset, "x", scores_root, layout))
+
+
+def main(argv=None):
+    """Print the score-file path for one (system, dataset, frontend).
+
+    Lets the shell scripts put their output in the configured layout without
+    duplicating the rule:
+
+        OUTPUT_FILE=$(python -m spoof_superb.core.scorepath \
+            --system linear_head --dataset wild --frontend xls_r_300m)
+    """
+    import argparse
+    ap = argparse.ArgumentParser(prog="python -m spoof_superb.core.scorepath")
+    ap.add_argument("--system", required=True)
+    ap.add_argument("--dataset", required=True)
+    ap.add_argument("--frontend", default="none")
+    ap.add_argument("--layout", default=None, choices=[None, *LAYOUTS])
+    ap.add_argument("--scores_root", default=None)
+    args = ap.parse_args(argv)
+    print(score_path(args.system, args.dataset, args.frontend,
+                     scores_root=args.scores_root, layout=args.layout))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -42,7 +42,13 @@ WALK_ROOT="$DATA_ROOT/MLAAD/fake"     # M-AILABS is $DATA_ROOT/MAILabs
 WALK_LABEL="spoof"                    # 'bonafide' for M-AILABS
 
 # --- output -----------------------------------------------------------------
-OUTPUT_FILE="$REPO/outputs/scores/${MODEL}_${SOURCE}_${SSL_MODEL}.txt"
+# Which benchmark set this run represents. Used to place the output in the
+# configured layout (see score_layout in configs/paths.yaml). For SOURCE=walk
+# this is Multilingual for MLAAD and MAILABS for M-AILABS.
+SCORED_DATASET="$DATASET"
+
+# Leave empty to place the file automatically. Set it to write somewhere else.
+OUTPUT_FILE=""
 
 # --- runtime ----------------------------------------------------------------
 CUDA_DEVICE="cuda:0"
@@ -52,6 +58,13 @@ N_JOBS=16           # lfcc_gmm worker processes (CPU)
 USE_AMP="no"        # KEEP THIS "no". fp16 overflow is what produced the NaN.
 
 # ------------------------------------------------------------ END SETTINGS --
+
+FRONTEND="none"
+[ "$MODEL" = "linear_head" ] && FRONTEND="$SSL_MODEL"
+if [ -z "$OUTPUT_FILE" ]; then
+    OUTPUT_FILE=$("$PY" -m spoof_superb.core.scorepath \
+        --system "$MODEL" --dataset "$SCORED_DATASET" --frontend "$FRONTEND")
+fi
 
 ARGS=(--model "$MODEL" --model_path "$MODEL_PATH" --output_file "$OUTPUT_FILE"
       --source "$SOURCE" --cuda_device "$CUDA_DEVICE"
