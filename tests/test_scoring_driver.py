@@ -196,15 +196,10 @@ def test_d1_dataset_resolves_its_own_source_and_parameters():
     assert a.protocol_csv.endswith("SpoofCeleb/metadata/evaluation.csv")
     assert a.audio_base.endswith("SpoofCeleb/flac/evaluation")
 
-    b = _args(dataset="MAILABS")
-    assert _apply_dataset_defaults(b)
-    assert b.source == "walk" and b.label == "bonafide"
-    assert b.walk_root.endswith("MAILabs")
-
-    c = _args(dataset="Multilingual")
-    assert _apply_dataset_defaults(c)
-    assert c.source == "walk" and c.label == "spoof"
-    assert c.walk_root.endswith(os.path.join("MLAAD", "fake"))
+    for dataset in ("MAILABS", "Multilingual", "wild", "asvspoofLD"):
+        a = _args(dataset=dataset)
+        assert _apply_dataset_defaults(a)
+        assert a.source == "protocol", f"{dataset} should read its protocol"
 
 
 def test_d2_explicit_flags_still_override():
@@ -218,11 +213,11 @@ def test_d2_explicit_flags_still_override():
 
 
 def test_d3_datasets_without_a_native_protocol_use_the_reference_file():
-    a = _args(dataset="wild")
-    assert _apply_dataset_defaults(a)
-    assert a.source == "benchmark", (
-        "wild has no corpus-derived trial list yet; see RP-7"
-    )
+    """The remaining reference-driven columns; see RP-7."""
+    for dataset in ("eval_2019", "asvspoof2021_DF", "Famous_Figures"):
+        a = _args(dataset=dataset)
+        assert _apply_dataset_defaults(a)
+        assert a.source == "benchmark", dataset
 
 
 def test_d4_unknown_dataset_is_rejected():
@@ -233,10 +228,68 @@ def test_d4_unknown_dataset_is_rejected():
 def test_d5_mailabs_is_scoreable_but_not_a_benchmark_column():
     assert "MAILABS" in SCOREABLE
     assert not has_reference("MAILABS")
-    assert native_source("MAILABS") == "walk"
+    assert native_source("MAILABS") == "protocol"
     with pytest.raises(KeyError):
         reference_paths("MAILABS", "xls_r_300m")
 
 
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-v"]))
+
+
+# ---------------------------------------------------------------------------
+# Protocol-driven trial lists
+#
+#   T1  One reader handles every corpus's protocol format via parameters.
+#   T2  Label vocabularies are normalised. In-the-Wild writes "bona-fide" and
+#       Deepfake-Eval writes "Real"/"Fake"; everything downstream filters on
+#       "bonafide"/"spoof", so an unmapped label does not raise -- the trial
+#       silently vanishes from the EER. That must be impossible.
+#   T3  An unrecognised label is refused loudly rather than passed through.
+#   T4  Every declared protocol spec resolves and yields both classes where
+#       the corpus has both.
+# ---------------------------------------------------------------------------
+
+from spoof_superb.scoring.datasets import (           # noqa: E402
+    LABEL_ALIASES, PROTOCOL_SPECS, normalise_label, trials_from_protocol,
+)
+
+
+def test_t1_one_reader_handles_different_formats(tmp_path):
+    csvp = tmp_path / "meta.csv"
+    csvp.write_text("Audio,Speaker,Label\n0.wav,Alec,bona-fide\n1.wav,Alec,spoof\n")
+    utts, keys = trials_from_protocol(str(csvp), delimiter=",", header=True,
+                                      utt_col=0, label_col=2, strip_ext=True)
+    assert utts == ["0", "1"], "extension should be stripped to match the score ids"
+    assert keys["0"] == "bonafide" and keys["1"] == "spoof"
+
+    pipep = tmp_path / "meta.txt"
+    pipep.write_text("filename|absolute_path|model\n"
+                     "a.wav|/data/Data/MLAAD/fake/en/X/a.wav|X\n")
+    utts, keys = trials_from_protocol(str(pipep), delimiter="|", header=True,
+                                      utt_col=1, label_const="spoof",
+                                      rel_to="/data/Data")
+    assert utts == ["MLAAD/fake/en/X/a.wav"]
+    assert keys[utts[0]] == "spoof"
+
+
+def test_t2_label_vocabularies_are_normalised():
+    for raw in ("bona-fide", "bona fide", "BONAFIDE", "Real", "genuine"):
+        assert normalise_label(raw) == "bonafide", raw
+    for raw in ("spoof", "Fake", "SPOOFED", "tts"):
+        assert normalise_label(raw) == "spoof", raw
+    assert set(LABEL_ALIASES.values()) == {"bonafide", "spoof"}
+
+
+def test_t3_unknown_label_is_refused(tmp_path):
+    p = tmp_path / "bad.tsv"
+    p.write_text("utt_id\tlabel\nx\tmystery\n")
+    with pytest.raises(ValueError, match="unrecognised label"):
+        trials_from_protocol(str(p))
+
+
+def test_t4_declared_protocol_specs_are_well_formed():
+    for dataset, spec in PROTOCOL_SPECS.items():
+        assert "protocol" in spec, f"{dataset} declares no protocol file"
+        assert ("label_col" in spec) or ("label_const" in spec), (
+            f"{dataset} declares neither a label column nor a constant label")

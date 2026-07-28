@@ -49,6 +49,7 @@ from spoof_superb.core.scorefile import read_reference, read_utt_ids, report_eer
 from spoof_superb.scoring import backends
 from spoof_superb.scoring.datasets import (
     ASVLD_CONDITIONS,
+    PROTOCOL_SPECS,
     SCOREABLE,
     native_params,
     native_source,
@@ -64,12 +65,13 @@ from spoof_superb.scoring.datasets import (
     reference_paths,
     relative_resolver,
     trials_from_asvld_protocol,
+    trials_from_protocol,
     trials_from_protocol_csv,
     trials_from_walk,
 )
 
 MODELS = ("linear_head", "aasist_raw", "lfcc_gmm")
-SOURCES = ("benchmark", "asvld", "walk", "protocol_csv")
+SOURCES = ("protocol", "benchmark", "asvld", "walk", "protocol_csv")
 
 # Conditions no ASVLD run scores. Replaces the `.asvld_skip` sentinel file,
 # which lived next to eval_asvld.py, was read relative to that script's own
@@ -124,6 +126,24 @@ def _resolve_trials(args):
         for p in paths:
             print(f"[{args.dataset}] reference {p}", flush=True)
         return utts, keys, spec["resolve"]
+
+    if args.source == "protocol":
+        spec = dict(PROTOCOL_SPECS.get(args.dataset, {}))
+        path = args.protocol or spec.pop("protocol", None)
+        spec.pop("protocol", None)
+        if not path:
+            print(f"[ERROR] no protocol declared for {args.dataset!r}; pass --protocol")
+            return None, None, None
+        if not os.path.isfile(path):
+            print(f"[ERROR] protocol not found: {path}\n"
+                  f"        some are built once -- see "
+                  f"spoof_superb.data.prep.build_protocols")
+            return None, None, None
+        utts, keys = trials_from_protocol(path, **spec)
+        n_bona = sum(1 for u in utts if keys[u] == "bonafide")
+        print(f"[{args.dataset}] protocol {path}: {len(utts)} utts "
+              f"({n_bona} bonafide, {len(utts) - n_bona} spoof)", flush=True)
+        return utts, keys, DATASETS[args.dataset]["resolve"]
 
     if args.source == "asvld":
         if args.asvld_condition in args.skip_conditions:
@@ -302,6 +322,8 @@ def build_parser():
     ap.add_argument("--label", default=None,
                     help="walk source: key for every row")
 
+    ap.add_argument("--protocol", default=None,
+                    help="protocol source: override the dataset's protocol file")
     ap.add_argument("--protocol_csv", default=None,
                     help="protocol_csv source: CSV with columns file,speaker,attack")
     ap.add_argument("--audio_base", default=None,

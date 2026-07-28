@@ -217,19 +217,31 @@ DATASETS = {
 # `native` is the source used when --source is not given. Corpus- or
 # protocol-driven wherever one exists; `benchmark` (read the published score
 # file) only where the trial list survives nowhere else. See RP-7.
+#: How each protocol file is laid out. `protocol` is the file; the rest are
+#: arguments to trials_from_protocol.
+PROTOCOL_SPECS = {
+    "wild": dict(
+        protocol=os.path.join(DATA, "ds_wild/protocols/meta.csv"),
+        delimiter=",", header=True, utt_col=0, label_col=2, strip_ext=True),
+    "Multilingual": dict(
+        protocol=os.path.join(MLAAD_ROOT, "combined_meta_all.txt"),
+        delimiter="|", header=True, utt_col=1, label_const="spoof", rel_to=DATA),
+    "MAILABS": dict(
+        protocol=os.path.join(MAILABS_ROOT, "protocol.txt"),
+        delimiter="\t", header=True, utt_col=0, label_col=1),
+    "asvspoofLD": dict(
+        protocol=os.path.join(ASVLD_ROOT, "protocol.txt"),
+        delimiter="\t", header=True, utt_col=0, label_col=1),
+}
+
 NATIVE_TRIALS = {
     "spoofceleb":   dict(source="protocol_csv",
                          protocol_csv=SPOOFCELEB_PROTOCOL,
                          audio_base=SPOOFCELEB_AUDIO),
-    "Multilingual": dict(source="walk",
-                         walk_root=os.path.join(MLAAD_ROOT, "fake"),
-                         data_base=DATA, label="spoof"),
-    "MAILABS":      dict(source="walk",
-                         walk_root=MAILABS_ROOT,
-                         data_base=DATA, label="bonafide"),
-    "asvspoofLD":   dict(source="asvld",
-                         protocols_dir=os.path.join(ASVLD_ROOT, "protocols"),
-                         audio_base_dir=ASVLD_ROOT),
+    "wild":         dict(source="protocol"),
+    "Multilingual": dict(source="protocol"),
+    "MAILABS":      dict(source="protocol"),
+    "asvspoofLD":   dict(source="protocol"),
 }
 
 #: Scoreable but not a published benchmark column: the bonafide counterpart to
@@ -318,6 +330,81 @@ def trials_from_walk(root, data_base, label):
                 utts.append(os.path.relpath(os.path.join(dirpath, fn), data_base))
     utts.sort()
     return utts, {u: label for u in utts}
+
+
+#: Corpus label vocabularies -> the repo's two labels.
+#:
+#: Corpora disagree on spelling: In-the-Wild writes "bona-fide", ASVspoof
+#: writes "bonafide", Deepfake-Eval writes "Real"/"Fake". Everything
+#: downstream filters on == "bonafide" / == "spoof", so an unmapped label does
+#: not raise -- the trial simply disappears from the EER, and the number is
+#: quietly wrong. Normalising here, and refusing anything unrecognised, is what
+#: keeps that from happening.
+LABEL_ALIASES = {
+    "bonafide": "bonafide", "bona-fide": "bonafide", "bona fide": "bonafide",
+    "real": "bonafide", "genuine": "bonafide", "human": "bonafide",
+    "spoof": "spoof", "spoofed": "spoof", "fake": "spoof", "tts": "spoof",
+}
+
+
+def normalise_label(raw):
+    """Map a corpus label onto the repo's vocabulary, or raise."""
+    label = LABEL_ALIASES.get(raw.strip().lower())
+    if label is None:
+        raise ValueError(
+            f"unrecognised label {raw!r}. Downstream code filters on "
+            f"'bonafide'/'spoof', so an unmapped label silently drops the trial "
+            f"from every EER. Add it to datasets.LABEL_ALIASES.")
+    return label
+
+
+def trials_from_protocol(path, delimiter="\t", header=True, utt_col=0,
+                         label_col=1, label_const=None, strip_ext=False,
+                         rel_to=None):
+    """([utt_id], {utt_id: label}) from a delimited protocol file.
+
+    One reader for every corpus that ships (or was given) a protocol, so the
+    per-corpus differences are declared as parameters instead of written as
+    separate functions.
+
+      delimiter/header   the corpus's own format
+      utt_col/label_col  which columns carry the id and the ground truth
+      label_const        for corpora that are entirely one class
+      strip_ext          when the score-file id drops the extension
+      rel_to             when the protocol stores an absolute path but the id
+                         is relative to a root
+    """
+    utts, keys = [], {}
+    with open(path, newline="") as f:
+        if header:
+            next(f, None)
+        for line in f:
+            line = line.rstrip("\n")
+            if not line:
+                continue
+            parts = line.split(delimiter)
+            if len(parts) <= utt_col:
+                continue
+            utt = parts[utt_col].strip()
+            if not utt:
+                continue
+            if rel_to:
+                utt = os.path.relpath(utt, rel_to)
+            if strip_ext:
+                utt = os.path.splitext(utt)[0]
+            if label_const is not None:
+                raw = label_const
+            elif len(parts) > label_col:
+                raw = parts[label_col]
+            else:
+                continue
+            try:
+                label = normalise_label(raw)
+            except ValueError as exc:
+                raise ValueError(f"{path}: {exc}") from None
+            utts.append(utt)
+            keys[utt] = label
+    return utts, keys
 
 
 def trials_from_protocol_csv(path, bonafide_attack="a00"):
