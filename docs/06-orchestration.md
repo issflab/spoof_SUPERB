@@ -33,11 +33,37 @@ output will land.
 | `spoofceleb` | every linear head on the SpoofCeleb eval set | `spoofceleb` |
 | `baselines` | `aasist_raw` and `lfcc_gmm` on every dataset | none |
 
-Restrict any job to particular datasets:
+## Narrowing a sweep
+
+A task is one `(system, dataset, model)`, and each axis has its own filter, so
+any slice can be named directly:
 
 ```bash
-bin/orchestrate.sh --job linear_head --datasets wild spoofceleb --list
+# one model on one dataset -- the smallest useful unit of work
+bin/orchestrate.sh --datasets wild --models xls_r_300m
+
+# one model everywhere
+bin/orchestrate.sh --models xls_r_300m
+
+# every model on one dataset
+bin/orchestrate.sh --datasets spoofceleb
+
+# just the CPU baseline, one dataset
+bin/orchestrate.sh --systems lfcc_gmm --datasets wild
 ```
+
+| Filter | Selects | Notes |
+|---|---|---|
+| `--systems` | `linear_head`, `aasist_raw`, `lfcc_gmm` | |
+| `--datasets` | any registry key | see `bin/score.sh --list_datasets` |
+| `--models` | s3prl upstreams | applies to `linear_head` only |
+
+The same three are settable in `bin/orchestrate.sh`'s settings block. A filter
+combination that selects nothing produces nothing -- `--systems lfcc_gmm
+--models xls_r_300m` is empty, because that back-end has no upstream.
+
+`--only` is the deprecated spelling of `--models`; it used to mean SSL model
+for the SSL sweep and dataset for the baselines, which was a trap.
 
 A job is a selection over (system x dataset x frontend) plus its runtime
 policy, so `all` is not a special case -- it is the selection with nothing

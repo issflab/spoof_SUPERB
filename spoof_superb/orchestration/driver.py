@@ -205,10 +205,14 @@ def main(argv=None):
         description="Run a scoring job across models/datasets and GPUs")
     ap.add_argument("--job", choices=sorted(JOBS), required=True,
                     help="all = every system on every dataset")
+    ap.add_argument("--systems", nargs="*", default=None,
+                    help="restrict to these back-ends: linear_head aasist_raw lfcc_gmm")
     ap.add_argument("--datasets", nargs="*", default=None,
-                    help="restrict the sweep to these datasets")
+                    help="restrict to these datasets")
+    ap.add_argument("--models", nargs="*", default=None,
+                    help="restrict to these SSL upstreams (linear_head only)")
     ap.add_argument("--only", nargs="*", default=None,
-                    help="restrict to these task keys (SSL model, or dataset for baselines)")
+                    help=argparse.SUPPRESS)   # deprecated alias for --models
     ap.add_argument("--jobs", type=int, default=0,
                     help="parallel workers; 0 = one per GPU in the job spec, 1 = sequential")
     ap.add_argument("--gpus", nargs="*", type=int, default=None)
@@ -221,9 +225,13 @@ def main(argv=None):
     job = JOBS[args.job]
     if args.gpus:
         job.gpus = tuple(args.gpus)
-    if args.datasets:
-        job.datasets = args.datasets
-    tasks = job.enumerate_tasks(args.only)
+    if args.only and not args.models:
+        print("[orchestrate] --only is deprecated; use --models (SSL upstreams) "
+              "or --datasets")
+        args.models = args.only
+    tasks = job.enumerate_tasks(systems=args.systems,
+                                datasets=args.datasets,
+                                models=args.models)
 
     if not tasks:
         print(f"[orchestrate] {job.name}: no tasks (checked {job.out_dir})")

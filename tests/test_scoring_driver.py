@@ -384,3 +384,30 @@ def test_t12_expected_rows_comes_from_the_protocol():
     assert expected_rows("spoofceleb") == 91130
     assert expected_rows("wild") == 31779
     assert expected_rows("not_a_dataset") is None
+
+
+def test_t13_the_three_filters_are_orthogonal():
+    """Any slice of (system x dataset x model) can be named directly."""
+    from spoof_superb.orchestration.jobs import (
+        JOBS, enumerate_tasks, ordered_datasets)
+    job = JOBS["all"]
+
+    one = enumerate_tasks(job, datasets=["wild"], models=["xls_r_300m"])
+    assert len(one) == 1
+    assert one[0].name == "linear_head/wild/xls_r_300m"
+
+    # one model, every dataset
+    per_model = enumerate_tasks(job, models=["xls_r_300m"])
+    assert {t.dataset for t in per_model} == set(ordered_datasets())
+    assert {t.name.rsplit("/", 1)[1] for t in per_model} == {"xls_r_300m"}
+
+    # every model, one dataset
+    per_dataset = enumerate_tasks(job, datasets=["wild"])
+    assert {t.dataset for t in per_dataset} == {"wild"}
+    assert len(per_dataset) > 1
+
+    per_system = enumerate_tasks(job, systems=["lfcc_gmm"], datasets=["wild"])
+    assert len(per_system) == 1 and per_system[0].name == "lfcc_gmm/wild"
+
+    # A filter that selects nothing yields nothing, rather than everything.
+    assert enumerate_tasks(job, systems=["lfcc_gmm"], models=["xls_r_300m"]) == []

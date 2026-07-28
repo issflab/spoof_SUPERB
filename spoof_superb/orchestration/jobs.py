@@ -111,8 +111,9 @@ class Job:
     def summary_path(self):
         return os.path.join(self.out_dir, "SUMMARY.txt")
 
-    def enumerate_tasks(self, only=None):
-        return enumerate_tasks(self, only)
+    def enumerate_tasks(self, systems=None, datasets=None, models=None):
+        return enumerate_tasks(self, systems=systems, datasets=datasets,
+                               models=models)
 
 
 # ===========================================================================
@@ -144,10 +145,12 @@ def resolve_baseline_model(system):
                         "model_weighted_CCE_50_64_aasist_raw_ASV19_none", "swa.pth")
 
 
-def _frontends(job, system, only):
+def _frontends(job, system, models=None):
     """(frontend, checkpoint) pairs for one system."""
     if system == "linear_head":
-        return discover_linear_heads(only=only, skip=job.skip)
+        return discover_linear_heads(only=models, skip=job.skip)
+    if models and "none" not in models:
+        return []          # this system has no upstream to select
     return [("none", resolve_baseline_model(system))]
 
 
@@ -155,20 +158,19 @@ def _frontends(job, system, only):
 # The one enumerator
 # ===========================================================================
 
-def enumerate_tasks(job, only=None):
+def enumerate_tasks(job, systems=None, datasets=None, models=None):
     """Every (system, dataset, frontend) this job selects.
 
-    `only` filters by frontend for the SSL sweep, and by dataset for the
-    baselines, which have no upstream to name.
+    The three filters are the three axes of the task space, so any slice of it
+    can be named directly: one model on one dataset, every model on one
+    dataset, one model everywhere.
     """
-    datasets = ordered_datasets(job.datasets)
+    chosen_systems = [s for s in job.systems if not systems or s in systems]
+    chosen_datasets = ordered_datasets(datasets or job.datasets)
     tasks = []
-    for system in job.systems:
-        pairs = _frontends(job, system, only if system == "linear_head" else None)
-        for frontend, ckpt in pairs:
-            for dataset in datasets:
-                if only and system != "linear_head" and dataset not in only:
-                    continue
+    for system in chosen_systems:
+        for frontend, ckpt in _frontends(job, system, models):
+            for dataset in chosen_datasets:
                 out_file = score_path(system, dataset, frontend)
                 argv = [*DRIVER, "--model", system, "--model_path", ckpt,
                         "--dataset", dataset, "--output_file", out_file,
