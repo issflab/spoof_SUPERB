@@ -26,10 +26,26 @@ output will land.
 
 | `JOB` | What it scores | Verify policy |
 |---|---|---|
+| `all` | every system on every dataset (312 tasks) | none |
+| `linear_head` | every SSL linear head on every dataset (288) | none |
 | `mlaad` | every linear head on MLAAD v10 fake | `mlaad` |
 | `mailabs` | every linear head on M-AILABS bonafide, into a staging dir | `mlaad` |
 | `spoofceleb` | every linear head on the SpoofCeleb eval set | `spoofceleb` |
-| `baselines` | `aasist_raw` and `lfcc_gmm` on all 10 published sets | none |
+| `baselines` | `aasist_raw` and `lfcc_gmm` on every dataset | none |
+
+Restrict any job to particular datasets:
+
+```bash
+bin/orchestrate.sh --job linear_head --datasets wild spoofceleb --list
+```
+
+A job is a selection over (system x dataset x frontend) plus its runtime
+policy, so `all` is not a special case -- it is the selection with nothing
+excluded. Expected row counts come from each dataset's protocol rather than
+being written down, so the resume check is correct for every dataset.
+
+Before a sweep starts, any dataset whose protocol is missing is reported with
+the command that builds it, rather than failing 200 tasks in.
 
 Job definitions live in `spoof_superb/orchestration/jobs.py`. Each declares its
 output directory, reference directory, skip list, retry budget, expected row

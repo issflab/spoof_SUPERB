@@ -27,6 +27,7 @@ import time
 from spoof_superb.config import cfg
 from spoof_superb.orchestration import cuda
 from spoof_superb.orchestration.jobs import JOBS
+from spoof_superb.scoring.datasets import PROTOCOL_SPECS
 
 _lock = threading.Lock()
 _results = {}
@@ -110,7 +111,7 @@ def run_task(job, task, gpu, python, force=False):
     _write_status(job)
 
     t0 = time.time()
-    if not force and output_is_complete(task.out_file, job.expect_lines):
+    if not force and output_is_complete(task.out_file, task.expect_lines):
         print(f"[orchestrate] {task.name}: existing output is complete; "
               f"re-verifying only", flush=True)
         rc = 0
@@ -164,7 +165,7 @@ def run_task(job, task, gpu, python, force=False):
     rec.update({"n_lines": n, "n_bonafide": n_bona, "n_spoof": n_spoof, "n_nan": n_nan})
     _verify(job, task, rec, python)
 
-    complete = (job.expect_lines is None) or (n == job.expect_lines)
+    complete = (task.expect_lines is None) or (n == task.expect_lines)
     rec["status"] = "ok" if complete and n_nan == 0 else "suspect"
     with _lock:
         _results[task.name] = rec
@@ -202,7 +203,10 @@ def main(argv=None):
     ap = argparse.ArgumentParser(
         prog="python -m spoof_superb.orchestration.driver",
         description="Run a scoring job across models/datasets and GPUs")
-    ap.add_argument("--job", choices=sorted(JOBS), required=True)
+    ap.add_argument("--job", choices=sorted(JOBS), required=True,
+                    help="all = every system on every dataset")
+    ap.add_argument("--datasets", nargs="*", default=None,
+                    help="restrict the sweep to these datasets")
     ap.add_argument("--only", nargs="*", default=None,
                     help="restrict to these task keys (SSL model, or dataset for baselines)")
     ap.add_argument("--jobs", type=int, default=0,
@@ -217,11 +221,29 @@ def main(argv=None):
     job = JOBS[args.job]
     if args.gpus:
         job.gpus = tuple(args.gpus)
-    tasks = job.enumerate_tasks(job, args.only)
+    if args.datasets:
+        job.datasets = args.datasets
+    tasks = job.enumerate_tasks(args.only)
 
     if not tasks:
         print(f"[orchestrate] {job.name}: no tasks (checked {job.out_dir})")
         return 1
+
+    # Pre-flight: a dataset whose protocol is missing cannot be scored, and
+    # finding that out 200 tasks into an overnight sweep is expensive.
+    missing = {}
+    for t in tasks:
+        spec = PROTOCOL_SPECS.get(t.dataset, {})
+        path = spec.get("protocol")
+        if path and not os.path.isfile(path):
+            missing[t.dataset] = spec.get("built_by")
+    if missing:
+        print(f"[orchestrate] {len(missing)} dataset(s) have no protocol on disk; "
+              f"their tasks will fail:")
+        for ds, built_by in sorted(missing.items()):
+            hint = f"  build it with: {built_by}" if built_by else ""
+            print(f"    {ds}{hint}")
+        print("    (pass --datasets to exclude them)")
     if args.list:
         for t in tasks:
             print(f"{t.name:40s} -> {t.out_file}")

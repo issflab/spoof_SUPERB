@@ -363,3 +363,24 @@ def test_t10_generated_protocols_say_how_to_build_them():
     for dataset in ("MAILABS", "asvspoofLD", "deepfake_eval_2024_segmented"):
         assert "built_by" in PROTOCOL_SPECS[dataset], dataset
         assert PROTOCOL_SPECS[dataset]["built_by"].startswith("python -m ")
+
+
+def test_t11_one_enumerator_covers_every_system_and_dataset():
+    """RP-8: `--job all` is the selection with nothing excluded, not a special case."""
+    from spoof_superb.orchestration.jobs import JOBS, enumerate_tasks, ordered_datasets
+    job = JOBS["all"]
+    tasks = enumerate_tasks(job)
+    systems = {t.name.split("/")[0] for t in tasks}
+    assert systems == {"linear_head", "aasist_raw", "lfcc_gmm"}
+    covered = {t.dataset for t in tasks}
+    assert covered == set(ordered_datasets()), "a dataset is unreachable by any job"
+    # every task writes through score_path, so no two land in the same file
+    assert len({t.out_file for t in tasks}) == len(tasks), "output path collision"
+
+
+def test_t12_expected_rows_comes_from_the_protocol():
+    """Resume correctness should not depend on a hand-written row count."""
+    from spoof_superb.orchestration.jobs import expected_rows
+    assert expected_rows("spoofceleb") == 91130
+    assert expected_rows("wild") == 31779
+    assert expected_rows("not_a_dataset") is None

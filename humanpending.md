@@ -432,7 +432,13 @@ Missing: nothing converts a raw protocol into a trial list. `bin/reproduce_table
 will fail once this lands, correctly; re-capture `tests/baseline_table5.json`
 only when the new numbers are the intended ones.
 
-### RP-8  No orchestrator job sweeps the reference-driven columns for SSL models
+### RP-8  Sweeping every column for the SSL models  [CLOSED 2026-07-28]
+One enumerator now covers the whole (system x dataset x frontend) space, so
+`--job all` is 312 tasks over 12 datasets and 3 systems. `--job linear_head` is
+the 288-task SSL sweep that previously had to be driven by hand.
+Original note follows.
+
+#### (original)
 `JOBS` covers mlaad, mailabs, spoofceleb and baselines. The seven
 reference-driven columns (eval_2019, asvspoof2021_LA, asvspoof2021_DF,
 asvspoof5, deepfake_eval_2024, wild, Famous_Figures) are only swept for the two
