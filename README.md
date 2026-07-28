@@ -46,6 +46,14 @@ ASVSpoofData_2019/
     ├── README.LA.txt
 ```
 
+## Documentation
+
+* **[docs/RUNNING.md](docs/RUNNING.md)** — how to run every component: training,
+  scoring, orchestration, verification, analysis, data prep, tests, plus
+  end-to-end recipes and troubleshooting.
+* `REORG_PLAN.md` — the audit the current layout came from.
+* `humanpending.md` — open items needing a human decision.
+
 ## Layout
 
 ```
