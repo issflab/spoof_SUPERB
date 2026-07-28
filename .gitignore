@@ -169,3 +169,10 @@ model_*
 # re-reads .asvld_skip per condition), so their contents are per-run state
 # rather than something to version.
 .asvld_skip
+
+# Generated score-file artifacts. The release manifest IS tracked; the trial
+# lists and subsamples that an earlier design shipped are not -- they are
+# recomputable from the score files and must not be duplicated into git.
+/trials/
+/reference/*
+!/reference/manifest.json

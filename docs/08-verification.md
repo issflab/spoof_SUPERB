@@ -18,6 +18,8 @@ python -m spoof_superb.verification.driver \
 Exit 0 = pass, 1 = fail. The orchestrator runs this automatically after each
 task in a job that declares a policy.
 
+Output always leads with a **coverage** line -- how your trial set relates to the reference, in both directions. Coverage is reported, never enforced: scoring the full protocol where the published column used a subset is a deliberate difference, and it should show up as output rather than silently changing what gets compared. The grade is computed on the overlap.
+
 ### The policies are not interchangeable
 
 | `--check` | Verdict | NaN tolerance in *your* output |
@@ -50,47 +52,50 @@ reasoning above.
 `REF_UNUSABLE` means the *reference* is more than 50% NaN -- the broken side is
 theirs, your output is finite, and it exits 0. It is a report, not a failure.
 
-## 1b. Against the shipped reference pack (no large download)
+## 1b. Getting a reference file
 
-The full score files are ~6 GB, so they are not in the repo. What *is* in the
-repo is a few-MB pack that answers the same questions:
+The published score files are ~6 GB and are **not** in this repo. They are
+released as a per-file archive; `reference/manifest.json` (~100 KB, versioned
+here) records what exists, its size, its sha256 and its EER.
 
-```
-trials/published/{dataset}.tsv.gz        the trial list the benchmark used
-reference/summary.json                   per (dataset, model): counts, EER, sha256
-reference/subsample/{dataset}/{model}.tsv.gz   2,000 reference scores
-```
+Files are fetched individually, so checking one model on one dataset costs a
+megabyte rather than a gigabyte:
 
 ```bash
-python -m spoof_superb.verification.driver --check spoofceleb --pack \
-    --dataset spoofceleb --model xls_r_300m --new my_scores.txt
+bin/fetch_scores.sh --list        # what the manifest offers, fetch nothing
+bin/fetch_scores.sh               # edit DATASET / MODEL at the top first
 ```
 
-```
-[coverage] spoofceleb/xls_r_300m  scored 91130  published 91130  overlap 91130
-           published-not-scored 0  scored-not-published 0
-[ranking ] on 2000 subsample rows: ... spearman=1.0000 ... -> PASS
-[expected] published EER = 1.2340% over 91130 rows
-```
+Every download is checked against its sha256 and written atomically; a file
+already present and matching is skipped, so re-running is cheap.
 
-Three separate answers: **coverage** (did you score the right trials?),
-**ranking** (do your scores order them the same way?), and **expected** (is
-your headline EER where it should be?).
+Nothing derived from the score files is committed. Trial lists and score
+subsamples were both considered and rejected: they are recomputable from the
+score files, so shipping them would put two copies of the same information
+under version control with no record of which is authoritative -- the pattern
+that produced the duplication in the score directory.
 
-Grading ranking on 2,000 rows is not a compromise: a 2,000-row subsample
-reproduces the full-file Spearman to within about 3e-6, against a 0.99 pass
-threshold.
-
-**Coverage is reported, never enforced.** Scoring the full protocol where the
-published column used a subset is a deliberate, legitimate difference; the
-point is that it appears as a line of output rather than silently changing what
-gets compared.
-
-Regenerate the pack from a full score tree with:
+With a manifest present, verification also reports the published EER for
+context:
 
 ```bash
-python -m spoof_superb.tools.build_reference_pack --dry-run
-python -m spoof_superb.tools.build_reference_pack
+python -m spoof_superb.verification.driver --check spoofceleb \
+    --new out.txt --ref fetched.txt \
+    --dataset spoofceleb --model apc --manifest
+```
+
+```
+[coverage] scored 91130  reference 91130  overlap 91130
+           reference-not-scored 0  scored-not-in-reference 0
+[expected] published EER = 40.9854% over 91130 rows
+[verify] ... spearman=1.0000 ... -> PASS
+```
+
+Publisher side, run once when releasing a score tree:
+
+```bash
+python -m spoof_superb.tools.build_release_manifest --dry-run
+python -m spoof_superb.tools.build_release_manifest --archive_url https://...
 ```
 
 ## 2. The fp32 ASVLD noise re-run promotion gate
