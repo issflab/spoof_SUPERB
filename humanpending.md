@@ -42,7 +42,9 @@ For all 10 sets, `eval_baselines.py` reads the eval list *and the ground-truth k
 Why: several published sets are subsets whose selection rule is recorded nowhere in the
 repo — ASV21 DF is 152,955 of 611,829 protocol rows; ASVLD pools a noise x10 / reverb x3 /
 resample x4 slice (1,207,509 of 2,065,873); Famous Figures is 346,471 of 348,135; DFEval24
-is 1,976 rows matching neither on-disk metadata file (377 / 1,980). Re-deriving from raw
+is 1,976 of the 1,980 rows in audio-metadata-publish.csv -- a strict subset, 4 files short
+(corrected 2026-07-28: an earlier note said it matched neither metadata file, which is wrong;
+the 377-row file is the speaker-verification protocol, a different list). Re-deriving from raw
 protocols would silently score a *different* trial set, and the baseline EERs could not be
 placed in the same table as the SSL models. This also matches the `--restrict_to`
 convention already used by `eval_asvld.py` / `eval_mlaad.py`.

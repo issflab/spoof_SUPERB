@@ -22,7 +22,7 @@ data_root: /data/Data
 
 # --- where score files are read from and written to -------------------------
 # Reproducing the published tables reads from here.
-scores_root: /data/ssl_anti_spoofing/asd_superb_score_files
+scores_root: /data/ssl_anti_spoofing/spoof_superb_score_files
 
 # --- where trained checkpoints live -----------------------------------------
 # models_root holds one directory per SSL model, each containing swa.pth,

@@ -92,9 +92,20 @@ Four mechanisms, selected with `--source`:
 `benchmark` is the default and the one that matters for comparability. The
 trial list comes from an existing published score file rather than being
 re-derived from a raw protocol, because several published sets are subsets
-whose selection rule is not recorded anywhere: ASV21 DF is 152,955 of 611,829
-protocol rows; Famous Figures is 346,471 of 348,135; Deepfake-Eval 2024 is
-1,976 rows matching neither on-disk metadata file. Re-deriving them would
+whose selection rule is not recorded anywhere. Verified against the corpora:
+
+| Dataset | Published trial list | Full protocol on disk | Gap |
+|---|---|---|---|
+| ASV21 DF | 152,955 | 611,829 (`trial_metadata.txt`, matches the `.trl` file and the flac count) | ~25% subsample, stratified across all three phases (eval 133,464 / progress 14,820 / hidden 4,671) and all 9 codec conditions. The sampling rule and seed are not recorded. |
+| Famous Figures | 346,471 | 348,135 (`protocol.txt`, excluding its header) | 1,664 rows absent: 1,344 spoof, 320 bonafide. No single attribute explains them. |
+| Deepfake-Eval 2024 | 1,976 | 1,980 (`audio-metadata-publish.csv`, and 1,980 files on disk) | 4 files. The published set is a strict **subset** of the metadata -- 2 Fake, 2 Real, mixed train/test, most plausibly dropped as undecodable at scoring time. |
+
+Comparing on Famous Figures requires normalising the path prefix first: the
+published ids are absolute paths under the retired NFS mount, and the protocol
+records `/data/Data/...`. The bonafide `-` vs `Bonafide` directory remap
+accounts for 50,266 of the apparent difference before the real 1,664 remains.
+
+Re-deriving these lists would
 silently score a different trial set and produce EERs that cannot go in the same
 table.
 
