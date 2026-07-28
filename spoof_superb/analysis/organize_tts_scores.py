@@ -21,6 +21,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from spoof_superb.config import cfg
+
 
 REQUIRED_LOOKUP_COLUMNS = {
     "tts_normalized",
@@ -39,11 +41,11 @@ DELIM_MAP = {
 }
 
 DATASET_PROTOCOL_PATHS = {
-    "ASV19": "/data/Data/ASVSpoofData_2019/train/LA/ASVspoof2019_LA_cm_protocols/ASVspoof2019.LA.cm.eval.trl.txt",
-    "ASV5": "/data/Data/ASVSpoof5/protocols/ASVspoof5.eval.track_1.tsv",
-    "FamousFigures": "/data/Data/famousfigures/protocol.txt",
-    "MLAAD-En": "/data/Data/MLAAD/fake/en/combined_meta.txt",
-    "Spoof-Celeb": "/data/Data/SpoofCeleb/metadata/evaluation.csv",
+    "ASV19": f"{cfg.data_root}/ASVSpoofData_2019/train/LA/ASVspoof2019_LA_cm_protocols/ASVspoof2019.LA.cm.eval.trl.txt",
+    "ASV5": f"{cfg.data_root}/ASVSpoof5/protocols/ASVspoof5.eval.track_1.tsv",
+    "FamousFigures": f"{cfg.data_root}/famousfigures/protocol.txt",
+    "MLAAD-En": f"{cfg.data_root}/MLAAD/fake/en/combined_meta.txt",
+    "Spoof-Celeb": f"{cfg.data_root}/SpoofCeleb/metadata/evaluation.csv",
 }
 
 DATASET_DELIMITERS = {

@@ -33,7 +33,9 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 
 from spoof_superb.core.metrics import compute_eer as repo_compute_eer  # type: ignore
 
-V10 = Path("/data/ssl_anti_spoofing/asd_superb_score_files/linear_head_MLAAD_v10")
+from spoof_superb.config import cfg
+
+V10 = Path(f"{cfg.scores_root}/linear_head_MLAAD_v10")
 
 # Table 5 display name -> score-file slug.  Non-960h Mockingjay is excluded:
 # it has no v10 scores and its row is struck from the table.

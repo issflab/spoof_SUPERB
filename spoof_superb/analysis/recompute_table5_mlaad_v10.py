@@ -54,10 +54,12 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 
 from spoof_superb.core.metrics import compute_eer  # type: ignore
 
-LEGACY_DIR = Path("/data/ssl_anti_spoofing/asd_superb_score_files/linear_head")
-V10_DIR = Path("/data/ssl_anti_spoofing/asd_superb_score_files/linear_head_MLAAD_v10")
+from spoof_superb.config import cfg
+
+LEGACY_DIR = Path(cfg.reference_dir)
+V10_DIR = Path(f"{cfg.scores_root}/linear_head_MLAAD_v10")
 RECOMP_DIR = Path(
-    "/data/ssl_anti_spoofing/asd_superb_score_files/asvld_rerun/Recompression")
+    f"{cfg.scores_root}/asvld_rerun/Recompression")
 
 # Table 5 column header -> legacy file prefix.  MLAAD is handled separately.
 #

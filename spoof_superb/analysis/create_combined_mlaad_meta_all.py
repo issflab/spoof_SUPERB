@@ -23,6 +23,8 @@ import sys
 from collections import Counter
 from pathlib import Path
 
+from spoof_superb.config import cfg
+
 # Some MLAAD transcripts exceed the 128 KiB default field limit.
 csv.field_size_limit(sys.maxsize)
 
@@ -100,10 +102,10 @@ def write_output(rows: list[tuple[str, str, str, str]], output_path: Path) -> No
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--fake-root", type=Path, default=Path("/data/Data/MLAAD/fake"))
-    parser.add_argument("--dataset-root", type=Path, default=Path("/data/Data/MLAAD"))
+    parser.add_argument("--fake-root", type=Path, default=Path(f"{cfg.data_root}/MLAAD/fake"))
+    parser.add_argument("--dataset-root", type=Path, default=Path(f"{cfg.data_root}/MLAAD"))
     parser.add_argument(
-        "--output", type=Path, default=Path("/data/Data/MLAAD/combined_meta_all.txt")
+        "--output", type=Path, default=Path(f"{cfg.data_root}/MLAAD/combined_meta_all.txt")
     )
     args = parser.parse_args()
 

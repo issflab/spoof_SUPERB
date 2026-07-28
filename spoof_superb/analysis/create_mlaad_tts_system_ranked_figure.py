@@ -42,7 +42,9 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 
-SCORE_ROOT = Path("/data/ssl_anti_spoofing/asd_superb_score_files")
+from spoof_superb.config import cfg
+
+SCORE_ROOT = Path(cfg.scores_root)
 ARCH_CSV = SCORE_ROOT / "mlaad_v10_tts_architecture_groups.csv"
 OUT_DIR = Path(__file__).resolve().parent.parent / "outputs" / "figures_mlaad_tts"
 EER_CSV = OUT_DIR / "eer_by_tts_system.csv"

@@ -424,7 +424,7 @@ if __name__ == '__main__':
             from spoof_superb.scoring.driver import run_eval_from_main
             raise SystemExit(run_eval_from_main(args, cfg, device))
         if cfg.model_arch == 'lfcc_gmm':
-            from train_lfcc_gmm import run_train_from_main
+            from spoof_superb.train.lfcc_gmm import run_train_from_main
             raise SystemExit(run_train_from_main(args, cfg))
         # aasist_raw in train mode falls through to the shared torch loop.
 

@@ -41,6 +41,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+from spoof_superb.config import cfg
+
 
 REQUIRED_MASTER_COLUMNS = {
     "tts_normalized",
@@ -74,11 +76,11 @@ DELIM_MAP = {
 # Edit these mappings instead of passing every dataset protocol on the command line.
 # Paths may be absolute or relative to the current working directory.
 DATASET_PROTOCOL_PATHS = {
-    "ASV19": "/data/Data/ASVSpoofData_2019/train/LA/ASVspoof2019_LA_cm_protocols/ASVspoof2019.LA.cm.eval.trl.txt",
-    "ASV5": "/data/Data/ASVSpoof5/protocols/ASVspoof5.eval.track_1.tsv",
-    "FamousFigures": "/data/Data/famousfigures/protocol.txt",
-    "MLAAD-En": "/data/Data/MLAAD/fake/en/combined_meta.txt",
-    "Spoof-Celeb": "/data/Data/SpoofCeleb/metadata/evaluation.csv",
+    "ASV19": f"{cfg.data_root}/ASVSpoofData_2019/train/LA/ASVspoof2019_LA_cm_protocols/ASVspoof2019.LA.cm.eval.trl.txt",
+    "ASV5": f"{cfg.data_root}/ASVSpoof5/protocols/ASVspoof5.eval.track_1.tsv",
+    "FamousFigures": f"{cfg.data_root}/famousfigures/protocol.txt",
+    "MLAAD-En": f"{cfg.data_root}/MLAAD/fake/en/combined_meta.txt",
+    "Spoof-Celeb": f"{cfg.data_root}/SpoofCeleb/metadata/evaluation.csv",
 }
 
 # Allowed values: tab, comma, pipe, space, auto

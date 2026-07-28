@@ -39,7 +39,9 @@ import seaborn as sns
 
 from spoof_superb.core.metrics import compute_eer  # noqa: E402
 
-SCORE_ROOT = Path("/data/ssl_anti_spoofing/asd_superb_score_files")
+from spoof_superb.config import cfg
+
+SCORE_ROOT = Path(cfg.scores_root)
 TSV_DIR = SCORE_ROOT / "linear_head_MLAAD_v10" / "tsv"
 ARCH_CSV = SCORE_ROOT / "mlaad_v10_tts_architecture_groups.csv"
 DIR_MAP = Path(__file__).resolve().parent / "mlaad_v10_dir_to_system.csv"

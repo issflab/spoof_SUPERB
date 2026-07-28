@@ -11,6 +11,8 @@ import argparse
 import csv
 from pathlib import Path
 
+from spoof_superb.config import cfg
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -19,19 +21,19 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--meta-root",
         type=Path,
-        default=Path("/data/Data/MLAAD/fake/en"),
+        default=Path(f"{cfg.data_root}/MLAAD/fake/en"),
         help="Directory containing one folder per TTS system.",
     )
     parser.add_argument(
         "--dataset-root",
         type=Path,
-        default=Path("/data/Data/MLAAD"),
+        default=Path(f"{cfg.data_root}/MLAAD"),
         help="Root used to resolve relative paths from the meta.csv files.",
     )
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path("/data/Data/MLAAD/fake/en/combined_meta.txt"),
+        default=Path(f"{cfg.data_root}/MLAAD/fake/en/combined_meta.txt"),
         help="Path to the output text file.",
     )
     return parser.parse_args()

@@ -42,7 +42,9 @@ import seaborn as sns
 import torch
 import torch.nn.functional as F
 
-CKPT_ROOT = Path("/data/ssl_anti_spoofing/asd_superb_models/linear_head_models")
+from spoof_superb.config import cfg
+
+CKPT_ROOT = Path(cfg.models_root)
 PREFIX = "model_weighted_CCE_50_64_linear_head_ASV19_"
 OUT_DIR = Path(__file__).resolve().parent.parent / "outputs" / "layer_weights"
 

@@ -40,9 +40,11 @@ from pathlib import Path
 
 import pandas as pd
 
-SCORE_ROOT = Path("/data/ssl_anti_spoofing/asd_superb_score_files")
+from spoof_superb.config import cfg
+
+SCORE_ROOT = Path(cfg.scores_root)
 TSV_DIR = SCORE_ROOT / "linear_head_MLAAD_v10" / "tsv"
-MLAAD_ROOT = Path("/data/Data/MLAAD")
+MLAAD_ROOT = Path(f"{cfg.data_root}/MLAAD")
 
 ARCH_CSV = SCORE_ROOT / "mlaad_v10_tts_architecture_groups.csv"
 PROVENANCE_CSV = SCORE_ROOT / "mlaad_v10_table4_provenance.csv"

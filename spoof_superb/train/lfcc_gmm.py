@@ -29,7 +29,9 @@ import time
 from spoof_superb.data.datasets_ssl import genSpoof_list
 from spoof_superb.models.lfcc_gmm import INIT_STRIDE, N_COMPONENTS, extract_many, train_gmm
 
-DEFAULT_OUT_DIR = "/data/ssl_anti_spoofing/asd_superb_models/baselines/lfcc_gmm"
+from spoof_superb.config import cfg
+
+DEFAULT_OUT_DIR = os.path.join(cfg.baseline_models_root, "lfcc_gmm")
 CLASSES = ("bonafide", "spoof")
 
 
@@ -121,9 +123,9 @@ def run_train_from_main(args, cfg):
 
 def main():
     ap = argparse.ArgumentParser(description="Train the LFCC-GMM baseline on ASV19 LA train")
-    ap.add_argument("--database_path", default="/data/Data/ASVSpoofData_2019/train/LA/")
+    ap.add_argument("--database_path", default=cfg.database_path)
     ap.add_argument("--protocols_path",
-                    default="/data/Data/ASVSpoofData_2019/train/LA/ASVspoof2019_LA_cm_protocols/")
+                    default=cfg.protocols_path)
     ap.add_argument("--train_protocol", default="ASVspoof2019.LA.cm.train.trn.txt")
     ap.add_argument("--out_dir", default=DEFAULT_OUT_DIR)
     ap.add_argument("--n_jobs", type=int, default=8)

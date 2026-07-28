@@ -4,6 +4,8 @@ import argparse
 from collections import defaultdict
 from pathlib import Path
 
+from spoof_superb.config import cfg
+
 
 SOURCE_DATASET_DIRS = [
     "Additive_Noise",
@@ -65,7 +67,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--input_root",
         type=Path,
-        default=Path("/data/ssl_anti_spoofing/asd_superb_score_files/scores_by_category"),
+        default=Path(f"{cfg.scores_root}/scores_by_category"),
         help="Root directory containing the source dataset subdirectories.",
     )
     parser.add_argument(
