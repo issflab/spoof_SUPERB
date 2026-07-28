@@ -9,7 +9,7 @@ from torch import Tensor
 from torch.utils.data import DataLoader
 from torchcontrib.optim import SWA
 import yaml
-from data_utils_SSL import genSpoof_list, Dataset_ASVspoof2019_train, Dataset_ASVspoof2021_eval
+from spoof_superb.data.datasets_ssl import genSpoof_list, Dataset_ASVspoof2019_train, Dataset_ASVspoof2021_eval
 from spoof_superb.models.aasist import Model as aasist_model
 # from sls_model import Model as sls_model
 from spoof_superb.models.linear_head import UtteranceLevel as LinearHead

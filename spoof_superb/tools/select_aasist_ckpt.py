@@ -27,7 +27,7 @@ from torch.utils.data import DataLoader
 
 from spoof_superb.models.aasist_raw import Model as AasistRaw
 from config import cfg
-from data_utils_SSL import Dataset_ASVspoof2019_train, genSpoof_list
+from spoof_superb.data.datasets_ssl import Dataset_ASVspoof2019_train, genSpoof_list
 from spoof_superb.core.metrics import compute_eer
 
 RUN_DIR = ("/data/ssl_anti_spoofing/asd_superb_models/baselines/"
