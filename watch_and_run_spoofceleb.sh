@@ -34,7 +34,7 @@ done
 
 echo "$(date): CUDA is available after ${waited}s -> starting canary (xls_r_300m)"
 cd "$REPO" || exit 1
-"$PY" orchestrate_spoofceleb.py xls_r_300m
+"$PY" -m spoof_superb.orchestration.driver --job spoofceleb --only xls_r_300m
 
 canary="$OUT/linear_head_SpoofCeleb_xls_r_300m.txt"
 lines=$( [ -f "$canary" ] && wc -l < "$canary" || echo 0 )
@@ -42,12 +42,12 @@ if [ "$lines" -ne 91130 ]; then
     echo "$(date): CANARY FAILED - $lines lines (expected 91130). Not batching a broken pipeline."
     exit 1
 fi
-if ! "$PY" verify_spoofceleb.py --new "$canary" \
+if ! "$PY" -m spoof_superb.verification.driver --check spoofceleb --new "$canary" \
         --ref "$REF/linear_head_spoofceleb_xls_r_300m.txt"; then
     echo "$(date): CANARY FAILED verification (spearman < 0.99). Stopping; see log above."
     exit 1
 fi
 
 echo "$(date): canary PASSED ($lines lines) -> launching remaining 23 models on 3 GPUs"
-"$PY" orchestrate_spoofceleb.py
+"$PY" -m spoof_superb.orchestration.driver --job spoofceleb
 echo "$(date): batch complete. Summary: $OUT/SUMMARY.txt"

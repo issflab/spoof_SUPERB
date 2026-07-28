@@ -8,8 +8,8 @@ while true; do
   if [ -s "$OUT" ]; then echo "$(date): output present, done"; break; fi
   if $PY -c "import torch,sys; sys.exit(0 if torch.cuda.is_available() else 1)" 2>/dev/null; then
     echo "$(date): CUDA healthy, launching"
-    $PY -u orchestrate_baselines.py --models aasist_raw --datasets Multilingual \
-        --cuda_device cuda:0 --batch_size 64 >> outputs/logs/phase3_aasist_mlaad.log 2>&1
+    $PY -u -m spoof_superb.orchestration.driver --job baselines --jobs 1 \
+        --only Multilingual >> outputs/logs/phase3_aasist_mlaad.log 2>&1
     if [ -s "$OUT" ]; then echo "$(date): SUCCESS"; break; fi
     echo "$(date): attempt failed, will retry"
   else

@@ -393,9 +393,9 @@ if __name__ == '__main__':
     # lfcc_gmm has no gradients, no DataLoader and no GPU kernel -- it is EM
     # over two diagonal GMMs. Running it through the loop below would be
     # theatre, so main.py hands it to its own trainer and exits with that
-    # status. Evaluation for both baselines goes to eval_baselines.py, which
-    # is the same standalone-driver pattern eval_asvld.py / eval_mlaad.py
-    # already established for the SSL models (main.py's eval branch below
+    # status. Evaluation for both baselines goes to spoof_superb.scoring.driver,
+    # the single scoring entry point that replaced the three standalone
+    # eval_*.py drivers (main.py's eval branch below
     # reads cfg.eval_protocol, which has no default and no CLI setter, and
     # Dataset_ASVspoof2021_eval hardcodes release_in_the_wild/*.wav).
     #

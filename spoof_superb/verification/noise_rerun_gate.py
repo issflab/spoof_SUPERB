@@ -54,11 +54,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-REPO_ROOT = Path(__file__).resolve().parent
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
-
-from spoof_superb.core.metrics import compute_eer  # type: ignore
+from spoof_superb import REPO_ROOT  # noqa: F401  (kept for path-relative reporting)
+from spoof_superb.core.metrics import compute_eer
 
 ROOT = "/data/ssl_anti_spoofing/asd_superb_score_files/asvld_rerun"
 OLD_DIR = os.path.join(ROOT, "Noise_Addition")
