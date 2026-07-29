@@ -43,9 +43,17 @@ WORKERS=0
 # "yes" re-scores even when a complete, NaN-free output already exists.
 FORCE="no"
 
+# Live progress display.
+#   auto   a redrawing bar on a terminal, one status line a minute when the
+#          output is redirected. Correct in both cases; leave it here.
+#   bar    force the redrawing bar
+#   plain  force periodic status lines
+#   none   only the per-task result lines
+PROGRESS="auto"
+
 # ------------------------------------------------------------ END SETTINGS --
 
-ARGS=(--job "$JOB" --jobs "$WORKERS" --gpus $GPUS)
+ARGS=(--job "$JOB" --jobs "$WORKERS" --gpus $GPUS --progress "$PROGRESS")
 [ -n "$SYSTEMS" ]  && ARGS+=(--systems $SYSTEMS)
 [ -n "$DATASETS" ] && ARGS+=(--datasets $DATASETS)
 [ -n "$MODELS" ]   && ARGS+=(--models $MODELS)

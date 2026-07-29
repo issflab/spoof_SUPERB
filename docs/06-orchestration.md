@@ -102,6 +102,51 @@ fp16 STFT crash and mockingjay's SpoofCeleb reference is usable.
 
 ## Watching a run
 
+### In the terminal
+
+A sweep prints a live display, redrawn in place:
+
+```
+[all] 41/312 tasks   13.4%  elapsed 6:12:40  eta 1 day, 8:19:02
+  [###.......................]
+  gpu0      linear_head/asvspoof2021_DF/xls_r_300m     62.3%  of 611,829 trials   2:41:09
+  gpu1      linear_head/asvspoof2021_DF/wavlm_large    58.9%  of 611,829 trials   2:41:07
+  gpu2      linear_head/Famous_Figures/hubert_large     4.1%  of 348,135 trials   0:11:22
+OK       linear_head/wild/xls_r_300m: 31,779 lines, 0 NaN, no reference
+```
+
+Read it as three separate facts:
+
+* **`41/312 tasks`** is exact. The percentage beside it is not the same number
+  -- it includes the fraction of each running task, so the bar keeps moving
+  during a three-hour column instead of sitting still for hours.
+* **The per-task percentage** comes from the scoring subprocess's own progress
+  counter, read back out of its log. **`of 611,829 trials`** comes from the
+  protocol. They are shown side by side rather than multiplied together,
+  because the subprocess counts batches, not trials.
+* **`eta`** is throughput-based: measured progress so far, projected over the
+  work left. It is unreliable for the first few minutes and tightens after
+  that. It does not know that ASVLD is 60x larger than in-the-wild, so it
+  jumps when the sweep reaches a big dataset.
+
+`...` in place of a percentage means the task has started but has not yet
+written a progress line -- model loading and protocol parsing happen first.
+
+`PROGRESS` in `bin/orchestrate.sh` (or `--progress`) selects the display:
+
+| value | behaviour |
+|---|---|
+| `auto` | bar on a terminal, periodic lines when redirected. The default. |
+| `bar` | force the redrawing bar |
+| `plain` | one status line every 60 s, no escape codes |
+| `none` | per-task result lines only |
+
+`auto` is what makes `nohup bin/orchestrate.sh > run.log &` safe: a redrawing
+bar would fill that log with cursor-movement codes, so redirection silently
+switches to `plain`.
+
+### On disk
+
 ```
 {out_dir}/run_status.json    live, one entry per task
 {out_dir}/SUMMARY.txt        final table
@@ -109,7 +154,12 @@ fp16 STFT crash and mockingjay's SpoofCeleb reference is usable.
 ```
 
 `run_status.json` records status, GPU, wall time, attempts, row counts, NaN
-count and the verification verdict for each task. Tail it while a sweep runs.
+count and the verification verdict for each task. Tail it while a sweep runs,
+or from another shell if the sweep is detached.
+
+`logs/{job}_{system}_{dataset}_{frontend}.log` is the full subprocess output for
+one task -- the same file the progress display reads its percentage from. Go
+there when a task is `suspect` or `failed`.
 
 A task ends `ok` only if the row count matches the job's expectation (where one
 is declared) and there are no NaN. Anything else is `suspect` or `failed`, and

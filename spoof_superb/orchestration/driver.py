@@ -27,6 +27,7 @@ import time
 from spoof_superb.config import cfg
 from spoof_superb.orchestration import cuda
 from spoof_superb.orchestration.jobs import JOBS
+from spoof_superb.orchestration.progress import NullReporter, make_reporter
 from spoof_superb.scoring.datasets import PROTOCOL_SPECS
 
 _lock = threading.Lock()
@@ -101,7 +102,9 @@ def _verify(job, task, rec, python):
             rec[key] = m.group(1)
 
 
-def run_task(job, task, gpu, python, force=False):
+def run_task(job, task, gpu, python, force=False, reporter=None, slot=None):
+    reporter = reporter or NullReporter()
+    slot = slot or f"gpu{gpu}"
     log_file = os.path.join(job.logs(), f"{job.name}_{task.name.replace('/', '_')}.log")
     os.makedirs(os.path.dirname(os.path.abspath(task.out_file)), exist_ok=True)
     os.makedirs(job.logs(), exist_ok=True)
@@ -111,9 +114,15 @@ def run_task(job, task, gpu, python, force=False):
     _write_status(job)
 
     t0 = time.time()
-    if not force and output_is_complete(task.out_file, task.expect_lines):
-        print(f"[orchestrate] {task.name}: existing output is complete; "
-              f"re-verifying only", flush=True)
+    # Decided before the slot is registered: the resume scan reads the whole
+    # score file, and a stale log from the previous run would otherwise be
+    # displayed as live progress for a task that is only re-verifying.
+    resume = not force and output_is_complete(task.out_file, task.expect_lines)
+    reporter.start_task(slot, task.name, None if resume else log_file, task.expect_lines)
+
+    if resume:
+        reporter.write(f"[orchestrate] {task.name}: existing output is complete; "
+                       f"re-verifying only")
         rc = 0
     else:
         open(log_file, "w").close()
@@ -122,8 +131,8 @@ def run_task(job, task, gpu, python, force=False):
         while attempts < job.max_attempts:
             if task.needs_gpu and not cuda.wait_for_cuda(
                     task.name, gpu, wait_s=job.cuda_wait_s, python=python):
-                print(f"[orchestrate] {task.name}: CUDA never returned within "
-                      f"{job.cuda_wait_s}s", flush=True)
+                reporter.write(f"[orchestrate] {task.name}: CUDA never returned "
+                               f"within {job.cuda_wait_s}s")
                 rc = 2
                 break
             with open(log_file, "a") as lf:
@@ -137,8 +146,8 @@ def run_task(job, task, gpu, python, force=False):
             # rc=2 is the driver's "CUDA requested but unavailable" guard: an
             # environment fault, not a model fault. Retry this same task in a
             # fresh process rather than losing it.
-            print(f"[orchestrate] {task.name}: rc=2 (CUDA init) attempt "
-                  f"{attempts}/{job.max_attempts} on gpu {gpu}", flush=True)
+            reporter.write(f"[orchestrate] {task.name}: rc=2 (CUDA init) attempt "
+                           f"{attempts}/{job.max_attempts} on gpu {gpu}")
             time.sleep(30)
         with _lock:
             _results[task.name]["attempts"] = attempts
@@ -157,12 +166,17 @@ def run_task(job, task, gpu, python, force=False):
         with _lock:
             _results[task.name] = rec
         _write_status(job)
-        print(f"FAIL {task.name}: rc={rc} | "
-              f"{tail.splitlines()[-1] if tail else ''}", flush=True)
+        reporter.finish_task(slot, "failed")
+        reporter.write(f"FAIL     {task.name}: rc={rc} | "
+                       f"{tail.splitlines()[-1] if tail else ''}")
         return
 
+    # Both of these read the whole score file back; on ASVLD that is minutes,
+    # and the display would otherwise show a slot frozen at 100%.
+    reporter.set_phase(slot, "count")
     n, n_bona, n_spoof, n_nan = read_score_file(task.out_file)
     rec.update({"n_lines": n, "n_bonafide": n_bona, "n_spoof": n_spoof, "n_nan": n_nan})
+    reporter.set_phase(slot, "verify")
     _verify(job, task, rec, python)
 
     complete = (task.expect_lines is None) or (n == task.expect_lines)
@@ -170,19 +184,24 @@ def run_task(job, task, gpu, python, force=False):
     with _lock:
         _results[task.name] = rec
     _write_status(job)
-    print(f"{rec['status'].upper():8s} {task.name}: {n} lines, {n_nan} NaN, "
-          f"{rec.get('verify', '')}", flush=True)
+    reporter.finish_task(slot, rec["status"])
+    reporter.write(f"{rec['status'].upper():8s} {task.name}: {n:,} lines, "
+                   f"{n_nan} NaN, {rec.get('verify', '')}")
 
 
-def _worker(job, work_q, gpu, python, force):
+def _worker(job, work_q, gpu, python, force, reporter=None, slot=None):
     while True:
         try:
             task = work_q.get_nowait()
         except queue.Empty:
             return
         try:
-            run_task(job, task, gpu, python, force=force)
+            run_task(job, task, gpu, python, force=force, reporter=reporter, slot=slot)
         finally:
+            # No-op when run_task reported normally; releases the slot if it
+            # raised, so one crashed worker cannot stall the counter.
+            if reporter:
+                reporter.finish_task(slot, "failed")
             work_q.task_done()
 
 
@@ -218,6 +237,10 @@ def main(argv=None):
     ap.add_argument("--gpus", nargs="*", type=int, default=None)
     ap.add_argument("--force", action="store_true", help="re-score even if the output is complete")
     ap.add_argument("--list", action="store_true", help="list tasks and exit")
+    ap.add_argument("--progress", choices=("auto", "bar", "plain", "none"),
+                    default="auto",
+                    help="auto = redrawing bar on a terminal, periodic lines "
+                         "when redirected")
     ap.add_argument("--python", default=cfg.python,
                     help="interpreter for the scoring subprocesses")
     args = ap.parse_args(argv)
@@ -268,10 +291,18 @@ def main(argv=None):
     print(f"[orchestrate] {job.name}: {len(tasks)} tasks over {n_workers} worker(s), "
           f"gpus={list(job.gpus)}", flush=True)
 
+    reporter = make_reporter(args.progress, len(tasks), title=job.name)
+    reporter.start()
+
     threads = []
     for i in range(n_workers):
         gpu = job.gpus[i % len(job.gpus)] if job.gpus else 0
-        th = threading.Thread(target=_worker, args=(job, work_q, gpu, args.python, args.force),
+        # One line per worker, so the label must be unique even when several
+        # workers share a GPU.
+        slot = f"gpu{gpu}" if n_workers <= len(job.gpus or [0]) else f"w{i}/gpu{gpu}"
+        th = threading.Thread(target=_worker,
+                              args=(job, work_q, gpu, args.python, args.force,
+                                    reporter, slot),
                               daemon=True)
         th.start()
         threads.append(th)
@@ -279,6 +310,7 @@ def main(argv=None):
     for th in threads:
         th.join()
 
+    reporter.stop()
     _write_status(job)
     write_summary(job, tasks)
 

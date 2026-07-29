@@ -27,6 +27,13 @@ from spoof_superb.scoring.datasets import CROP
 
 __all__ = ["WavDataset", "score_linear_head", "score_aasist_raw", "score_lfcc_gmm"]
 
+# How often tqdm may redraw. These loops write to a log file, not a terminal,
+# so the interval sets both the log's growth rate and how stale the
+# orchestrator's progress display can be -- it reads this same counter back out
+# of the log. 10s is ~1k updates on a three-hour column: negligible on disk,
+# responsive enough to watch.
+PROGRESS_INTERVAL_S = 10.0
+
 
 def pad(x, max_len=CROP):
     x_len = x.shape[0]
@@ -70,7 +77,7 @@ def _run_torch_loop(model, items, device, batch_size, num_workers, amp, desc):
     use_amp = amp and str(device).startswith("cuda")
     out, n_bad = [], 0
     with torch.no_grad():
-        for batch_x, utt, ok in tqdm(loader, desc=desc, mininterval=30.0):
+        for batch_x, utt, ok in tqdm(loader, desc=desc, mininterval=PROGRESS_INTERVAL_S):
             batch_x = batch_x.to(device)
             with torch.autocast("cuda", dtype=torch.float16, enabled=use_amp):
                 logits = model(batch_x)
@@ -162,7 +169,8 @@ def score_lfcc_gmm(items, model_dir, n_jobs=16):
     out, n_bad = [], 0
     with Pool(processes=n_jobs, initializer=_gmm_init, initargs=(model_dir,)) as pool:
         for utt, score in tqdm(pool.imap(_gmm_score_one, items, chunksize=64),
-                               total=len(items), desc="lfcc_gmm", mininterval=30.0):
+                               total=len(items), desc="lfcc_gmm",
+                               mininterval=PROGRESS_INTERVAL_S):
             if score is None:
                 n_bad += 1
             else:
