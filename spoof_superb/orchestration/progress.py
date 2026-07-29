@@ -44,6 +44,12 @@ _COUNTER_LOOSE = re.compile(r"\b(\d+)\s*/\s*(\d+)\b")
 
 BAR_WIDTH = 26
 TAIL_BYTES = 16384
+# tqdm and the warnings share one stream, so a frame can be buried arbitrarily
+# far back: the ASV21-DF logs carry 121,640 librosa audioread warnings and push
+# the live counter ~200 KB behind the end of the file. The window grows until it
+# finds one rather than assuming a depth.
+MAX_TAIL_BYTES = 8 << 20
+_WINDOW = {}          # path -> the window size that last worked for it
 
 
 def parse_progress(text):
@@ -65,17 +71,34 @@ def parse_progress(text):
     return None
 
 
-def tail_progress(path, nbytes=TAIL_BYTES):
-    """(done, total) from the tail of a task log, or None if not determinable."""
+def tail_progress(path, nbytes=None, max_bytes=MAX_TAIL_BYTES):
+    """(done, total) from the tail of a task log, or None if not determinable.
+
+    The window grows 8x at a time until a counter turns up, because how deep
+    the newest frame is buried depends on how noisy the subprocess is -- a
+    quiet log needs 16 KB, an ASV21-DF log needs 200 KB of librosa warnings
+    skipped first. The window that worked is remembered per path, so the search
+    is paid once per task rather than once per redraw.
+    """
+    window = nbytes or _WINDOW.get(path, TAIL_BYTES)
     try:
         size = os.path.getsize(path)
-        with open(path, "rb") as f:
-            if size > nbytes:
-                f.seek(size - nbytes)
-            blob = f.read()
     except OSError:
         return None
-    return parse_progress(blob.decode("utf-8", "replace"))
+    while True:
+        try:
+            with open(path, "rb") as f:
+                f.seek(max(0, size - window))
+                blob = f.read(window)
+        except OSError:
+            return None
+        got = parse_progress(blob.decode("utf-8", "replace"))
+        if got:
+            _WINDOW[path] = window
+            return got
+        if nbytes or window >= max_bytes or window >= size:
+            return None
+        window *= 8
 
 
 def fmt_hms(seconds):

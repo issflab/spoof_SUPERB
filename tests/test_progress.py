@@ -75,6 +75,26 @@ def test_p7_missing_log_is_none_not_an_exception(tmp_path):
     assert tail_progress(str(tmp_path / "nope.log")) is None
 
 
+def test_p7b_finds_a_counter_buried_behind_interleaved_warnings(tmp_path):
+    """tqdm and stderr share one stream, so the frame is not near the end.
+
+    Measured on a live run: the ASV21-DF logs carry 121,640 librosa audioread
+    warnings and the newest tqdm frame sits ~200 KB back. A fixed 16 KB window
+    reported "no progress" for the two longest-running tasks in the sweep.
+    """
+    log = tmp_path / "noisy.log"
+    log.write_text(TQDM + "\n" + "FutureWarning: librosa.core.audio\n" * 20000)
+    assert os.path.getsize(log) > 500_000
+    assert tail_progress(str(log)) == (450, 994)
+
+
+def test_p7c_window_search_is_bounded(tmp_path):
+    """A log with no counter at all must not be read end to end every redraw."""
+    log = tmp_path / "quiet.log"
+    log.write_text("no counters here\n" * 200000)
+    assert tail_progress(str(log), max_bytes=1 << 15) is None
+
+
 # ===========================================================================
 # P8-P11: the reporter's accounting
 # ===========================================================================
