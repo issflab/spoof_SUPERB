@@ -61,11 +61,10 @@ class WavDataset(Dataset):
         return len(self.items)
 
     def __getitem__(self, i):
-        import librosa  # imported in the worker to keep the fork light
+        from spoof_superb.scoring.audio import load_wave  # kept out of the fork
         utt, path = self.items[i]
         try:
-            X, _ = librosa.load(path, sr=self.sr)
-            return Tensor(pad(X, self.cut)), utt, True
+            return Tensor(pad(load_wave(path, self.sr), self.cut)), utt, True
         except Exception:
             return Tensor(np.zeros(self.cut, dtype=np.float32)), utt, False
 

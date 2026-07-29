@@ -83,8 +83,11 @@ def load_lfcc(path, sr=None):
     two datasets covers marginally fewer trials than the SSL columns, which
     score these files by tiling them to 4 s.
     """
-    import librosa
-    data, samplerate = librosa.load(path, sr=sr)
+    from spoof_superb.scoring.audio import load_wave, native_rate
+    # Same three-decoder policy as the SSL path: 43% of ASVspoof2021-LA is
+    # unreadable by libsndfile, and this back-end scores it too.
+    data = load_wave(path, sr=sr)
+    samplerate = native_rate(path) if sr is None else sr
     return extract_lfcc(data, samplerate).astype(np.float32)
 
 

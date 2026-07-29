@@ -21,6 +21,12 @@ numpy==2.2.6
 scipy==1.15.3
 librosa==0.11.0
 soundfile==0.13.1
+# libsndfile 1.2.2 (shipped inside soundfile) cannot decode 36-43% of the
+# ASVspoof2021 FLAC files. librosa hides that by falling back to audioread,
+# which spawns a subprocess per file and is ~40x slower. av decodes them in
+# process, bit-identically. Technically optional -- scoring works without it,
+# and much more slowly on ASVspoof2021. See spoof_superb/scoring/audio.py.
+av==17.1.0
 s3prl==0.4.18
 scikit-learn==1.5.1
 pandas==2.3.1
