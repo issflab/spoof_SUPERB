@@ -22,16 +22,97 @@ bin/orchestrate.sh --list      # enumerate the tasks and exit, running nothing
 Always `--list` first. It shows exactly which tasks will run and where each
 output will land.
 
+## Every option
+
+The settings block is the intended way to configure a run: it is editable,
+self-documenting, and what you ran is recoverable from the file afterwards.
+But every setting also has a flag, and **flags are appended after the settings
+block, so a flag wins over the file.** The script echoes the full command
+before executing, so you can always see which won.
+
+| Flag | Setting | Values | Meaning |
+|---|---|---|---|
+| `--job` | `JOB` | `all` `linear_head` `baselines` `mlaad` `mailabs` `spoofceleb` | which selection + policy; see below |
+| `--systems` | `SYSTEMS` | `linear_head` `aasist_raw` `lfcc_gmm` | restrict back-ends |
+| `--datasets` | `DATASETS` | any registry key | restrict datasets |
+| `--models` | `MODELS` | s3prl upstream names | restrict SSL upstreams (`linear_head` only) |
+| `--gpus` | `GPUS` | e.g. `0 1 2` | devices to spread over |
+| `--jobs` | `WORKERS` | `0` = one per GPU, `1` = sequential | parallel workers |
+| `--force` | `FORCE="yes"` | flag | re-score even when a complete NaN-free output exists |
+| `--progress` | `PROGRESS` | `auto` `bar` `plain` `none` | live display; see [Watching a run](#watching-a-run) |
+| `--list` | — | flag | print the tasks and exit, running nothing |
+| `--python` | — | path | interpreter for the scoring subprocesses; defaults to `cfg.python` |
+
+Empty settings mean "all of them", so `DATASETS=""` is not a restriction.
+
+### Three ways to lose work
+
+**`--list` is not the default.** `bin/orchestrate.sh --datasets wild --models
+xls_r_300m` *runs*; the same line with `--list` looks. There is no confirmation
+prompt. Read the echoed command before pressing return.
+
+**`--force` cannot be switched off from the command line.** It is a boolean
+flag, so if `FORCE="yes"` is in the settings block it is already in the argument
+list and nothing you pass removes it. Edit the file.
+
+**Two runs of the same `--job` overwrite each other's record.** Run state lives
+at `{scores_root}/_runs/{job}/`, keyed by job name and nothing else, so a second
+`--job all` clobbers the first's `run_status.json` and `SUMMARY.txt` even if the
+two select different tasks. Score files are unaffected, and resume reads the
+score files rather than the status file, so this costs the audit trail and not
+the work. Use a different `--job`, or wait.
+
+### Detached runs
+
+A sweep is hours to days. If the terminal that launched it goes away, the
+orchestrator and every scoring subprocess it owns die together, mid-task, and
+whatever they had not yet written is lost.
+
+```bash
+nohup bin/orchestrate.sh > run.log 2>&1 &
+```
+
+`--progress auto` detects the redirection and switches to periodic status lines,
+so `run.log` stays readable. `tmux` or `screen` works equally well and lets you
+reattach to the live bar.
+
 ## The jobs
 
-| `JOB` | What it scores | Verify policy |
+A job is **a selection over (system x dataset x model), plus a runtime policy**.
+The selection part is fully expressible with the three filters; the policy part
+is not, and that is the only reason the dataset-specific jobs exist.
+
+| `JOB` | Selects | Policy it adds |
 |---|---|---|
-| `all` | every system on every dataset (312 tasks) | none |
-| `linear_head` | every SSL linear head on every dataset (288) | none |
-| `mlaad` | every linear head on MLAAD v10 fake | `mlaad` |
-| `mailabs` | every linear head on M-AILABS bonafide, into a staging dir | `mlaad` |
-| `spoofceleb` | every linear head on the SpoofCeleb eval set | `spoofceleb` |
-| `baselines` | `aasist_raw` and `lfcc_gmm` on every dataset | none |
+| `all` | every system on every dataset (312 tasks) | — |
+| `linear_head` | every SSL head on every dataset (288) | — |
+| `baselines` | `aasist_raw` + `lfcc_gmm` everywhere (24) | `batch_size=64` |
+| `mlaad` | every SSL head on MLAAD v10 (22) | verify `mlaad`; 1 attempt; skips `byol_a_2048`, `mockingjay` |
+| `mailabs` | every SSL head on M-AILABS (22) | as `mlaad` |
+| `spoofceleb` | every SSL head on SpoofCeleb (24) | verify `spoofceleb`; 6 attempts; 3 h CUDA wait |
+
+So `--job mlaad` is **not** the same as `--job all --datasets Multilingual`. The
+latter is 26 tasks: it adds the two baselines and the two skipped upstreams, and
+runs no verification.
+
+Why the policies differ:
+
+* **Verification.** Only these three datasets have a published score file to
+  compare a fresh run against, and the two comparisons grade differently --
+  `mlaad` requires Pearson *and* Spearman *and* sign agreement at 0 and
+  tolerates 1% NaN; `spoofceleb` uses Spearman alone and tolerates none. See
+  [verification](08-verification.md).
+* **Retry budget.** `spoofceleb` was run through a period of driver instability
+  and retries 6 times over 3 hours. `mlaad` and `mailabs` use a single attempt
+  because those runs are short: failing fast beats a 3 h wait on a 20 min task.
+* **Skip lists.** `mlaad` and `mailabs` exclude `byol_a_2048` and `mockingjay`
+  by an earlier request. `spoofceleb` deliberately includes them -- fp32 fixes
+  byol's fp16 STFT crash, and mockingjay's SpoofCeleb reference is usable. The
+  exclusion is attached to the jobs where it applies rather than made a global
+  default, so it is visible instead of silent.
+
+These three are also how the published runs were organised, and their names are
+what `_runs/{job}/` is keyed on, so each keeps a separate audit trail.
 
 ## Narrowing a sweep
 
@@ -62,21 +143,26 @@ The same three are settable in `bin/orchestrate.sh`'s settings block. A filter
 combination that selects nothing produces nothing -- `--systems lfcc_gmm
 --models xls_r_300m` is empty, because that back-end has no upstream.
 
+Filters compose with `--job`, so a named job can be narrowed the same way:
+`--job spoofceleb --models xls_r_300m` keeps that job's verification and retry
+budget while running one upstream.
+
 `--only` is the deprecated spelling of `--models`; it used to mean SSL model
 for the SSL sweep and dataset for the baselines, which was a trap.
 
-A job is a selection over (system x dataset x frontend) plus its runtime
-policy, so `all` is not a special case -- it is the selection with nothing
-excluded. Expected row counts come from each dataset's protocol rather than
-being written down, so the resume check is correct for every dataset.
+`all` is not a special case -- it is the selection with nothing excluded.
+Expected row counts come from each dataset's protocol rather than being written
+down, so the resume check is correct for every dataset.
 
 Before a sweep starts, any dataset whose protocol is missing is reported with
 the command that builds it, rather than failing 200 tasks in.
 
-Job definitions live in `spoof_superb/orchestration/jobs.py`. Each declares its
-output directory, reference directory, skip list, retry budget, expected row
-count and verification policy. To add a dataset sweep, add a `Job` there rather
-than writing a new script.
+Job definitions live in `spoof_superb/orchestration/jobs.py`. A `Job` declares
+only its policy -- skip list, retry budget, CUDA wait, batch size, verification
+check. Output paths come from `core/scorepath.py` and expected row counts from
+each dataset's protocol, so neither is written down per job. To add a dataset
+sweep, add a `Job` there rather than writing a new script; to run an existing
+one over a different slice, use the filters.
 
 ## Behaviour worth knowing
 
@@ -90,15 +176,14 @@ which previously sent whole models to CPU without anyone noticing.
 
 **rc=2 is retried in a fresh process.** That return code is the scoring
 driver's "CUDA requested but unavailable" guard -- an environment fault, not a
-model fault. Retry budgets differ per job: `spoofceleb` retries 6 times over a
-3-hour window, `baselines` 3 times over 1 hour.
-
-**Skip lists differ on purpose.** `mlaad` and `mailabs` skip `byol_a_2048` and
-`mockingjay`; `spoofceleb` deliberately includes them, because fp32 fixes byol's
-fp16 STFT crash and mockingjay's SpoofCeleb reference is usable.
+model fault. Per-job retry budgets are in [the jobs table](#the-jobs).
 
 **`WORKERS=1` runs sequentially**, which is what the old
 `orchestrate_baselines.py` did.
+
+**ASVspoof2021 needs `av` installed** or it decodes ~14x slower. libsndfile
+cannot read 36-43% of those FLAC files and librosa falls back to a subprocess
+per file. See [troubleshooting](11-troubleshooting.md).
 
 ## Watching a run
 
