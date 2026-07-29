@@ -37,13 +37,27 @@ before executing, so you can always see which won.
 | `--datasets` | `DATASETS` | any registry key | restrict datasets |
 | `--models` | `MODELS` | s3prl upstream names | restrict SSL upstreams (`linear_head` only) |
 | `--gpus` | `GPUS` | e.g. `0 1 2` | devices to spread over |
-| `--jobs` | `WORKERS` | `0` = one per GPU, `1` = sequential | parallel workers |
+| `--jobs` | `WORKERS` | `0` = one per GPU, `1` = sequential | parallel workers. **Not** `--job`, and not `Job.n_jobs` -- see below |
 | `--force` | `FORCE="yes"` | flag | re-score even when a complete NaN-free output exists |
 | `--progress` | `PROGRESS` | `auto` `bar` `plain` `none` | live display; see [Watching a run](#watching-a-run) |
 | `--list` | — | flag | print the tasks and exit, running nothing |
 | `--python` | — | path | interpreter for the scoring subprocesses; defaults to `cfg.python` |
 
 Empty settings mean "all of them", so `DATASETS=""` is not a restriction.
+
+### "job" means three different things
+
+They differ by one character and are unrelated. Worth knowing before you edit
+anything:
+
+| | Is | Not |
+|---|---|---|
+| `--job all` | which named `Job` to run | anything to do with parallelism |
+| `--jobs 3` | how many worker *threads* the orchestrator runs | how many named jobs |
+| `Job.n_jobs` (=16) | processes in the LFCC-GMM pool, forwarded to the scoring driver as `--n_jobs` | anything the orchestrator uses itself |
+
+Only `--jobs` is settable from the shell script (`WORKERS`). `Job.n_jobs` is a
+`jobs.py` constant and affects the CPU baseline only.
 
 ### Three ways to lose work
 
@@ -78,9 +92,25 @@ reattach to the live bar.
 
 ## The jobs
 
-A job is **a selection over (system x dataset x model), plus a runtime policy**.
-The selection part is fully expressible with the three filters; the policy part
-is not, and that is the only reason the dataset-specific jobs exist.
+A job is one `Job` dataclass in `jobs.py`. There is no separate policy object --
+"policy" below just names the fields that are not selection. The thirteen fields
+do five unrelated things:
+
+| Role | Fields | Overridable from the CLI? |
+|---|---|---|
+| **Selection** -- which tasks exist | `systems` `datasets` `skip` | yes, by `--systems` `--datasets` `--models` |
+| **Resources** -- how much machine | `gpus` `batch_size` `num_workers` `n_jobs` | only `--gpus` |
+| **Failure handling** | `max_attempts` `cuda_wait_s` | no |
+| **Post-check** | `verify` | no |
+| **Identity** -- where the record goes | `name` `log_dir` | no (`--job` picks a whole job) |
+
+Selection is fully expressible with the three filters. Nothing else is, and
+that is the only reason the dataset-specific jobs exist.
+
+The two override paths differ, which matters if you read the code: `--gpus`
+mutates `job.gpus` in place, while `--systems/--datasets/--models` are passed as
+arguments to `enumerate_tasks()` and never touch the job. So a filter narrows
+what a job produces; it does not redefine the job.
 
 | `JOB` | Selects | Policy it adds |
 |---|---|---|
