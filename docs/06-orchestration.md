@@ -151,14 +151,13 @@ arguments to `enumerate_tasks()` and never touch the job. So a filter narrows
 what a job produces; it does not redefine the job.
 
 Counts below are at the default (paper models only); the figure in brackets is
-what `--all-models` gives. Neither figure includes the per-dataset
-`SKIP_MODELS` exclusions, which `--all-models` does not lift -- only `--models`
-does.
+what `--all-models` gives -- every trained head on every dataset, with nothing
+excluded.
 
 | `JOB` | Selects | Tasks | Policy it adds |
 |---|---|---|---|
-| `all` | every system on every dataset | 252 (308) | — |
-| `linear_head` | every SSL head on every dataset | 228 (284) | — |
+| `all` | every system on every dataset | 252 (312) | — |
+| `linear_head` | every SSL head on every dataset | 228 (288) | — |
 | `baselines` | `aasist_raw` + `lfcc_gmm` everywhere | 24 (24) | `batch_size=64` |
 
 **There is no per-dataset job.** There used to be three -- `mlaad`, `mailabs`,
@@ -171,7 +170,6 @@ dataset, so they moved to the registry:
 # spoof_superb/scoring/datasets.py
 VERIFY_POLICY = {"Multilingual": "mlaad", "MAILABS": "mlaad",
                  "spoofceleb": "spoofceleb"}
-SKIP_MODELS   = {"Multilingual": {"byol_a_2048", "mockingjay"}, ...}
 ```
 
 This fixed a real hole rather than just tidying: because the grading policy lived
@@ -180,14 +178,14 @@ policy attached at all** -- the sweep anyone would actually run was the one that
 skipped the check. The policy now travels with the dataset, so
 `--datasets Multilingual` carries it regardless of which job selected it.
 
-`SKIP_MODELS` excludes `mockingjay` and `byol_a_2048` from MLAAD and M-AILABS.
-**Both are outside the 19-model roster, so at the default it changes nothing** --
-it bites only under `--all-models`. It is kept because it states an intent that
-outlives the current roster, and because it is the only thing keeping those two
-off MLAAD when someone widens the sweep.
+There used to be a per-dataset `SKIP_MODELS` here too, holding `mockingjay` and
+`byol_a_2048` off MLAAD and M-AILABS. It was removed: both are outside the
+19-model roster, so it excluded nothing `paper_only` did not. `--all-models` now
+really does mean every trained head on every dataset.
 
-The exclusion is an exact name match, so it never catches `mockingjay_960hr` --
-which **is** scored on MLAAD, and is the variant the paper's MLAAD table lists.
+`mockingjay_960hr` is unaffected and **is** scored on MLAAD -- it is the variant
+the paper's MLAAD table lists. Plain `mockingjay` is not, because it is not one
+of the 19 reported models, and `--models mockingjay` scores it deliberately.
 
 ## Verification is a separate step
 

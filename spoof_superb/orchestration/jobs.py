@@ -25,7 +25,6 @@ from spoof_superb.core.scorepath import score_path
 from spoof_superb.scoring.datasets import (
     PROTOCOL_SPECS,
     SCOREABLE,
-    skip_models,
     verify_policy,
 )
 from spoof_superb.scoring.models import paper_models
@@ -154,13 +153,13 @@ class Job:
 # Model discovery
 # ===========================================================================
 
-def discover_linear_heads(only=None, skip=frozenset(), paper_only=False):
+def discover_linear_heads(only=None, paper_only=False):
     """(ssl_name, checkpoint) for every trained linear head on disk.
 
-    ``paper_only`` keeps just the upstreams Table 5 reports. It is applied only
-    when nothing was asked for by name: naming a model with ``only`` is an
-    explicit request, and a filter that silently discarded it would be a trap of
-    the same kind as the old --only overload.
+    ``paper_only`` keeps just the upstreams the paper's results table reports.
+    It is applied only when nothing was asked for by name: naming a model with
+    ``only`` is an explicit request, and a filter that silently discarded it
+    would be a trap of the same kind as the old --only overload.
     """
     out = []
     if not os.path.isdir(MODELS_ROOT):
@@ -173,17 +172,14 @@ def discover_linear_heads(only=None, skip=frozenset(), paper_only=False):
                 and os.path.isfile(ckpt)):
             continue
         ssl = name[len(LINEAR_HEAD_PREFIX):]
-        # An explicit request overrides BOTH defaults. Naming a model and
-        # getting nothing back is the --only trap in a new costume, and it is
-        # worse here because the two filters that could swallow it are silent.
+        # An explicit request overrides the default. Naming a model and getting
+        # nothing back is the --only trap in a new costume, and it is worse here
+        # because the filter that would swallow it is silent.
         if only:
             if ssl not in only:
                 continue
-        else:
-            if ssl in skip:
-                continue
-            if keep is not None and ssl not in keep:
-                continue
+        elif keep is not None and ssl not in keep:
+            continue
         out.append((ssl, ckpt))
     return out
 
@@ -195,16 +191,10 @@ def resolve_baseline_model(system):
                         "model_weighted_CCE_50_64_aasist_raw_ASV19_none", "swa.pth")
 
 
-def _frontends(job, system, dataset, models=None, paper_only=False):
-    """(frontend, checkpoint) pairs for one system on one dataset.
-
-    Takes the dataset because the skip list is per-dataset now: `mockingjay` is
-    excluded from MLAAD and wanted everywhere else, which a job-wide skip could
-    not express without a job per dataset.
-    """
+def _frontends(job, system, models=None, paper_only=False):
+    """(frontend, checkpoint) pairs for one system."""
     if system == "linear_head":
-        return discover_linear_heads(only=models, skip=skip_models(dataset),
-                                     paper_only=paper_only)
+        return discover_linear_heads(only=models, paper_only=paper_only)
     if models and "none" not in models:
         return []          # this system has no upstream to select
     return [("none", resolve_baseline_model(system))]
@@ -232,8 +222,7 @@ def enumerate_tasks(job, systems=None, datasets=None, models=None,
     tasks = []
     for system in chosen_systems:
         for dataset in chosen_datasets:
-            for frontend, ckpt in _frontends(job, system, dataset, models,
-                                             paper_only):
+            for frontend, ckpt in _frontends(job, system, models, paper_only):
                 out_file = score_path(system, dataset, frontend)
                 argv = [*DRIVER, "--model", system, "--model_path", ckpt,
                         "--dataset", dataset, "--output_file", out_file,

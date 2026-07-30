@@ -331,30 +331,12 @@ VERIFY_POLICY = {
     "spoofceleb": "spoofceleb",
 }
 
-#: Upstreams excluded from a dataset by an earlier request, kept per-dataset so
-#: the exclusion is visible where it applies rather than being global.
-#: `--models` overrides it: an explicit request is never silently dropped.
-#:
-#: `mockingjay` is here because the paper's MLAAD table reports no cell for it.
-#: The plain variant only: `mockingjay_960hr` IS scored on MLAAD and is the one
-#: that table lists. Membership is an exact name match, so the `_960hr` variant
-#: is never caught by this. `mockingjay` is still in the paper roster -- the main
-#: results table reports it on nine of ten datasets.
-#:
-#: A from-scratch build MAY fill the empty MLAAD cell: pass --models mockingjay.
-SKIP_MODELS = {
-    "Multilingual": frozenset({"byol_a_2048", "mockingjay"}),
-    "MAILABS": frozenset({"byol_a_2048", "mockingjay"}),
-}
-
-
 def verify_policy(dataset):
     """The grading policy for this dataset, or None if it has no published twin."""
     return VERIFY_POLICY.get(dataset)
 
 
-def skip_models(dataset):
-    return SKIP_MODELS.get(dataset, frozenset())
+
 
 #: Every dataset that can be scored, benchmark column or not.
 SCOREABLE = list(DATASETS)

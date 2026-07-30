@@ -308,44 +308,37 @@ def test_j3_the_grading_policy_travels_with_the_dataset():
     assert any(t.verify is None for t in tasks.values())
 
 
-def test_j4_model_skips_are_per_dataset_not_per_sweep():
-    """`mockingjay` is excluded from MLAAD and wanted elsewhere.
+def test_j4_unreported_models_are_excluded_by_the_roster_alone():
+    """SKIP_MODELS is gone; paper_only is the only exclusion mechanism left.
 
-    A job-wide skip could not express that without a job per dataset. Exercised
-    with --all-models, because under the default roster both SKIP_MODELS entries
-    are already excluded for being unreported -- the skip list only bites when
-    someone widens the sweep.
+    Both its entries -- mockingjay and byol_a_2048 -- were already outside the
+    19-model roster, so it excluded nothing the roster did not. Removing it means
+    --all-models now really does mean every trained head, on every dataset.
     """
-    from spoof_superb.scoring.datasets import skip_models
-    names = lambda ds: {t.frontend for t in JOBS["all"].enumerate_tasks(
-        datasets=[ds], paper_only=False) if t.system == "linear_head"}
-    heads = {s for s, _ in discover_linear_heads(paper_only=False)}
-    if "mockingjay" not in heads:
-        pytest.skip("mockingjay is not trained here")
-    assert "mockingjay" not in names("Multilingual")
-    assert "mockingjay" in names("wild")
-    assert "mockingjay" in skip_models("Multilingual")
-    assert skip_models("wild") == frozenset()
+    import spoof_superb.scoring.datasets as D
+    assert not hasattr(D, "SKIP_MODELS")
+    assert not hasattr(D, "skip_models")
+    default = {t.frontend for t in JOBS["all"].enumerate_tasks(
+        datasets=["Multilingual"]) if t.system == "linear_head"}
+    widened = {t.frontend for t in JOBS["all"].enumerate_tasks(
+        datasets=["Multilingual"], paper_only=False) if t.system == "linear_head"}
+    assert default == paper_models() & widened
+    assert widened == {s for s, _ in discover_linear_heads(paper_only=False)}
 
 
-def test_j4b_skip_models_is_redundant_under_the_default_roster():
-    """Both SKIP_MODELS entries are unreported models, so paper_only covers them.
-
-    Recorded rather than removed: the skip list is still the only thing keeping
-    them off MLAAD under --all-models, and it states an intent that outlives the
-    current roster.
-    """
-    from spoof_superb.scoring.datasets import SKIP_MODELS
-    everything = set().union(*SKIP_MODELS.values())
-    assert everything.isdisjoint(paper_models()), sorted(everything & paper_models())
+def test_j4b_discover_no_longer_takes_a_skip_argument():
+    """The parameter went with the data: nothing else ever passed one."""
+    import inspect
+    assert "skip" not in inspect.signature(discover_linear_heads).parameters
 
 
-def test_j5_naming_a_skipped_model_still_scores_it():
-    """An explicit --models must override the dataset's skip list."""
+def test_j5_naming_an_unreported_model_still_scores_it():
+    """An explicit --models must override the paper_only default."""
     got = {t.frontend for t in JOBS["all"].enumerate_tasks(
         datasets=["Multilingual"], models=["mockingjay"])
         if t.system == "linear_head"}
     assert got == {"mockingjay"}
+    assert not is_paper_model("mockingjay")
 
 
 def test_j6_scoring_resolves_no_reference_file():
@@ -377,14 +370,13 @@ def test_j8_reference_resolves_against_a_real_old_tree():
     assert found, "no published column resolved; the migration check is broken"
 
 
-def test_j9_the_mockingjay_skip_is_the_plain_variant_only():
-    """mockingjay_960hr must still be scored on MLAAD.
+def test_j9_only_the_960hr_variant_is_scored_on_mlaad():
+    """mockingjay_960hr must be scored on MLAAD; plain mockingjay must not.
 
     It is the variant the paper's MLAAD table lists, and the only mockingjay*
-    file in the published MLAAD tree. A substring or prefix match here would
-    silently drop it -- so this pins that membership is exact.
+    file in the published MLAAD tree. The two names share a prefix, so a
+    substring match anywhere in the roster logic would take out the wrong one.
     """
-    from spoof_superb.scoring.datasets import skip_models
     frontends = {t.frontend for t in JOBS["all"].enumerate_tasks(
         datasets=["Multilingual"]) if t.system == "linear_head"}
     heads = {s for s, _ in discover_linear_heads(paper_only=False)}
@@ -392,7 +384,6 @@ def test_j9_the_mockingjay_skip_is_the_plain_variant_only():
         pytest.skip("mockingjay_960hr is not trained here")
     assert "mockingjay_960hr" in frontends
     assert "mockingjay" not in frontends
-    assert "mockingjay_960hr" not in skip_models("Multilingual")
 
 
 def test_j10_only_the_960hr_mockingjay_is_a_paper_model():

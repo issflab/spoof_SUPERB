@@ -62,10 +62,16 @@ costume.
 
 Task counts: `all` 312 -> 252, `linear_head` 288 -> 228.
 
-A side effect worth recording: `SKIP_MODELS` (`mockingjay`, `byol_a_2048` off
-MLAAD/M-AILABS) is now redundant at the default, since both are unreported
-anyway. Kept because it still bites under `--all-models` and states an intent
-that outlives the current roster. `test_j4b` pins that relationship.
+A side effect: `SKIP_MODELS` (`mockingjay`, `byol_a_2048` off MLAAD/M-AILABS)
+became redundant, since both are unreported models that `paper_only` already
+excludes. **Removed**, along with `discover_linear_heads(skip=...)`, whose only
+caller it was. `--all-models` now really means every trained head on every
+dataset: 312 tasks rather than 308.
+
+The original exclusion was an early request, and byol's half of it was a
+workaround for an fp16 STFT crash that fp32 scoring already fixes. Neither
+reason survived, so keeping the mechanism would have been keeping a comment in
+executable form.
 
 ---
 
@@ -157,7 +163,7 @@ named job.
 
     JOBS         = {all, linear_head, baselines}
     VERIFY_POLICY = {Multilingual: mlaad, MAILABS: mlaad, spoofceleb: spoofceleb}
-    SKIP_MODELS   = {Multilingual: {byol_a_2048, mockingjay}, MAILABS: same}
+    (SKIP_MODELS also moved here, then was removed as redundant -- see P1)
 
 `Job.verify` and `Job.skip` are gone; `Task` carries `verify`, `system` and
 `frontend` instead, the way it already carried `expect_lines`.
@@ -177,17 +183,13 @@ The intended sequence, which is why verification is not automatic:
 3. once accepted, build the release manifest from the new tree -- from then on
    the new files are the reference
 
-Counts moved again: `all` 276 -> 274, `linear_head` 252 -> 250, because
-`SKIP_MODELS` now applies under `--job all`, which it never did before.
-`mockingjay` is excluded from MLAAD and M-AILABS because the paper's MLAAD table
-reports no cell for it -- the plain variant only; `mockingjay_960hr` is scored on
-MLAAD and is the one that table lists. `mockingjay` remains in the paper roster,
-since the main results table reports it on nine of ten datasets.
-`--models mockingjay` fills the empty MLAAD cell deliberately.
+`mockingjay_960hr` is scored on MLAAD -- the variant the paper's MLAAD table
+lists. Plain `mockingjay` is not, because it is not one of the 19 reported
+models; `--models mockingjay` scores it deliberately.
 
-A test caught a real gap while writing this: `skip` was evaluated before `only`,
-so `--models mockingjay --datasets Multilingual` silently produced nothing. An
-explicit request now overrides both `SKIP_MODELS` and `paper_only`.
+A test caught a real gap while writing this: the skip list was evaluated before
+`only`, so `--models mockingjay --datasets Multilingual` silently produced
+nothing. An explicit request now overrides the default roster.
 
 ---
 
