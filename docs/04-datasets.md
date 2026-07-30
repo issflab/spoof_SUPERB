@@ -59,7 +59,7 @@ if this document and the code ever disagree.
 | `Famous_Figures` | absolute path | rewritten, see below |
 | `spoofceleb` | relative path with `.flac` | `SpoofCeleb/flac/evaluation/{utt}` |
 | `Multilingual` (MLAAD) | path relative to `data_root` | `{data_root}/{utt}` |
-| `asvspoofLD` | bare id | condition looked up in the protocols, then `ASVspoofLD/{cond}/flac/{utt}.flac` |
+| `asvspoofLD` | bare id | condition looked up, then `ASVspoofLD/{cond}/flac/{utt}.flac` |
 
 Three of these need explanation.
 
@@ -78,48 +78,104 @@ reference file:
    are `key=bonafide` and all 49,945 resolve after the remap. Without it the
    dataset scores zero bonafide trials and its EER is undefined.
 
-**ASVLD** — audio is split by laundering condition, but the pooled reference
-score file carries no condition column. The resolver parses all five protocols
-once into a utt_id → condition index. Note the upstream filename misspelling,
-`ASVspoofLauneredDatabase_{condition}.txt`, which is reproduced deliberately.
+**ASVLD** — audio is split by laundering condition (`ASVspoofLD/{cond}/flac/`),
+but a utt_id does not say which condition it belongs to. The resolver parses all
+five condition protocols once into a 2,065,873-entry utt_id → condition index.
+Note the upstream filename misspelling,
+`ASVspoofLauneredDatabase_{condition}.txt`, reproduced deliberately.
+
+The combined protocol we now build **does** carry a `condition` column, so for a
+protocol-driven run that index is redundant work -- `trials_from_protocol` reads
+only `utt_col` and `label_col` and discards the rest. Harmless but wasteful;
+tracked as P10 in `PLANNED_CHANGES.md` rather than changed under a running sweep.
 
 ## Where trial lists come from
 
-Four mechanisms, selected with `--source`:
+**Every dataset reads its trial list from a protocol file.** All twelve, with no
+exceptions and no per-dataset special cases. This is the whole of the default
+behaviour; `--source` exists only as an override for one-off work.
+
+### The protocol path for every dataset
+
+Declared once, in `PROTOCOL_SPECS` in `spoof_superb/scoring/datasets.py`. Every
+path is built from `cfg.data_root`, so a corpus that moves is a one-line config
+change and nothing else:
+
+| Dataset | Protocol, relative to `data_root` | Ships with the corpus? |
+|---|---|---|
+| `eval_2019` | `ASVSpoofData_2019/train/LA/ASVspoof2019_LA_cm_protocols/ASVspoof2019.LA.cm.eval.trl.txt` | yes |
+| `asvspoof2021_LA` | `ASVSpoof2021_complete/LA/ASVspoof2021_LA_eval/trial_metadata.txt` | yes |
+| `asvspoof2021_DF` | `ASVSpoof2021_complete/DF/ASVspoof2021_DF_eval/trial_metadata.txt` | yes |
+| `asvspoof5` | `ASVSpoof5/protocols/ASVspoof5.eval.track_1.tsv` | yes (named `.tsv`, actually space-delimited) |
+| `wild` | `ds_wild/protocols/meta.csv` | yes |
+| `spoofceleb` | `SpoofCeleb/metadata/evaluation.csv` | yes |
+| `Famous_Figures` | `famousfigures/protocol.txt` | yes |
+| `deepfake_eval_2024` | `Deepfake_Eval_2024/audio-metadata-publish.csv` | yes |
+| `Multilingual` (MLAAD) | `MLAAD/combined_meta_all.txt` | **built** |
+| `MAILABS` | `MAILabs/protocol.txt` | **built** |
+| `asvspoofLD` | `ASVSpoofLaunderedDatabase/ASVspoofLD/protocol.txt` | **built** |
+| `deepfake_eval_2024_segmented` | `Deepfake_Eval_2024/segmented/protocol.txt` | **built** |
+
+The four **built** ones each record their builder in the registry, and the
+orchestrator prints that command if the protocol is missing rather than failing
+200 tasks into a sweep:
+
+```
+[orchestrate] 1 dataset(s) have no protocol on disk; their tasks will fail:
+    MAILABS  build it with: python -m spoof_superb.data.prep.build_protocols mailabs
+```
+
+How each protocol is *parsed* is declared beside its path -- `delimiter`,
+`utt_col`, `label_col`, `label_const`, `bonafide_when`, `strip_ext`, `add_ext`,
+`rel_to`. So the per-corpus differences are data, not twelve reader functions.
+`delimiter=None` splits on any whitespace, which several "tsv" files need.
+
+Label vocabularies differ too (`Real`/`Fake`, `bona-fide`, `bonafide`,
+`genuine`) and are normalised through `LABEL_ALIASES`. An unrecognised label
+raises rather than being silently treated as spoof: In-the-Wild writes
+`bona-fide`, and a downstream filter on `== "bonafide"` would once have dropped
+all 19,963 of its bonafide trials from the EER.
+
+### `--source`, and why it is not what you want
 
 | `--source` | Trial list | Label |
 |---|---|---|
-| `benchmark` | the published reference score file | copied from that file |
-| `asvld` | the ASVLD protocol for one condition | protocol column 4 |
+| `protocol` | the dataset's protocol file | from the protocol |
+| `benchmark` | an existing published score file | copied from that file |
+| `asvld` | one ASVLD condition protocol | protocol column 4 |
 | `walk` | every `.wav` under a directory | one constant, via `--label` |
-| `protocol_csv` | a `file,speaker,attack` CSV | per-utterance: `a00` = bonafide |
+| `protocol_csv` | a `file,speaker,attack` CSV | `a00` = bonafide |
 
-`benchmark` is the default and the one that matters for comparability. The
-trial list comes from an existing published score file rather than being
-re-derived from a raw protocol, because several published sets are subsets
-whose selection rule is not recorded anywhere. Verified against the corpora:
+`protocol` is the default for all twelve. The others remain for ad-hoc work; in
+particular **`benchmark` should not be used to build a score tree.** Taking the
+trial list from a previously produced score file means a new tree can only ever
+reproduce the old one's coverage, and the old coverage is demonstrably partial:
 
 | Dataset | Published trial list | Full protocol on disk | Gap |
 |---|---|---|---|
-| ASV21 DF | 152,955 | 611,829 (`trial_metadata.txt`, matches the `.trl` file and the flac count) | ~25% subsample, stratified across all three phases (eval 133,464 / progress 14,820 / hidden 4,671) and all 9 codec conditions. The sampling rule and seed are not recorded. |
+| ASV21 DF | 152,955 | 611,829 (`trial_metadata.txt`, matches the `.trl` file and the flac count) | ~25% subsample, stratified across all three phases (eval 133,464 / progress 14,820 / hidden 4,671) and all 9 codec conditions. The sampling rule and seed are not recorded anywhere. |
 | Famous Figures | 346,471 | 348,135 (`protocol.txt`, excluding its header) | 1,664 rows absent: 1,344 spoof, 320 bonafide. No single attribute explains them. |
-| Deepfake-Eval 2024 | 1,976 | 1,980 (`audio-metadata-publish.csv`, and 1,980 files on disk) | 4 files. The published set is a strict **subset** of the metadata -- 2 Fake, 2 Real, mixed train/test, most plausibly dropped as undecodable at scoring time. |
+| Deepfake-Eval 2024 | 1,976 | 1,980 (`audio-metadata-publish.csv`, and 1,980 files on disk) | 4 files, a strict **subset** -- 2 Fake, 2 Real, mixed train/test. They carry a `.dat` extension but are MP4 containers: librosa cannot open them, ffmpeg can. |
 
-Comparing on Famous Figures requires normalising the path prefix first: the
-published ids are absolute paths under the retired NFS mount, and the protocol
-records `/data/Data/...`. The bonafide `-` vs `Bonafide` directory remap
-accounts for 50,266 of the apparent difference before the real 1,664 remains.
+Those three columns were reference-driven until RP-7 closed, which is why they
+were short. Reading the full protocol means **a fresh run legitimately produces
+more rows than the published file**. That is reported by verification as a
+coverage line, not treated as a failure -- see [verification](08-verification.md).
 
-Re-deriving these lists would
-silently score a different trial set and produce EERs that cannot go in the same
-table.
+Comparing on Famous Figures needs the path prefix normalised first: published
+ids are absolute paths under the retired NFS mount while the protocol records
+`{data_root}/...`, and the bonafide `-` vs `Bonafide` remap accounts for 50,266
+of the apparent difference before the real 1,664 remains.
 
 ## Protocols and preparation we had to build
 
-Three corpora did not ship something we could use directly: MLAAD has no
-combined protocol, M-AILABS has none at all, and Deepfake-Eval needs
-segmenting before its audio is reachable. SpoofCeleb is included for
-contrast -- it ships a protocol that works as-is.
+Four of the twelve did not ship something usable: MLAAD has no combined
+protocol, M-AILABS has none at all, ASVLD ships five disjoint ones, and
+Deepfake-Eval needs segmenting before most of its audio is reachable.
+SpoofCeleb is included for contrast -- it ships a protocol that works as-is.
+
+Each writes its output beside its corpus and records its builder in
+`PROTOCOL_SPECS`, so a missing protocol names its own fix.
 
 ### MLAAD
 
@@ -153,21 +209,37 @@ python -m spoof_superb.analysis.build_mlaad_dir_map   # -> mlaad_v10_dir_to_syst
 ### M-AILABS
 
 M-AILABS has no protocol at all. It is the **bonafide** counterpart to MLAAD's
-spoof audio, so the trial list is simply every wav under the corpus with a
-constant label:
+spoof audio, so every wav under the corpus is one trial with a constant label.
+That used to be a directory walk at scoring time; it is now written down once:
 
 ```bash
-bin/score.sh    # with SOURCE="walk", WALK_ROOT=".../MAILabs", WALK_LABEL="bonafide"
+python -m spoof_superb.data.prep.build_protocols mailabs --dry-run
+python -m spoof_superb.data.prep.build_protocols mailabs
 ```
 
-The walk skips macOS AppleDouble sidecars (`._name.wav`) -- 176-245 byte
-metadata stubs that are not audio. M-AILABS carries 6 of them and they are
-absent from the reference score files.
+Writing it down matters more than it looks. A directory walk has no record: two
+runs months apart can enumerate different sets -- a re-download, an added file,
+a filesystem that orders differently -- and nothing in the output says so. A
+protocol file is an artifact you can diff. 584,006 rows, all bonafide, ids
+relative to `data_root` so they pool with MLAAD's without rewriting.
+
+The builder skips macOS AppleDouble sidecars (`._name.wav`) -- 176-245 byte
+metadata stubs that are not audio. M-AILABS carries 6 and they are absent from
+the published score files.
 
 ### Scoring MLAAD and M-AILABS: separately, then combine
 
-They are scored as two separate runs and merged afterwards, **not** combined
-into one protocol first:
+Each is single-class, so **neither yields an EER on its own** -- MLAAD is
+456,000 spoof with no bonafide, M-AILABS is 584,006 bonafide with no spoof.
+Pooled they are 1,040,006, which is exactly the published MLAAD row including
+both class counts. The MLAAD column is the pool, and until the pooling runs
+there is no MLAAD number.
+
+The orchestrator scores both and marks them `ok`, because each protocol was read
+in full and contains no NaN -- it does not know the column is not yet a column.
+**This is tracked as P8 in `PLANNED_CHANGES.md` and is open.** The tooling below
+is the pre-reorganisation path and predates the v2 score layout, so check it
+before relying on it:
 
 ```bash
 # 1. score MLAAD fake  (label=spoof)      -> linear_head_MLAAD_v10/
@@ -235,10 +307,25 @@ Once built, it is a dataset like any other:
 bin/score.sh    # DATASET="deepfake_eval_2024_segmented"
 ```
 
-It is marked non-benchmark -- a derived set, not a published column -- so
+**The segmented set is what a default sweep scores.** It is in
+`DEFAULT_DATASETS`; the unsegmented `deepfake_eval_2024` is not, though it stays
+scoreable by name and the two write to different paths, so both can sit on disk:
+
+```bash
+bin/orchestrate.sh                                 # segmented
+bin/orchestrate.sh --datasets deepfake_eval_2024   # the published column
+```
+
+It is still marked non-benchmark -- a derived set, not a *published* column -- so
 `--source benchmark` is refused for it and it is absent from the release
-manifest. The unsegmented `deepfake_eval_2024` column is untouched, so the two
-can be compared directly.
+manifest.
+
+**The two are not comparable, and this is the one thing to get right.** The
+published column is 1,976 trials, one 4 s window per recording; segmented is
+56,481, every window of every recording. A three-minute file contributes ~45
+trials instead of one, so the segmented EER weights long recordings far more
+heavily. It answers a different question rather than correcting the old answer,
+and any write-up has to say which column it reports.
 
 The pre-existing `Deepfake_Eval_2024/data/` tree is a separate local artifact
 with its own train/test and duration splits. This script never reads or writes

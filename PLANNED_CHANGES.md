@@ -257,6 +257,24 @@ Blocks verification, not scoring.
 
 ---
 
+## P10  ASVLD rebuilds a condition index the protocol already contains  [OPEN]
+
+`_r_asvld` parses all five condition protocols into a 2,065,873-entry
+utt_id -> condition map, because a bare utt_id does not say which
+`ASVspoofLD/{cond}/flac/` directory holds its audio.
+
+The combined protocol built by `build_protocols asvld` already carries a
+`condition` column, but `trials_from_protocol` reads only `utt_col` and
+`label_col` and discards the rest, so the resolver re-derives what it was handed.
+
+Harmless -- the index is built once and cached -- but it is ~2M rows of parsing
+per process for information already in hand, and the two sources could in
+principle disagree. The fix is to let a dataset's parsed protocol carry extra
+columns through to its resolver. Left open rather than changed under a running
+sweep, since it touches the path every ASVLD trial resolves through.
+
+---
+
 ## Carried over from `humanpending.md`
 
 Still open there, unchanged by the reorganisation:
