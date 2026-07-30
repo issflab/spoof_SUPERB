@@ -32,7 +32,7 @@ before executing, so you can always see which won.
 
 | Flag | Setting | Values | Meaning |
 |---|---|---|---|
-| `--job` | `JOB` | `all` `linear_head` `baselines` `mlaad` `mailabs` `spoofceleb` | which selection + policy; see below |
+| `--job` | `JOB` | `all` `linear_head` `baselines` | which back-ends; see below |
 | `--systems` | `SYSTEMS` | `linear_head` `aasist_raw` `lfcc_gmm` | restrict back-ends |
 | `--datasets` | `DATASETS` | any registry key | restrict datasets |
 | `--models` | `MODELS` | s3prl upstream names | restrict SSL upstreams (`linear_head` only) |
@@ -41,6 +41,8 @@ before executing, so you can always see which won.
 | `--force` | `FORCE="yes"` | flag | re-score even when a complete NaN-free output exists |
 | `--progress` | `PROGRESS` | `auto` `bar` `plain` `none` | live display; see [Watching a run](#watching-a-run) |
 | `--all-models` | `PAPER_ONLY="no"` | flag | score all 24 trained heads, not just the 21 Table 5 reports |
+| `--verify-against` | `VERIFY_AGAINST` | path to a score tree | compare each finished column against that tree. Off by default |
+| `--verify-layout` | `VERIFY_LAYOUT` | `legacy` `v2` | layout of the tree above |
 | `--run-name` | `RUN_NAME` | any string | identity for this run; defaults to a timestamp |
 | `--list` | — | flag | print the tasks and exit, running nothing |
 | `--python` | — | path | interpreter for the scoring subprocesses; defaults to `cfg.python` |
@@ -137,110 +139,87 @@ arguments to `enumerate_tasks()` and never touch the job. So a filter narrows
 what a job produces; it does not redefine the job.
 
 Counts below are at the default (paper models only); the figure in brackets is
-what `--all-models` gives.
+what `--all-models` gives. Neither figure includes the per-dataset
+`SKIP_MODELS` exclusions, which `--all-models` does not lift -- only `--models`
+does.
 
 | `JOB` | Selects | Tasks | Policy it adds |
 |---|---|---|---|
-| `all` | every system on every dataset | 276 (312) | — |
-| `linear_head` | every SSL head on every dataset | 252 (288) | — |
+| `all` | every system on every dataset | 274 (308) | — |
+| `linear_head` | every SSL head on every dataset | 250 (284) | — |
 | `baselines` | `aasist_raw` + `lfcc_gmm` everywhere | 24 (24) | `batch_size=64` |
-| `mlaad` | every SSL head on MLAAD v10 | 20 (22) | verify `mlaad`; 1 attempt; skips `byol_a_2048`, `mockingjay` |
-| `mailabs` | every SSL head on M-AILABS | 20 (22) | as `mlaad` |
-| `spoofceleb` | every SSL head on SpoofCeleb | 21 (24) | verify `spoofceleb`; 6 attempts; 3 h CUDA wait |
 
-So `--job mlaad` is **not** the same as `--job all --datasets Multilingual`. The
-latter is 23 tasks: it adds the two baselines and `mockingjay`, and runs no
-verification.
+**There is no per-dataset job.** There used to be three -- `mlaad`, `mailabs`,
+`spoofceleb`. Each was a dataset name plus three facts about that dataset: which
+policy grades it, its retry budget, and which upstreams to skip on it. Once
+`--datasets` existed the name was redundant, and the facts belonged to the
+dataset, so they moved to the registry:
 
-Why the policies differ:
-
-* **Verification.** Only these three datasets have a published score file to
-  compare a fresh run against, and the two comparisons grade differently --
-  `mlaad` requires Pearson *and* Spearman *and* sign agreement at 0 and
-  tolerates 1% NaN; `spoofceleb` uses Spearman alone and tolerates none. See
-  [verification](08-verification.md).
-* **Retry budget.** `spoofceleb` was run through a period of driver instability
-  and retries 6 times over 3 hours. `mlaad` and `mailabs` use a single attempt
-  because those runs are short: failing fast beats a 3 h wait on a 20 min task.
-* **Skip lists.** `mlaad` and `mailabs` exclude `byol_a_2048` and `mockingjay`
-  by an earlier request. `spoofceleb` deliberately includes them -- fp32 fixes
-  byol's fp16 STFT crash, and mockingjay's SpoofCeleb reference is usable. The
-  exclusion is attached to the jobs where it applies rather than made a global
-  default, so it is visible instead of silent.
-
-These three are also how the published runs were organised, and their names are
-what `_runs/{job}/` is keyed on, so each keeps a separate audit trail.
-
-## Narrowing a sweep
-
-A task is one `(system, dataset, model)`, and each axis has its own filter, so
-any slice can be named directly:
-
-```bash
-# one model on one dataset -- the smallest useful unit of work
-bin/orchestrate.sh --datasets wild --models xls_r_300m
-
-# one model everywhere
-bin/orchestrate.sh --models xls_r_300m
-
-# every model on one dataset
-bin/orchestrate.sh --datasets spoofceleb
-
-# just the CPU baseline, one dataset
-bin/orchestrate.sh --systems lfcc_gmm --datasets wild
+```python
+# spoof_superb/scoring/datasets.py
+VERIFY_POLICY = {"Multilingual": "mlaad", "MAILABS": "mlaad",
+                 "spoofceleb": "spoofceleb"}
+SKIP_MODELS   = {"Multilingual": {"byol_a_2048", "mockingjay"}, ...}
 ```
 
-| Filter | Selects | Notes |
-|---|---|---|
-| `--systems` | `linear_head`, `aasist_raw`, `lfcc_gmm` | |
-| `--datasets` | any registry key | see `bin/score.sh --list_datasets` |
-| `--models` | s3prl upstreams | applies to `linear_head` only |
+This fixed a real hole rather than just tidying: because the grading policy lived
+on `--job mlaad`, **`--job all` used to score MLAAD and SpoofCeleb with no
+policy attached at all** -- the sweep anyone would actually run was the one that
+skipped the check. The policy now travels with the dataset, so
+`--datasets Multilingual` carries it regardless of which job selected it.
 
-The same three are settable in `bin/orchestrate.sh`'s settings block. A filter
-combination that selects nothing produces nothing -- `--systems lfcc_gmm
---models xls_r_300m` is empty, because that back-end has no upstream.
+`SKIP_MODELS` is why `all` is 274 and not 276: `mockingjay` is excluded from
+MLAAD and M-AILABS, matching Table 5, which reports no MLAAD cell for it.
+`--models mockingjay` overrides that and fills the cell deliberately.
 
-Filters compose with `--job`, so a named job can be narrowed the same way:
-`--job spoofceleb --models xls_r_300m` keeps that job's verification and retry
-budget while running one upstream.
+## Verification is a separate step
 
-`--only` is the deprecated spelling of `--models`; it used to mean SSL model
-for the SSL sweep and dataset for the baselines, which was a trap.
+**Scoring never reads a score file it did not just write.** Trial lists come
+from protocols; no reference file is consulted, and there is no configuration
+that changes this. A tree built from scratch therefore cannot inherit an older
+tree's coverage -- which is exactly how the published ASV21-DF column ended up
+at 152,955 rows of a 611,829-row protocol.
 
-`all` is not a special case -- it is the selection with nothing excluded.
-Expected row counts come from each dataset's protocol rather than being written
-down, so the resume check is correct for every dataset.
+That leaves comparison as something you ask for, in one of two places.
 
-Before a sweep starts, any dataset whose protocol is missing is reported with
-the command that builds it, rather than failing 200 tasks in.
+**During the sweep**, if you want each column checked as it lands:
 
-Job definitions live in `spoof_superb/orchestration/jobs.py`. A `Job` declares
-only its policy -- skip list, retry budget, CUDA wait, batch size, verification
-check. Output paths come from `core/scorepath.py` and expected row counts from
-each dataset's protocol, so neither is written down per job. To add a dataset
-sweep, add a `Job` there rather than writing a new script; to run an existing
-one over a different slice, use the filters.
+```bash
+# in bin/orchestrate.sh
+VERIFY_AGAINST="/data/ssl_anti_spoofing/asd_superb_score_files"
+VERIFY_LAYOUT="legacy"
+```
 
-## Behaviour worth knowing
+**Afterwards**, which costs nothing extra and does not slow the sweep:
 
-**Resume is automatic.** A complete, NaN-free output is not recomputed, only
-re-verified. Set `FORCE="yes"` to override. This means an interrupted overnight
-run can simply be restarted.
+```bash
+python -m spoof_superb.verification.driver \
+    --check mlaad \
+    --new  {new_root}/raw/linear_head/mlaad_v10/xls_r_300m.txt \
+    --ref  {old_root}/linear_head_MLAAD_v10/linear_head_MLAAD_v10_xls_r_300m.txt
+```
 
-**GPUs are pinned by UUID, not index.** Index-based `CUDA_VISIBLE_DEVICES`
-fails to initialise on this host once another process holds a different device,
-which previously sent whole models to CPU without anyone noticing.
+Either way the reference tree is **named explicitly**. It is never derived from
+`scores_root`, because `scores_root` is where the new files go -- comparing a
+tree against itself is vacuous, and defaulting to some other tree is how a
+"fresh" build silently stops being fresh.
 
-**rc=2 is retried in a fresh process.** That return code is the scoring
-driver's "CUDA requested but unavailable" guard -- an environment fault, not a
-model fault. Per-job retry budgets are in [the jobs table](#the-jobs).
+### Building a new tree and promoting it
 
-**`WORKERS=1` runs sequentially**, which is what the old
-`orchestrate_baselines.py` did.
+The order matters, and it is the reason verification is not automatic:
 
-**ASVspoof2021 needs `av` installed** or it decodes ~14x slower. libsndfile
-cannot read 36-43% of those FLAC files and librosa falls back to a subprocess
-per file. See [troubleshooting](11-troubleshooting.md).
+1. **Build from scratch.** `bin/orchestrate.sh` with `VERIFY_AGAINST=""`.
+   Every column comes from its protocol. Coverage may legitimately *exceed* the
+   old tree's.
+2. **Compare against the old tree.** Per column, with the dataset's own policy.
+   Expect differences in row counts where the old column was a subset; expect
+   agreement in ranking and EER where it was not.
+3. **Confirm, then promote.** Once the new tree is accepted, build the release
+   manifest from it (`spoof_superb.tools.build_release_manifest`). From that
+   point the new files are the reference and the old tree is history.
+
+A column whose policy is `None` has no published twin to compare against; it
+records `not compared` and that is not a failure.
 
 ## Watching a run
 

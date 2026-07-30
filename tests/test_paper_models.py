@@ -218,3 +218,89 @@ def test_c3_run_name_flag_reaches_the_job(capsys, monkeypatch, tmp_path):
     monkeypatch.setattr(d.JOBS["all"], "enumerate_tasks", spy)
     _parse(["--job", "all", "--datasets", "wild", "--run-name", "my-run", "--list"])
     assert seen["run"] == "my-run"
+
+
+# ===========================================================================
+# J1-J7: jobs pick back-ends; datasets carry their own policy
+# ===========================================================================
+
+def test_j1_only_three_jobs_remain():
+    """mlaad/mailabs/spoofceleb were a dataset name plus dataset facts."""
+    assert sorted(JOBS) == ["all", "baselines", "linear_head"]
+
+
+def test_j2_job_no_longer_carries_verify_or_skip():
+    """Both were properties of a dataset, not of an invocation."""
+    import dataclasses
+    names = {f.name for f in dataclasses.fields(Job)}
+    assert "verify" not in names
+    assert "skip" not in names
+
+
+def test_j3_the_grading_policy_travels_with_the_dataset():
+    """The hole this closed: --job all used to grade nothing.
+
+    Because the policy lived on --job mlaad, the sweep anyone would actually
+    run had verify=None for MLAAD and SpoofCeleb.
+    """
+    from spoof_superb.scoring.datasets import verify_policy
+    tasks = {t.name: t for t in JOBS["all"].enumerate_tasks(
+        datasets=["Multilingual", "spoofceleb", "wild"])}
+    for name, t in tasks.items():
+        assert t.verify == verify_policy(t.dataset), name
+    assert any(t.verify == "mlaad" for t in tasks.values())
+    assert any(t.verify == "spoofceleb" for t in tasks.values())
+    assert any(t.verify is None for t in tasks.values())
+
+
+def test_j4_model_skips_are_per_dataset_not_per_sweep():
+    """`mockingjay` is excluded from MLAAD and wanted everywhere else.
+
+    A job-wide skip could not express that without a job per dataset.
+    """
+    from spoof_superb.scoring.datasets import skip_models
+    names = lambda ds: {t.frontend for t in JOBS["all"].enumerate_tasks(datasets=[ds])
+                        if t.system == "linear_head"}
+    if "mockingjay" not in paper_models():
+        pytest.skip("mockingjay is not a paper model here")
+    assert "mockingjay" not in names("Multilingual")
+    assert "mockingjay" in names("wild")
+    assert "mockingjay" in skip_models("Multilingual")
+    assert skip_models("wild") == frozenset()
+
+
+def test_j5_naming_a_skipped_model_still_scores_it():
+    """An explicit --models must override the dataset's skip list."""
+    got = {t.frontend for t in JOBS["all"].enumerate_tasks(
+        datasets=["Multilingual"], models=["mockingjay"])
+        if t.system == "linear_head"}
+    assert got == {"mockingjay"}
+
+
+def test_j6_scoring_resolves_no_reference_file():
+    """The core contract: a fresh tree cannot inherit an old tree's coverage."""
+    for t in JOBS["all"].enumerate_tasks(datasets=["Multilingual", "spoofceleb"]):
+        assert not hasattr(t, "ref_file") or getattr(t, "ref_file", None) is None
+    # and the task argv never mentions a reference
+    for t in JOBS["all"].enumerate_tasks(datasets=["Multilingual"]):
+        assert not any("--reference" in a or "--ref" == a for a in t.argv)
+
+
+def test_j7_reference_lookup_requires_an_explicit_root(tmp_path):
+    """No root named means no comparison -- never a silent default."""
+    from spoof_superb.orchestration.driver import reference_for
+    t = JOBS["all"].enumerate_tasks(datasets=["Multilingual"])[0]
+    assert reference_for(t, None, "legacy") is None
+    assert reference_for(t, str(tmp_path), "legacy") is None      # empty tree
+
+
+def test_j8_reference_resolves_against_a_real_old_tree():
+    """The migration check must actually find the published columns."""
+    from spoof_superb.orchestration.driver import reference_for
+    old = "/data/ssl_anti_spoofing/asd_superb_score_files"
+    if not os.path.isdir(old):
+        pytest.skip("the old score tree is not mounted")
+    found = [t.name for t in JOBS["all"].enumerate_tasks(
+        datasets=["Multilingual", "spoofceleb"])
+        if reference_for(t, old, "legacy")]
+    assert found, "no published column resolved; the migration check is broken"

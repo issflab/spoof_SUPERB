@@ -34,7 +34,7 @@ done
 
 echo "$(date): CUDA is available after ${waited}s -> starting canary (xls_r_300m)"
 cd "$REPO" || exit 1
-"$PY" -m spoof_superb.orchestration.driver --job spoofceleb --only xls_r_300m
+"$PY" -m spoof_superb.orchestration.driver --job all --datasets spoofceleb --models xls_r_300m
 
 canary="$OUT/linear_head_SpoofCeleb_xls_r_300m.txt"
 lines=$( [ -f "$canary" ] && wc -l < "$canary" || echo 0 )
@@ -49,5 +49,5 @@ if ! "$PY" -m spoof_superb.verification.driver --check spoofceleb --new "$canary
 fi
 
 echo "$(date): canary PASSED ($lines lines) -> launching remaining 23 models on 3 GPUs"
-"$PY" -m spoof_superb.orchestration.driver --job spoofceleb
+"$PY" -m spoof_superb.orchestration.driver --job all --datasets spoofceleb
 echo "$(date): batch complete. Summary: $OUT/SUMMARY.txt"

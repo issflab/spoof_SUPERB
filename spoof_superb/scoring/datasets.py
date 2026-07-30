@@ -316,6 +316,42 @@ NATIVE_TRIALS = {
 #: MLAAD, scored separately and merged in afterwards.
 NON_BENCHMARK = {"MAILABS", "deepfake_eval_2024_segmented"}
 
+#: Which grading policy applies when a fresh run of this dataset is compared
+#: against an older one. A property of the dataset, not of whoever launched the
+#: sweep: the two policies differ because the corpora differ, and previously
+#: they lived on the `mlaad`/`mailabs`/`spoofceleb` jobs -- so `--job all`, the
+#: sweep anyone would actually run, silently graded nothing.
+#:
+#: Declaring the policy here does NOT make verification happen. Scoring never
+#: reads a reference file; comparison is a separate step the user asks for.
+#: See spoof_superb.verification.policies for what each name grades on.
+VERIFY_POLICY = {
+    "Multilingual": "mlaad",
+    "MAILABS": "mlaad",
+    "spoofceleb": "spoofceleb",
+}
+
+#: Upstreams excluded from a dataset by an earlier request, kept per-dataset so
+#: the exclusion is visible where it applies rather than being global.
+#: `--models` overrides it: an explicit request is never silently dropped.
+#:
+#: Table 5 reports no MLAAD cell for `mockingjay`, which is why it is here. A
+#: from-scratch build MAY now fill that cell -- pass --models mockingjay to do
+#: it deliberately.
+SKIP_MODELS = {
+    "Multilingual": frozenset({"byol_a_2048", "mockingjay"}),
+    "MAILABS": frozenset({"byol_a_2048", "mockingjay"}),
+}
+
+
+def verify_policy(dataset):
+    """The grading policy for this dataset, or None if it has no published twin."""
+    return VERIFY_POLICY.get(dataset)
+
+
+def skip_models(dataset):
+    return SKIP_MODELS.get(dataset, frozenset())
+
 #: Every dataset that can be scored, benchmark column or not.
 SCOREABLE = list(DATASETS)
 

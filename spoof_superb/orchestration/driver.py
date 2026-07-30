@@ -5,18 +5,23 @@ and orchestrate_baselines.py. Those four shared their scheduler, their UUID
 pinning, their status file, their resume logic and their summary table, and
 differed only in the constants now living in jobs.py.
 
-    python -m spoof_superb.orchestration.driver --job spoofceleb
+    python -m spoof_superb.orchestration.driver --job all
     python -m spoof_superb.orchestration.driver --job baselines --workers 1
-    python -m spoof_superb.orchestration.driver --job mlaad --models xls_r_300m
-    python -m spoof_superb.orchestration.driver --job baselines --list
+    python -m spoof_superb.orchestration.driver --job all --datasets spoofceleb
+    python -m spoof_superb.orchestration.driver --job all --list
 
-`--workers 1` reproduces orchestrate_baselines.py's sequential behaviour; the
-other three ran a pool over GPUS=[0,1,2], which is the default.
+`--workers 1` runs sequentially; the default is a pool over GPUS=[0,1,2].
 
-Two defaults worth knowing: only the 21 SSL upstreams Table 5 reports are
-scored (`--all-models` for all 24), and each invocation gets its own
-`_runs/{job}/{run}/` so two runs of one job cannot overwrite each other's
-record.
+Three defaults worth knowing:
+
+  * Only the 21 SSL upstreams Table 5 reports are scored (`--all-models` for
+    all 24).
+  * Each invocation gets its own `_runs/{job}/{run}/`, so two runs of one job
+    cannot overwrite each other's record.
+  * **No verification happens.** Scoring never reads a score file it did not
+    just write, so a fresh tree is built from protocols alone and cannot
+    inherit an older tree's coverage. Pass `--verify-against OLD_ROOT` to
+    compare as you go, or run spoof_superb.verification.driver afterwards.
 """
 
 import argparse
@@ -30,6 +35,7 @@ import threading
 import time
 
 from spoof_superb.config import cfg
+from spoof_superb.core.scorepath import score_path
 from spoof_superb.orchestration import cuda
 from spoof_superb.orchestration.jobs import JOBS
 from spoof_superb.orchestration.progress import NullReporter, make_reporter
@@ -83,18 +89,43 @@ def output_is_complete(path, expect_lines):
     return n > 0 if expect_lines is None else n == expect_lines
 
 
-def _verify(job, task, rec, python):
-    """Run the job's verification policy against the reference, if there is one."""
-    if not job.verify or not task.ref_file or not os.path.isfile(task.ref_file):
-        rec["verify"] = "no reference"
+def reference_for(task, root, layout):
+    """The file in ``root`` that corresponds to this task, or None.
+
+    Resolved from an explicitly named tree, never from the configured
+    scores_root. Scoring writes to scores_root; comparing it against itself
+    would be meaningless, and comparing it against a tree nobody named is how
+    a fresh build silently inherits an old one's coverage.
+    """
+    if not root:
+        return None
+    try:
+        path = score_path(task.system, task.dataset, task.frontend,
+                          scores_root=root, layout=layout)
+    except KeyError:
+        return None          # the old tree had no convention for this column
+    return path if os.path.isfile(path) else None
+
+
+def _verify(job, task, rec, python, ref_root=None, ref_layout="legacy"):
+    """Compare a finished score file against an older tree, if asked.
+
+    Off unless the caller names a reference tree. Verification is a separate
+    concern from scoring by design: a score file must be producible without any
+    previously produced score file existing.
+    """
+    ref = reference_for(task, ref_root, ref_layout)
+    if not task.verify or not ref:
+        rec["verify"] = "not compared" if not ref_root else "no reference"
         rec["verify_pass"] = None
         return
+    rec["ref_file"] = ref
 
     vlog = os.path.join(job.logs(), f"verify_{job.name}_{task.name.replace('/', '_')}.log")
     with open(vlog, "w") as vf:
         vrc = subprocess.call(
             [python, "-m", "spoof_superb.verification.driver",
-             "--check", job.verify, "--new", task.out_file, "--ref", task.ref_file],
+             "--check", task.verify, "--new", task.out_file, "--ref", ref],
             stdout=vf, stderr=subprocess.STDOUT)
     lines = open(vlog).read().strip().splitlines()
     vline = lines[-1] if lines else ""
@@ -107,7 +138,8 @@ def _verify(job, task, rec, python):
             rec[key] = m.group(1)
 
 
-def run_task(job, task, gpu, python, force=False, reporter=None, slot=None):
+def run_task(job, task, gpu, python, force=False, reporter=None, slot=None,
+             ref_root=None, ref_layout="legacy"):
     reporter = reporter or NullReporter()
     slot = slot or f"gpu{gpu}"
     log_file = os.path.join(job.logs(), f"{job.name}_{task.name.replace('/', '_')}.log")
@@ -182,7 +214,7 @@ def run_task(job, task, gpu, python, force=False, reporter=None, slot=None):
     n, n_bona, n_spoof, n_nan = read_score_file(task.out_file)
     rec.update({"n_lines": n, "n_bonafide": n_bona, "n_spoof": n_spoof, "n_nan": n_nan})
     reporter.set_phase(slot, "verify")
-    _verify(job, task, rec, python)
+    _verify(job, task, rec, python, ref_root=ref_root, ref_layout=ref_layout)
 
     complete = (task.expect_lines is None) or (n == task.expect_lines)
     rec["status"] = "ok" if complete and n_nan == 0 else "suspect"
@@ -194,14 +226,16 @@ def run_task(job, task, gpu, python, force=False, reporter=None, slot=None):
                    f"{n_nan} NaN, {rec.get('verify', '')}")
 
 
-def _worker(job, work_q, gpu, python, force, reporter=None, slot=None):
+def _worker(job, work_q, gpu, python, force, reporter=None, slot=None,
+            ref_root=None, ref_layout="legacy"):
     while True:
         try:
             task = work_q.get_nowait()
         except queue.Empty:
             return
         try:
-            run_task(job, task, gpu, python, force=force, reporter=reporter, slot=slot)
+            run_task(job, task, gpu, python, force=force, reporter=reporter,
+                     slot=slot, ref_root=ref_root, ref_layout=ref_layout)
         finally:
             # No-op when run_task reported normally; releases the slot if it
             # raised, so one crashed worker cannot stall the counter.
@@ -246,6 +280,14 @@ def main(argv=None):
     ap.add_argument("--list", action="store_true", help="list tasks and exit")
     ap.add_argument("--all-models", dest="all_models", action="store_true",
                     help="score every trained head, not just the 21 Table 5 reports")
+    ap.add_argument("--verify-against", dest="verify_against", default=None,
+                    metavar="SCORES_ROOT",
+                    help="after each task, compare its output against the same "
+                         "column in this tree. Off by default: scoring never "
+                         "reads a score file it did not just write.")
+    ap.add_argument("--verify-layout", dest="verify_layout", default="legacy",
+                    choices=("legacy", "v2"),
+                    help="layout of --verify-against (default: legacy)")
     ap.add_argument("--run-name", dest="run_name", default=None,
                     help="identity for this run; defaults to a timestamp. Two runs "
                          "of one job no longer share a status file.")
@@ -328,7 +370,8 @@ def main(argv=None):
         slot = f"gpu{gpu}" if n_workers <= len(job.gpus or [0]) else f"w{i}/gpu{gpu}"
         th = threading.Thread(target=_worker,
                               args=(job, work_q, gpu, args.python, args.force,
-                                    reporter, slot),
+                                    reporter, slot, args.verify_against,
+                                    args.verify_layout),
                               daemon=True)
         th.start()
         threads.append(th)

@@ -25,8 +25,8 @@ from spoof_superb.core.scorepath import score_path
 from spoof_superb.scoring.datasets import (
     PROTOCOL_SPECS,
     SCOREABLE,
-    has_reference,
-    reference_paths,
+    skip_models,
+    verify_policy,
 )
 from spoof_superb.scoring.models import paper_models
 
@@ -78,9 +78,13 @@ class Task:
     argv: Sequence[str]
     out_file: str
     dataset: str
-    ref_file: Optional[str] = None
+    system: str = "linear_head"
+    frontend: str = "none"
     needs_gpu: bool = True
     expect_lines: Optional[int] = None
+    # Which policy would grade this task if the user asks for a comparison.
+    # Carried per task because it is a property of the dataset, not the sweep.
+    verify: Optional[str] = None
 
 
 def default_run_name():
@@ -93,8 +97,6 @@ class Job:
     name: str
     systems: Sequence[str] = ("linear_head",)
     datasets: Optional[Sequence[str]] = None      # None = every scoreable one
-    verify: Optional[str] = None
-    skip: frozenset = frozenset()
     gpus: tuple = (0, 1, 2)
     max_attempts: int = 3
     cuda_wait_s: int = 3600
@@ -163,7 +165,7 @@ def discover_linear_heads(only=None, skip=frozenset(), paper_only=False):
     out = []
     if not os.path.isdir(MODELS_ROOT):
         return out
-    keep = paper_models() if (paper_only and not only) else None
+    keep = paper_models() if paper_only else None
     for name in sorted(os.listdir(MODELS_ROOT)):
         d = os.path.join(MODELS_ROOT, name)
         ckpt = os.path.join(d, "swa.pth")
@@ -171,10 +173,17 @@ def discover_linear_heads(only=None, skip=frozenset(), paper_only=False):
                 and os.path.isfile(ckpt)):
             continue
         ssl = name[len(LINEAR_HEAD_PREFIX):]
-        if ssl in skip or (only and ssl not in only):
-            continue
-        if keep is not None and ssl not in keep:
-            continue
+        # An explicit request overrides BOTH defaults. Naming a model and
+        # getting nothing back is the --only trap in a new costume, and it is
+        # worse here because the two filters that could swallow it are silent.
+        if only:
+            if ssl not in only:
+                continue
+        else:
+            if ssl in skip:
+                continue
+            if keep is not None and ssl not in keep:
+                continue
         out.append((ssl, ckpt))
     return out
 
@@ -186,10 +195,15 @@ def resolve_baseline_model(system):
                         "model_weighted_CCE_50_64_aasist_raw_ASV19_none", "swa.pth")
 
 
-def _frontends(job, system, models=None, paper_only=False):
-    """(frontend, checkpoint) pairs for one system."""
+def _frontends(job, system, dataset, models=None, paper_only=False):
+    """(frontend, checkpoint) pairs for one system on one dataset.
+
+    Takes the dataset because the skip list is per-dataset now: `mockingjay` is
+    excluded from MLAAD and wanted everywhere else, which a job-wide skip could
+    not express without a job per dataset.
+    """
     if system == "linear_head":
-        return discover_linear_heads(only=models, skip=job.skip,
+        return discover_linear_heads(only=models, skip=skip_models(dataset),
                                      paper_only=paper_only)
     if models and "none" not in models:
         return []          # this system has no upstream to select
@@ -217,8 +231,9 @@ def enumerate_tasks(job, systems=None, datasets=None, models=None,
     chosen_datasets = ordered_datasets(datasets or job.datasets)
     tasks = []
     for system in chosen_systems:
-        for frontend, ckpt in _frontends(job, system, models, paper_only):
-            for dataset in chosen_datasets:
+        for dataset in chosen_datasets:
+            for frontend, ckpt in _frontends(job, system, dataset, models,
+                                             paper_only):
                 out_file = score_path(system, dataset, frontend)
                 argv = [*DRIVER, "--model", system, "--model_path", ckpt,
                         "--dataset", dataset, "--output_file", out_file,
@@ -229,22 +244,18 @@ def enumerate_tasks(job, systems=None, datasets=None, models=None,
                 if system == "linear_head":
                     argv += ["--ssl_model", frontend]
 
-                # Only meaningful where a published score file exists to
-                # compare against; protocol-scored columns in a fresh tree
-                # have none.
-                ref = None
-                if job.verify and system == "linear_head" and has_reference(dataset):
-                    try:
-                        ref = reference_paths(dataset, frontend)[0]
-                    except KeyError:
-                        ref = None
-
+                # No reference file is resolved here. Scoring must not depend
+                # on a previously produced score file, or a fresh tree can only
+                # ever reproduce the old one's coverage. Comparison is a
+                # separate step against an explicitly named tree.
                 name = (f"{system}/{dataset}/{frontend}" if system == "linear_head"
                         else f"{system}/{dataset}")
                 tasks.append(Task(name=name, argv=argv, out_file=out_file,
-                                  dataset=dataset, ref_file=ref,
+                                  dataset=dataset, system=system,
+                                  frontend=frontend,
                                   needs_gpu=(system != "lfcc_gmm"),
-                                  expect_lines=expected_rows(dataset)))
+                                  expect_lines=expected_rows(dataset),
+                                  verify=verify_policy(dataset)))
     return tasks
 
 
@@ -252,28 +263,20 @@ def enumerate_tasks(job, systems=None, datasets=None, models=None,
 # The registry
 # ===========================================================================
 
-# byol_a_2048 and mockingjay were excluded from the MLAAD/M-AILABS runs by an
-# earlier request. Kept on those named jobs rather than made a global default,
-# so the exclusion is visible where it applies instead of silently everywhere.
-_MLAAD_SKIP = frozenset({"byol_a_2048", "mockingjay"})
-
+# Three jobs, one per set of back-ends. There used to be three more -- mlaad,
+# mailabs, spoofceleb -- one per dataset. They were a dataset name plus three
+# facts about that dataset (which policy grades it, its retry budget, which
+# upstreams to skip), and once --datasets existed the name was redundant while
+# the facts belonged to the dataset registry. They now live there, so
+# `--job all --datasets Multilingual` behaves like `--job mlaad` did, which
+# `--job all` never used to.
 JOBS = {
     # Everything: every system on every dataset.
     "all": Job(name="all", systems=("linear_head", *BASELINE_SYSTEMS)),
 
-    # Every SSL linear head on every dataset. This is the sweep that had no
-    # job before -- it needed one script invocation per dataset by hand.
+    # Every SSL linear head on every dataset.
     "linear_head": Job(name="linear_head", systems=("linear_head",)),
 
     # The two non-SSL baselines on every dataset.
     "baselines": Job(name="baselines", systems=BASELINE_SYSTEMS, batch_size=64),
-
-    # Dataset-restricted sweeps, kept because they are how the published runs
-    # were organised and because their skip lists and retry budgets differ.
-    "mlaad": Job(name="mlaad", datasets=["Multilingual"], verify="mlaad",
-                 skip=_MLAAD_SKIP, max_attempts=1),
-    "mailabs": Job(name="mailabs", datasets=["MAILABS"], verify="mlaad",
-                   skip=_MLAAD_SKIP, max_attempts=1),
-    "spoofceleb": Job(name="spoofceleb", datasets=["spoofceleb"],
-                      verify="spoofceleb", max_attempts=6, cuda_wait_s=3 * 3600),
 }

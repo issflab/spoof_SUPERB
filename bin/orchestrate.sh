@@ -9,13 +9,15 @@ source "$(dirname "${BASH_SOURCE[0]}")/_common.sh"
 
 # ---------------------------------------------------------------- SETTINGS --
 
-# Which job. A job is a selection over (system x dataset x model); the three
-# filters below narrow it further, and any combination is valid.
+# Which job. A job picks the back-ends; the three filters below narrow it
+# further, and any combination is valid.
 #   all          every system on every dataset
 #   linear_head  every SSL head on every dataset
 #   baselines    aasist_raw + lfcc_gmm on every dataset
-#   mlaad | mailabs | spoofceleb   dataset-restricted, with their own skip
-#                                  lists and retry budgets
+# There is no per-dataset job: use DATASETS below. What the old mlaad /
+# mailabs / spoofceleb jobs carried (grading policy, retry budget, model skips)
+# now lives on the datasets themselves, so DATASETS="Multilingual" behaves the
+# way JOB="mlaad" used to.
 JOB="all"
 
 # --- narrow the sweep. Leave empty to mean "all of them". -------------------
@@ -56,6 +58,18 @@ RUN_NAME=""
 # "yes" re-scores even when a complete, NaN-free output already exists.
 FORCE="no"
 
+# Compare each finished score file against the same column in an OLDER score
+# tree, as the sweep runs. Empty = no comparison, which is the default and the
+# right choice for a from-scratch build: scoring must not depend on a score file
+# it did not just write, or the new tree can only reproduce the old one's
+# coverage.
+#
+# Set this only once you want the migration check, or run
+#   bin/verify.sh
+# afterwards, which does the same thing without re-scoring anything.
+VERIFY_AGAINST=""
+VERIFY_LAYOUT="legacy"   # layout of the tree above: legacy | v2
+
 # Live progress display.
 #   auto   a redrawing bar on a terminal, one status line a minute when the
 #          output is redirected. Correct in both cases; leave it here.
@@ -73,6 +87,7 @@ ARGS=(--job "$JOB" --workers "$WORKERS" --gpus $GPUS --progress "$PROGRESS")
 [ -n "$RUN_NAME" ]  && ARGS+=(--run-name "$RUN_NAME")
 [ "$FORCE" = "yes" ]      && ARGS+=(--force)
 [ "$PAPER_ONLY" != "yes" ] && ARGS+=(--all-models)
+[ -n "$VERIFY_AGAINST" ] && ARGS+=(--verify-against "$VERIFY_AGAINST" --verify-layout "$VERIFY_LAYOUT")
 
 echo "+ python -m spoof_superb.orchestration.driver ${ARGS[*]} $*"
 exec "$PY" -m spoof_superb.orchestration.driver "${ARGS[@]}" "$@"

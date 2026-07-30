@@ -140,29 +140,49 @@ in that context "GMM worker processes" is unambiguous, and it is used by
 
 ---
 
-## P5  A Job conflates selection with policy  [needs decision]
+## P5  Jobs pick back-ends; datasets carry their own policy  [DONE 2026-07-29]
 
-`Job`'s thirteen fields do five unrelated things -- selection (`systems`,
-`datasets`, `skip`), resources (`gpus`, `batch_size`, `num_workers`,
-`gmm_processes`), failure handling (`max_attempts`, `cuda_wait_s`), post-check
-(`verify`), and identity (`name`, `run`, `log_dir`).
+`mlaad`, `mailabs` and `spoofceleb` were each a dataset name plus three facts
+about that dataset: which policy grades it, its retry budget, and which
+upstreams to skip. Once `--datasets` existed the name was redundant and the
+facts belonged to the dataset.
 
-Selection is now fully expressible with `--systems/--datasets/--models`, so the
-`datasets=` field inside `mlaad`, `mailabs` and `spoofceleb` duplicates a filter.
-What those jobs uniquely carry is dataset-specific policy: a verification check,
-a retry budget, a CUDA wait, a skip list.
+**Done, and it closed a real hole rather than just tidying.** Because the
+grading policy lived on `--job mlaad`, `--job all` -- the sweep anyone would
+actually run -- had `verify=None` for MLAAD and SpoofCeleb. The check that
+exists for those two corpora only ran if you happened to invoke the specially
+named job.
 
-**Shape of the fix.** Move the policy onto the dataset registry, which already
-owns each dataset's trial source and resolver -- the same move that closed
-RP-6/7/8. The three named jobs then disappear, leaving `all` plus filters.
+    JOBS         = {all, linear_head, baselines}
+    VERIFY_POLICY = {Multilingual: mlaad, MAILABS: mlaad, spoofceleb: spoofceleb}
+    SKIP_MODELS   = {Multilingual: {byol_a_2048, mockingjay}, MAILABS: same}
 
-**No longer blocked.** P2 has landed, so collapsing the jobs would no longer
-funnel every run into one status directory. This is now purely a question of
-whether to do it.
+`Job.verify` and `Job.skip` are gone; `Task` carries `verify`, `system` and
+`frontend` instead, the way it already carried `expect_lines`.
 
-**Needs a human decision:** whether to do this at all. It is a real
-simplification, but the named jobs are how the published runs were organised and
-the current arrangement is documented and working.
+**Scoring no longer resolves a reference file at all.** This was the deciding
+requirement: a new tree must be buildable from protocols alone, or it can only
+ever reproduce the old tree's coverage -- which is how the published ASV21-DF
+column came to hold 152,955 rows of a 611,829-row protocol. Comparison is now
+opt-in against an explicitly named tree (`--verify-against ROOT`), never derived
+from `scores_root`.
+
+The intended sequence, which is why verification is not automatic:
+
+1. build from scratch, no comparison
+2. compare the new tree against the old one, per column, with each dataset's
+   own policy
+3. once accepted, build the release manifest from the new tree -- from then on
+   the new files are the reference
+
+Counts moved again: `all` 276 -> 274, `linear_head` 252 -> 250, because
+`SKIP_MODELS` now applies under `--job all`, which it never did before.
+`mockingjay` is excluded from MLAAD and M-AILABS, matching Table 5, which
+reports no MLAAD cell for it. `--models mockingjay` fills it deliberately.
+
+A test caught a real gap while writing this: `skip` was evaluated before `only`,
+so `--models mockingjay --datasets Multilingual` silently produced nothing. An
+explicit request now overrides both `SKIP_MODELS` and `paper_only`.
 
 ---
 

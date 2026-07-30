@@ -110,9 +110,9 @@ If you used the flat scripts, they merged into the entry points above.
 | `python eval_asvld.py --condition C ...` | `bin/score.sh` (set `SOURCE="asvld"`, `ASVLD_CONDITION`) |
 | `python eval_mlaad.py ...` | `bin/score.sh` (set `SOURCE="walk"`) |
 | `python eval_mlaad.py --protocol_csv ...` | `bin/score.sh` (set `SOURCE="protocol_csv"`) |
-| `python orchestrate_mlaad.py` | `bin/orchestrate.sh` (set `JOB="mlaad"`) |
-| `python orchestrate_mailabs.py` | `bin/orchestrate.sh` (set `JOB="mailabs"`) |
-| `python orchestrate_spoofceleb.py` | `bin/orchestrate.sh` (set `JOB="spoofceleb"`) |
+| `python orchestrate_mlaad.py` | `bin/orchestrate.sh` (set `DATASETS="Multilingual"`) |
+| `python orchestrate_mailabs.py` | `bin/orchestrate.sh` (set `DATASETS="MAILABS"`) |
+| `python orchestrate_spoofceleb.py` | `bin/orchestrate.sh` (set `DATASETS="spoofceleb"`) |
 | `python orchestrate_baselines.py` | `bin/orchestrate.sh` (set `JOB="baselines"`, `WORKERS=1`) |
 | `python verify_mlaad.py --new N --ref R` | `bin/verify.sh` (set `CHECK="mlaad"`) |
 | `python verify_spoofceleb.py --new N --ref R` | `bin/verify.sh` (set `CHECK="spoofceleb"`) |
