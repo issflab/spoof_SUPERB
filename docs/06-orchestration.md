@@ -168,9 +168,19 @@ policy attached at all** -- the sweep anyone would actually run was the one that
 skipped the check. The policy now travels with the dataset, so
 `--datasets Multilingual` carries it regardless of which job selected it.
 
-`SKIP_MODELS` is why `all` is 274 and not 276: `mockingjay` is excluded from
-MLAAD and M-AILABS, matching Table 5, which reports no MLAAD cell for it.
-`--models mockingjay` overrides that and fills the cell deliberately.
+`SKIP_MODELS` is why `all` is 274 and not 276. Two upstreams are excluded from
+MLAAD and M-AILABS:
+
+* **`mockingjay`** -- the paper's MLAAD table reports no cell for it. Note this
+  is the plain variant only: `mockingjay_960hr` **is** scored on MLAAD, and is
+  the one that appears in that table. The exclusion is an exact name match, so
+  it never catches the `_960hr` variant.
+* **`byol_a_2048`** -- excluded by an earlier request; it is also outside the
+  21-model paper roster, so `paper_only` would drop it anyway.
+
+`mockingjay` itself stays in the paper roster: the main results table reports it
+on nine of ten datasets, MLAAD being the exception. `--models mockingjay` fills
+the MLAAD cell deliberately if you want it.
 
 ## Verification is a separate step
 

@@ -335,9 +335,13 @@ VERIFY_POLICY = {
 #: the exclusion is visible where it applies rather than being global.
 #: `--models` overrides it: an explicit request is never silently dropped.
 #:
-#: Table 5 reports no MLAAD cell for `mockingjay`, which is why it is here. A
-#: from-scratch build MAY now fill that cell -- pass --models mockingjay to do
-#: it deliberately.
+#: `mockingjay` is here because the paper's MLAAD table reports no cell for it.
+#: The plain variant only: `mockingjay_960hr` IS scored on MLAAD and is the one
+#: that table lists. Membership is an exact name match, so the `_960hr` variant
+#: is never caught by this. `mockingjay` is still in the paper roster -- the main
+#: results table reports it on nine of ten datasets.
+#:
+#: A from-scratch build MAY fill the empty MLAAD cell: pass --models mockingjay.
 SKIP_MODELS = {
     "Multilingual": frozenset({"byol_a_2048", "mockingjay"}),
     "MAILABS": frozenset({"byol_a_2048", "mockingjay"}),

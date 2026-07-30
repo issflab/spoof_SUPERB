@@ -304,3 +304,31 @@ def test_j8_reference_resolves_against_a_real_old_tree():
         datasets=["Multilingual", "spoofceleb"])
         if reference_for(t, old, "legacy")]
     assert found, "no published column resolved; the migration check is broken"
+
+
+def test_j9_the_mockingjay_skip_is_the_plain_variant_only():
+    """mockingjay_960hr must still be scored on MLAAD.
+
+    It is the variant the paper's MLAAD table lists, and the only mockingjay*
+    file in the published MLAAD tree. A substring or prefix match here would
+    silently drop it -- so this pins that membership is exact.
+    """
+    from spoof_superb.scoring.datasets import skip_models
+    frontends = {t.frontend for t in JOBS["all"].enumerate_tasks(
+        datasets=["Multilingual"]) if t.system == "linear_head"}
+    heads = {s for s, _ in discover_linear_heads(paper_only=False)}
+    if "mockingjay_960hr" not in heads:
+        pytest.skip("mockingjay_960hr is not trained here")
+    assert "mockingjay_960hr" in frontends
+    assert "mockingjay" not in frontends
+    assert "mockingjay_960hr" not in skip_models("Multilingual")
+
+
+def test_j10_mockingjay_is_still_a_paper_model():
+    """Absent from the MLAAD table is not absent from the paper.
+
+    The main results table reports mockingjay on nine of ten datasets, so it
+    must not be dropped from the roster along with its MLAAD cell.
+    """
+    assert is_paper_model("mockingjay")
+    assert is_paper_model("mockingjay_960hr")

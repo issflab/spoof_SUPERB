@@ -177,8 +177,11 @@ The intended sequence, which is why verification is not automatic:
 
 Counts moved again: `all` 276 -> 274, `linear_head` 252 -> 250, because
 `SKIP_MODELS` now applies under `--job all`, which it never did before.
-`mockingjay` is excluded from MLAAD and M-AILABS, matching Table 5, which
-reports no MLAAD cell for it. `--models mockingjay` fills it deliberately.
+`mockingjay` is excluded from MLAAD and M-AILABS because the paper's MLAAD table
+reports no cell for it -- the plain variant only; `mockingjay_960hr` is scored on
+MLAAD and is the one that table lists. `mockingjay` remains in the paper roster,
+since the main results table reports it on nine of ten datasets.
+`--models mockingjay` fills the empty MLAAD cell deliberately.
 
 A test caught a real gap while writing this: `skip` was evaluated before `only`,
 so `--models mockingjay --datasets Multilingual` silently produced nothing. An
