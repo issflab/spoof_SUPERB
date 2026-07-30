@@ -23,6 +23,7 @@ from typing import Optional, Sequence
 from spoof_superb.config import cfg
 from spoof_superb.core.scorepath import score_path
 from spoof_superb.scoring.datasets import (
+    DEFAULT_DATASETS,
     PROTOCOL_SPECS,
     SCOREABLE,
     verify_policy,
@@ -46,8 +47,13 @@ DATASET_ORDER = [
 
 
 def ordered_datasets(datasets=None):
-    """Requested datasets, smallest-first, unknown names dropped."""
-    wanted = list(datasets) if datasets else list(SCOREABLE)
+    """Requested datasets, smallest-first, unknown names dropped.
+
+    With nothing requested this is DEFAULT_DATASETS, not every scoreable set:
+    the two Deepfake-Eval variants measure the same corpus two ways and only the
+    segmented one belongs in a sweep by default. Naming either explicitly works.
+    """
+    wanted = list(datasets) if datasets else list(DEFAULT_DATASETS)
     known = [d for d in DATASET_ORDER if d in wanted]
     return known + [d for d in wanted if d not in DATASET_ORDER and d in SCOREABLE]
 

@@ -199,6 +199,64 @@ nothing. An explicit request now overrides the default roster.
 
 ---
 
+## P7  Deepfake-Eval: segmented is the new tree's column  [DONE 2026-07-30]
+
+Deepfake-Eval 2024 is registered twice because it can be measured two ways:
+
+    deepfake_eval_2024              1,980 trials -- one 4 s window per recording
+    deepfake_eval_2024_segmented   56,481 trials -- every 4 s window
+
+The model's input is 4 s, so the unsegmented column looks at the first four
+seconds of each file and never sees the rest; these recordings run to minutes.
+
+**Done.** `DEFAULT_DATASETS` holds 11 of the 12 scoreable sets, excluding
+`deepfake_eval_2024`. `ordered_datasets(None)` reads it, so a sweep with no
+`--datasets` scores the segmented set. The unsegmented one stays scoreable by
+name and the two write to different paths, so both can sit on disk.
+
+Counts: `all` 252 -> 231, `linear_head` 228 -> 209, `baselines` 24 -> 22.
+
+**Not a bug fix, and it needs saying in the paper.** The published DFEval24
+column is n=1,976. Per-segment trials weight long recordings more heavily, so the
+segmented EER is a different quantity, not a corrected one. `test_d5` pins the
+order-of-magnitude gap so nobody compares the two by accident.
+
+---
+
+## P8  MLAAD has no EER until M-AILABS is pooled into it  [OPEN -- blocking]
+
+Both are single-class, so neither yields an EER alone:
+
+    Multilingual   456,000 spoof,    0 bonafide
+    MAILABS        584,006 bonafide, 0 spoof
+    pooled       1,040,006 -- exactly the paper's MLAAD row (n, n_bonafide, n_spoof)
+
+The orchestrator will score both and mark them `ok`; any per-dataset EER for
+either is undefined. **No tooling in the repo pools them** -- checked
+`analysis/` and `recompute_table5_mlaad_v10.py`. `MAILABS` is in
+`NON_BENCHMARK`, which records the fact, but nothing consumes it.
+
+This blocks the MLAAD column, not the sweep. Scoring can proceed; the merge has
+to exist before that column can be reported.
+
+---
+
+## P9  The migration comparison reaches only 3 of 12 columns  [OPEN]
+
+`score_path(layout="legacy")` raises `KeyError` for nine datasets -- the old tree
+had no single naming convention for them, which `scorepath.py` documents
+deliberately. So `--verify-against` silently reports "no reference" for `wild`,
+`eval_2019`, both ASV21 columns, `asvspoof5`, `Famous_Figures`, `asvspoofLD` and
+both Deepfake-Eval sets. Only `spoofceleb`, `Multilingual` and `MAILABS` resolve.
+
+That undercuts step 2 of the promote sequence in P5. Either fill in
+`scorepath._LEGACY_LINEAR_HEAD` for the nine, or let the comparison take
+explicit per-dataset reference paths.
+
+Blocks verification, not scoring.
+
+---
+
 ## Carried over from `humanpending.md`
 
 Still open there, unchanged by the reorganisation:

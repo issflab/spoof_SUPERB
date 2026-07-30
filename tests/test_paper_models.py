@@ -395,3 +395,56 @@ def test_j10_only_the_960hr_mockingjay_is_a_paper_model():
     assert is_paper_model("mockingjay_960hr")
     assert not is_paper_model("mockingjay")
     assert not is_paper_model("fbank")
+
+
+# ===========================================================================
+# D1-D4: the default sweep uses the segmented Deepfake-Eval
+# ===========================================================================
+
+def test_d1_segmented_dfeval_is_in_the_default_sweep_and_unsegmented_is_not():
+    """The two variants measure the same corpus two ways; only one belongs.
+
+    Scoring both by default would put two DFEval columns in the tree with no
+    statement of which one the benchmark means.
+    """
+    from spoof_superb.scoring.datasets import DEFAULT_DATASETS, SCOREABLE
+    assert "deepfake_eval_2024_segmented" in DEFAULT_DATASETS
+    assert "deepfake_eval_2024" not in DEFAULT_DATASETS
+    assert "deepfake_eval_2024" in SCOREABLE       # still scoreable by name
+    assert set(DEFAULT_DATASETS) < set(SCOREABLE)
+
+
+def test_d2_a_default_sweep_scores_the_segmented_set_only():
+    datasets = {t.dataset for t in JOBS["all"].enumerate_tasks()}
+    assert "deepfake_eval_2024_segmented" in datasets
+    assert "deepfake_eval_2024" not in datasets
+
+
+def test_d3_naming_the_unsegmented_set_still_scores_it():
+    """Excluded from the default is not removed: the published column is
+    reproducible on request."""
+    tasks = JOBS["all"].enumerate_tasks(datasets=["deepfake_eval_2024"])
+    assert tasks
+    assert {t.dataset for t in tasks} == {"deepfake_eval_2024"}
+
+
+def test_d4_the_two_variants_write_to_different_paths():
+    """Both can sit on disk at once without either overwriting the other."""
+    from spoof_superb.core.scorepath import score_path
+    a = score_path("linear_head", "deepfake_eval_2024", "xls_r_300m")
+    b = score_path("linear_head", "deepfake_eval_2024_segmented", "xls_r_300m")
+    assert a != b
+
+
+def test_d5_the_segmented_column_is_not_the_published_one():
+    """Guards against anyone comparing the new column to the paper's number.
+
+    The paper reports n=1,976 for DFEval24 -- one 4 s window per recording. The
+    segmented set is an order of magnitude larger and weights long recordings
+    more, so the EERs are different quantities.
+    """
+    from spoof_superb.orchestration.jobs import expected_rows
+    with open(TABLE5_BASELINE) as f:
+        published = json.load(f)["results"]["XLS-R"]["datasets"]["DFEval24"]["n"]
+    assert published == 1976
+    assert expected_rows("deepfake_eval_2024_segmented") > 10 * published

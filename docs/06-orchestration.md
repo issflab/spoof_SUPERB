@@ -47,7 +47,9 @@ before executing, so you can always see which won.
 | `--list` | — | flag | print the tasks and exit, running nothing |
 | `--python` | — | path | interpreter for the scoring subprocesses; defaults to `cfg.python` |
 
-Empty settings mean "all of them", so `DATASETS=""` is not a restriction.
+Empty settings mean "the defaults", which for `DATASETS` is
+`DEFAULT_DATASETS` -- 11 of the 12 scoreable sets. See
+[Deepfake-Eval: segmented by default](#deepfake-eval-segmented-by-default).
 
 ### `--job` vs `--workers`
 
@@ -98,6 +100,33 @@ bin/orchestrate.sh --models fbank --list        # naming one always works
 
 Naming a model with `--models` overrides the filter, in the paper or not -- an
 explicit request is never silently dropped.
+
+### Deepfake-Eval: segmented by default
+
+Deepfake-Eval 2024 is registered twice, because it can be measured two ways:
+
+| dataset key | trials | what one trial is |
+|---|---|---|
+| `deepfake_eval_2024` | 1,980 | one 4 s window per recording |
+| `deepfake_eval_2024_segmented` | 56,481 | every 4 s window of every recording |
+
+The model's input is 4 s, so the unsegmented column looks at the first four
+seconds of each file and never sees the rest -- and these recordings run to
+minutes. Segmenting cuts each one into 4 s pieces and scores all of them.
+
+**The new score tree uses the segmented set.** It is in `DEFAULT_DATASETS`; the
+unsegmented one is not, though it stays scoreable by name and the two write to
+different paths, so both can sit on disk.
+
+```bash
+bin/orchestrate.sh                                     # segmented
+bin/orchestrate.sh --datasets deepfake_eval_2024       # the published column
+```
+
+**This is not a bug fix and the two numbers are not comparable.** The paper
+reports `n=1976` for DFEval24; per-segment trials weight long recordings more
+heavily, so the segmented EER is a different quantity, not a corrected one. Any
+write-up of the new tree needs to say which it reports.
 
 ### Three ways to lose work
 
@@ -156,9 +185,9 @@ excluded.
 
 | `JOB` | Selects | Tasks | Policy it adds |
 |---|---|---|---|
-| `all` | every system on every dataset | 252 (312) | — |
-| `linear_head` | every SSL head on every dataset | 228 (288) | — |
-| `baselines` | `aasist_raw` + `lfcc_gmm` everywhere | 24 (24) | `batch_size=64` |
+| `all` | every system on every dataset | 231 (286) | — |
+| `linear_head` | every SSL head on every dataset | 209 (264) | — |
+| `baselines` | `aasist_raw` + `lfcc_gmm` everywhere | 22 (22) | `batch_size=64` |
 
 **There is no per-dataset job.** There used to be three -- `mlaad`, `mailabs`,
 `spoofceleb`. Each was a dataset name plus three facts about that dataset: which

@@ -341,6 +341,26 @@ def verify_policy(dataset):
 #: Every dataset that can be scored, benchmark column or not.
 SCOREABLE = list(DATASETS)
 
+#: What a sweep scores when no --datasets is given. A strict subset of
+#: SCOREABLE: everything remains scoreable by name, this only decides the
+#: default.
+#:
+#: The two Deepfake-Eval variants are mutually exclusive here. The new score
+#: tree uses the SEGMENTED set (56,481 trials), not the unsegmented one (1,980):
+#:
+#:   * The unsegmented column scores one 4 s window per recording, because that
+#:     is the model's input length. Recordings run to minutes, so all but the
+#:     first four seconds of most of the corpus is never looked at.
+#:   * Segmenting cuts every recording into 4 s pieces and scores all of them,
+#:     so the whole corpus contributes.
+#:
+#: This is a deliberate change of what the column measures, not a bug fix. It is
+#: NOT comparable to the published DFEval24 column (n=1,976): per-segment trials
+#: weight long recordings more heavily, so the EER is a different quantity.
+#: Scoring both is supported -- `--datasets deepfake_eval_2024` -- and they write
+#: to different paths, so having both on disk is fine.
+DEFAULT_DATASETS = [d for d in SCOREABLE if d != "deepfake_eval_2024"]
+
 
 def native_source(dataset):
     """The trial source a dataset uses when --source is not given."""
