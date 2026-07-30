@@ -13,57 +13,59 @@ question is answered, **queued** = decided and waiting on something,
 
 ---
 
-## P1  Score only the models the paper reports  [DONE 2026-07-29]
+## P1  Score only the models the paper reports  [DONE 2026-07-29, corrected]
 
-24 trained linear heads exist; Table 5 reports 21. Three are scored on every
-dataset and never appear in the paper:
+24 trained linear heads exist. The paper's main results table -- **Table 6**,
+`\label{tab:results_main}` in access.tex -- prints **19**, plus the two non-SSL
+reference systems. Five were trained and scored but never reported:
 
-    audio_albert_960hr
-    byol_a_2048
-    modified_cpc
+    audio_albert_960hr   byol_a_2048   fbank   mockingjay   modified_cpc
 
-All 21 Table 5 rows have a trained head, so nothing is missing in the other
-direction.
+That is 60 of 288 tasks (21%) on columns nobody reads, including the two most
+expensive corpora.
 
-**Cost of the status quo:** 288 tasks where 252 tasks would do -- 36 wasted
-(12%). Of
-those, 15 are already on disk (each of the three has `wild`, `eval_2019`,
-`asvspoof2021_LA`, `asvspoof2021_DF`, `asvspoof5`), so **21 remain avoidable**,
-including the two most expensive columns.
+**The first implementation got the roster wrong, and the reason is worth keeping.**
+It derived the 21 names from `tests/baseline_table5.json`, arguing that a
+hand-maintained list would drift from the paper while the regression baseline
+could not. The argument was right about the risk and wrong about the remedy: the
+baseline had *already* drifted. It tracks 21 models, two of which the paper does
+not print --
 
-**Shape of the fix.** Do not hand-maintain a 21-name list. `tests/baseline_table5.json`
-already maps each Table 5 row to its slug and is the authority the regression
-gate uses, so derive the roster from it:
+    FBANK        has mean/pooled, not printed
+    Mockingjay   no MLAAD cell, not printed
 
-```python
-# spoof_superb/scoring/models.py
-def paper_models():
-    """The 21 slugs Table 5 reports, read from the regression baseline."""
-```
+-- and no key in the JSON distinguishes them from the 19 that are printed, so no
+filter over that file could have recovered the real roster. The regression gate
+deliberately guards more columns than the paper reports; the baseline is a
+superset, not the roster.
 
-Then `discover_linear_heads` gains a `paper_only` filter, and the jobs default
-to it. `--models` stays an explicit override, so scoring an excluded model
-remains one flag away.
+**As shipped:** `PAPER_TABLE_ROWS` in `spoof_superb/scoring/models.py` states the
+19 display names once, from the table. `test_m1_roster_matches_the_paper_table_exactly`
+parses `access.tex` and asserts the two agree, skipping only when the paper repo
+is not checked out beside this one. Drift is now detected rather than assumed
+impossible -- the only honest arrangement when the authority lives in another
+repository. The name-to-slug mapping still comes from the baseline, so slugs
+cannot disagree with the gate.
 
-**Decided as implemented**, on the reading that "only work on models which are
-relevant for the paper" means excluded rather than reordered:
+**Decided as implemented**, reading "only work on models which are relevant for
+the paper" as excluded rather than reordered:
 
 1. **Excluded**, not deprioritised. `paper_only=True` is the enumerator default.
-2. **The 15 existing non-paper score files were left in place.** They are valid
-   scores and deleting them is irreversible; nothing asked for that. They are
-   simply no longer produced or extended. Say the word to remove them.
-3. **Scoring only.** Verification and the analysis scripts read whatever score
-   files exist; narrowing them was not implied and would hide a column someone
-   deliberately produced with `--models`.
+2. **Existing non-paper score files were left in place.** Valid scores; deleting
+   is irreversible and was not asked for. They are simply no longer extended.
+3. **Scoring only.** Verification and analysis read whatever exists; narrowing
+   them would hide a column someone produced deliberately with `--models`.
 
-Delivered as `spoof_superb/scoring/models.py` (`paper_models()` reading
-`tests/baseline_table5.json`), a `paper_only` argument threaded through
-`discover_linear_heads` / `_frontends` / `enumerate_tasks` defaulting to True,
-`--all-models` to opt out, and `PAPER_ONLY` in `bin/orchestrate.sh`. Naming a
-model with `--models` overrides the filter in either direction.
+`--all-models` opts out. `--models` overrides in either direction -- a default
+filter that dropped an explicit request would be the `--only` trap in a new
+costume.
 
-Task counts moved: `all` 312 -> 276, `linear_head` 288 -> 252, `mlaad`/`mailabs`
-22 -> 20, `spoofceleb` 24 -> 21.
+Task counts: `all` 312 -> 252, `linear_head` 288 -> 228.
+
+A side effect worth recording: `SKIP_MODELS` (`mockingjay`, `byol_a_2048` off
+MLAAD/M-AILABS) is now redundant at the default, since both are unreported
+anyway. Kept because it still bites under `--all-models` and states an intent
+that outlives the current roster. `test_j4b` pins that relationship.
 
 ---
 

@@ -10,6 +10,7 @@ Two changes are guarded here, and both have a failure mode that is silent:
 
 import json
 import os
+import re
 
 import pytest
 
@@ -20,7 +21,9 @@ from spoof_superb.orchestration.jobs import (
     discover_linear_heads,
 )
 from spoof_superb.scoring.models import (
+    PAPER_TABLE_ROWS,
     TABLE5_BASELINE,
+    _slug_by_display,
     is_paper_model,
     non_paper_models,
     paper_models,
@@ -31,38 +34,90 @@ from spoof_superb.scoring.models import (
 # M1-M6: the roster comes from Table 5 and cannot drift from it
 # ===========================================================================
 
-def test_m1_roster_is_read_from_the_table5_baseline():
-    """Not a hand-kept list: the file the regression gate reads is the source."""
+PAPER_TEX = os.path.join(os.path.dirname(os.path.dirname(
+    os.path.dirname(os.path.abspath(__file__)))), "spoof_SUPERB_IEEE_ACCESS",
+    "access.tex")
+
+
+def _table6_rows():
+    """The SSL row labels actually printed by the paper's main results table.
+
+    Parsed from access.tex, which is the authority for what the paper reports.
+    Skips when the paper repo is not checked out beside this one.
+    """
+    if not os.path.isfile(PAPER_TEX):
+        pytest.skip("the paper repo is not checked out beside this one")
+    tex = open(PAPER_TEX).read()
+    try:
+        body = tex[tex.index("\\label{tab:results_main}"):]
+        body = body[:body.index("\\end{table*}")]
+    except ValueError:
+        pytest.skip("tab:results_main not found in access.tex")
+    rows = []
+    for line in body.splitlines():
+        m = re.match(r"\s*([A-Za-z][A-Za-z0-9 .\-+]*?)\s*&", line)
+        if m and not line.lstrip().startswith("\\textbf{SSL"):
+            rows.append(m.group(1).strip())
+    # LFCC-GMM and AASIST are complete detectors, not upstreams.
+    return [r for r in rows if r not in ("LFCC-GMM", "AASIST")]
+
+
+def test_m1_roster_matches_the_paper_table_exactly():
+    """The reconciliation this module exists for.
+
+    The first implementation derived the roster from baseline_table5.json and
+    claimed it "cannot drift from the paper". It had already drifted: the
+    baseline carries FBANK and Mockingjay, which the table does not print. This
+    test is what makes the explicit list trustworthy.
+    """
+    printed = _table6_rows()
+    assert list(PAPER_TABLE_ROWS) == printed, (
+        f"PAPER_TABLE_ROWS disagrees with the paper's results table.\n"
+        f"  only in code : {[r for r in PAPER_TABLE_ROWS if r not in printed]}\n"
+        f"  only in paper: {[r for r in printed if r not in PAPER_TABLE_ROWS]}")
+
+
+def test_m2_the_baseline_is_a_superset_of_the_paper():
+    """The regression gate deliberately tracks more models than are printed.
+
+    That is fine -- it guards computed columns -- but it means the baseline is
+    not the roster, which is the mistake this replaced.
+    """
     with open(TABLE5_BASELINE) as f:
         rows = json.load(f)["results"]
-    assert paper_models() == frozenset(r["slug"] for r in rows.values())
+    tracked = {r["slug"] for r in rows.values() if r.get("slug")}
+    assert paper_models() < tracked, "the baseline should track at least the paper's models"
+    extra = sorted(tracked - paper_models())
+    assert extra, "expected the baseline to track unprinted models"
 
 
-def test_m2_every_reported_model_is_in_the_roster():
-    """A model in Table 5 that is not scoreable is a hole in the paper."""
-    with open(TABLE5_BASELINE) as f:
-        rows = json.load(f)["results"]
-    for name, row in rows.items():
-        assert is_paper_model(row["slug"]), f"Table 5 row {name} not in the roster"
+def test_m3_every_printed_row_maps_to_a_slug():
+    """A printed row with no slug means the two sources have diverged."""
+    for name in PAPER_TABLE_ROWS:
+        assert name in _slug_by_display(), f"{name} has no slug in the baseline"
+    assert len(paper_models()) == len(PAPER_TABLE_ROWS)
 
 
-def test_m3_a_missing_baseline_raises_instead_of_widening(tmp_path):
+def test_m4_a_missing_baseline_raises_instead_of_widening(tmp_path):
     """Falling back to "score everything" would silently burn a day of GPU."""
     paper_models.cache_clear()
+    _slug_by_display.cache_clear()
     with pytest.raises(FileNotFoundError, match="model roster"):
         paper_models(str(tmp_path / "absent.json"))
-
-
-def test_m4_a_malformed_baseline_raises(tmp_path):
-    bad = tmp_path / "bad.json"
-    bad.write_text('{"not_results": {}}')
     paper_models.cache_clear()
-    with pytest.raises(ValueError):
-        paper_models(str(bad))
-    empty = tmp_path / "empty.json"
-    empty.write_text('{"results": {}}')
-    with pytest.raises(ValueError, match="no model slugs"):
-        paper_models(str(empty))
+    _slug_by_display.cache_clear()
+
+
+def test_m4b_a_row_the_baseline_does_not_know_raises(tmp_path):
+    """Renaming a table row must fail loudly, not silently shrink the roster."""
+    part = tmp_path / "partial.json"
+    part.write_text(json.dumps({"results": {"APC": {"slug": "apc"}}}))
+    paper_models.cache_clear()
+    _slug_by_display.cache_clear()
+    with pytest.raises(ValueError, match="diverged"):
+        paper_models(str(part))
+    paper_models.cache_clear()
+    _slug_by_display.cache_clear()
 
 
 def test_m5_non_paper_models_are_identified_not_guessed():
@@ -254,19 +309,35 @@ def test_j3_the_grading_policy_travels_with_the_dataset():
 
 
 def test_j4_model_skips_are_per_dataset_not_per_sweep():
-    """`mockingjay` is excluded from MLAAD and wanted everywhere else.
+    """`mockingjay` is excluded from MLAAD and wanted elsewhere.
 
-    A job-wide skip could not express that without a job per dataset.
+    A job-wide skip could not express that without a job per dataset. Exercised
+    with --all-models, because under the default roster both SKIP_MODELS entries
+    are already excluded for being unreported -- the skip list only bites when
+    someone widens the sweep.
     """
     from spoof_superb.scoring.datasets import skip_models
-    names = lambda ds: {t.frontend for t in JOBS["all"].enumerate_tasks(datasets=[ds])
-                        if t.system == "linear_head"}
-    if "mockingjay" not in paper_models():
-        pytest.skip("mockingjay is not a paper model here")
+    names = lambda ds: {t.frontend for t in JOBS["all"].enumerate_tasks(
+        datasets=[ds], paper_only=False) if t.system == "linear_head"}
+    heads = {s for s, _ in discover_linear_heads(paper_only=False)}
+    if "mockingjay" not in heads:
+        pytest.skip("mockingjay is not trained here")
     assert "mockingjay" not in names("Multilingual")
     assert "mockingjay" in names("wild")
     assert "mockingjay" in skip_models("Multilingual")
     assert skip_models("wild") == frozenset()
+
+
+def test_j4b_skip_models_is_redundant_under_the_default_roster():
+    """Both SKIP_MODELS entries are unreported models, so paper_only covers them.
+
+    Recorded rather than removed: the skip list is still the only thing keeping
+    them off MLAAD under --all-models, and it states an intent that outlives the
+    current roster.
+    """
+    from spoof_superb.scoring.datasets import SKIP_MODELS
+    everything = set().union(*SKIP_MODELS.values())
+    assert everything.isdisjoint(paper_models()), sorted(everything & paper_models())
 
 
 def test_j5_naming_a_skipped_model_still_scores_it():
@@ -324,11 +395,12 @@ def test_j9_the_mockingjay_skip_is_the_plain_variant_only():
     assert "mockingjay_960hr" not in skip_models("Multilingual")
 
 
-def test_j10_mockingjay_is_still_a_paper_model():
-    """Absent from the MLAAD table is not absent from the paper.
+def test_j10_only_the_960hr_mockingjay_is_a_paper_model():
+    """The paper's results table prints Mockingjay-960h and no plain Mockingjay.
 
-    The main results table reports mockingjay on nine of ten datasets, so it
-    must not be dropped from the roster along with its MLAAD cell.
+    The regression baseline carries both, which is why the roster is not derived
+    from it.
     """
-    assert is_paper_model("mockingjay")
     assert is_paper_model("mockingjay_960hr")
+    assert not is_paper_model("mockingjay")
+    assert not is_paper_model("fbank")

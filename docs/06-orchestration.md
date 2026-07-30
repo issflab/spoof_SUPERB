@@ -68,20 +68,32 @@ flag is unchanged -- in that context "GMM worker processes" is unambiguous.
 
 ### Only the paper's models are scored by default
 
-24 trained linear heads are on disk; Table 5 reports 21. `audio_albert_960hr`,
-`byol_a_2048` and `modified_cpc` were trained and scored but never reported, so
-scoring them everywhere spends 36 of 288 tasks on columns nobody reads.
+24 trained linear heads are on disk. The paper's main results table -- Table 6,
+`\label{tab:results_main}` -- prints **19** of them, plus the two non-SSL
+reference systems. Five were trained and scored but never reported:
 
-The roster is **read from `tests/baseline_table5.json`**, the same file the
-zero-tolerance regression gate compares against, so it cannot drift from the
-paper. Add a row to Table 5 and it becomes scoreable with no code change; lose
-the file and the orchestrator refuses to start rather than silently widening
-back to 24.
+    audio_albert_960hr   byol_a_2048   fbank   mockingjay   modified_cpc
+
+Scoring those five everywhere spends 60 of 288 tasks on columns nobody reads,
+including the two most expensive corpora.
+
+The roster lives in `spoof_superb/scoring/models.py` as `PAPER_TABLE_ROWS`,
+stated once as the display names the table prints. It is **not** derived from
+`tests/baseline_table5.json`: that file tracks 21 models, two of which
+(`FBANK`, `Mockingjay`) the paper does not print, and nothing in it distinguishes
+them. The regression gate deliberately guards more columns than the paper
+reports, so the baseline is not the roster.
+
+Instead, `tests/test_paper_models.py::test_m1_roster_matches_the_paper_table_exactly`
+parses `access.tex` and asserts the two agree, whenever the paper repo is checked
+out beside this one. Drift is detected rather than assumed impossible. The
+name-to-slug mapping still comes from the baseline, so slugs cannot disagree with
+the gate.
 
 ```bash
-bin/orchestrate.sh --list                       # 21 heads + 2 baselines
+bin/orchestrate.sh --list                       # 19 heads + 2 baselines
 bin/orchestrate.sh --all-models --list          # all 24 + 2
-bin/orchestrate.sh --models byol_a_2048 --list  # naming one always works
+bin/orchestrate.sh --models fbank --list        # naming one always works
 ```
 
 Naming a model with `--models` overrides the filter, in the paper or not -- an
@@ -145,8 +157,8 @@ does.
 
 | `JOB` | Selects | Tasks | Policy it adds |
 |---|---|---|---|
-| `all` | every system on every dataset | 274 (308) | — |
-| `linear_head` | every SSL head on every dataset | 250 (284) | — |
+| `all` | every system on every dataset | 252 (308) | — |
+| `linear_head` | every SSL head on every dataset | 228 (284) | — |
 | `baselines` | `aasist_raw` + `lfcc_gmm` everywhere | 24 (24) | `batch_size=64` |
 
 **There is no per-dataset job.** There used to be three -- `mlaad`, `mailabs`,
@@ -168,19 +180,14 @@ policy attached at all** -- the sweep anyone would actually run was the one that
 skipped the check. The policy now travels with the dataset, so
 `--datasets Multilingual` carries it regardless of which job selected it.
 
-`SKIP_MODELS` is why `all` is 274 and not 276. Two upstreams are excluded from
-MLAAD and M-AILABS:
+`SKIP_MODELS` excludes `mockingjay` and `byol_a_2048` from MLAAD and M-AILABS.
+**Both are outside the 19-model roster, so at the default it changes nothing** --
+it bites only under `--all-models`. It is kept because it states an intent that
+outlives the current roster, and because it is the only thing keeping those two
+off MLAAD when someone widens the sweep.
 
-* **`mockingjay`** -- the paper's MLAAD table reports no cell for it. Note this
-  is the plain variant only: `mockingjay_960hr` **is** scored on MLAAD, and is
-  the one that appears in that table. The exclusion is an exact name match, so
-  it never catches the `_960hr` variant.
-* **`byol_a_2048`** -- excluded by an earlier request; it is also outside the
-  21-model paper roster, so `paper_only` would drop it anyway.
-
-`mockingjay` itself stays in the paper roster: the main results table reports it
-on nine of ten datasets, MLAAD being the exception. `--models mockingjay` fills
-the MLAAD cell deliberately if you want it.
+The exclusion is an exact name match, so it never catches `mockingjay_960hr` --
+which **is** scored on MLAAD, and is the variant the paper's MLAAD table lists.
 
 ## Verification is a separate step
 
