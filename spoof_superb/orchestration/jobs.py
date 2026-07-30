@@ -15,6 +15,7 @@ selection with nothing excluded.
 """
 
 import os
+import time
 from dataclasses import dataclass, field
 from functools import lru_cache
 from typing import Optional, Sequence
@@ -27,6 +28,7 @@ from spoof_superb.scoring.datasets import (
     has_reference,
     reference_paths,
 )
+from spoof_superb.scoring.models import paper_models
 
 MODELS_ROOT = cfg.models_root
 BASELINE_MODELS_ROOT = cfg.baseline_models_root
@@ -81,6 +83,11 @@ class Task:
     expect_lines: Optional[int] = None
 
 
+def default_run_name():
+    """A run identity that sorts chronologically and never collides."""
+    return time.strftime("%Y%m%d-%H%M%S")
+
+
 @dataclass
 class Job:
     name: str
@@ -93,14 +100,22 @@ class Job:
     cuda_wait_s: int = 3600
     batch_size: int = 0                           # 0 = the back-end default
     num_workers: int = 6
-    n_jobs: int = 16
+    gmm_processes: int = 16                       # LFCC-GMM pool only
     log_dir: Optional[str] = None
-    extra: dict = field(default_factory=dict)
+    # Which invocation this is. Keyed separately from the job name because two
+    # runs of the same job used to share one directory: the second overwrote
+    # the first's run_status.json, and their logs interleaved silently.
+    run: str = field(default_factory=default_run_name)
+
+    @property
+    def job_dir(self):
+        """Everything this job has ever produced, across runs."""
+        return os.path.join(cfg.scores_root, "_runs", self.name)
 
     @property
     def out_dir(self):
-        """Where this job's status and summary live -- not the score files."""
-        return os.path.join(cfg.scores_root, "_runs", self.name)
+        """This one run's status, summary and logs -- not the score files."""
+        return os.path.join(self.job_dir, self.run)
 
     def logs(self):
         return self.log_dir or os.path.join(self.out_dir, "logs")
@@ -111,20 +126,44 @@ class Job:
     def summary_path(self):
         return os.path.join(self.out_dir, "SUMMARY.txt")
 
-    def enumerate_tasks(self, systems=None, datasets=None, models=None):
+    def link_latest(self):
+        """Point {job_dir}/latest at this run.
+
+        Keeps every documented path and any existing tooling working: what used
+        to be {job_dir}/run_status.json is now {job_dir}/latest/run_status.json,
+        one level deeper but still a fixed location.
+        """
+        link = os.path.join(self.job_dir, "latest")
+        try:
+            if os.path.islink(link) or os.path.exists(link):
+                os.remove(link)
+            os.symlink(self.run, link)
+        except OSError:
+            pass          # a status symlink is never worth failing a sweep for
+        return link
+
+    def enumerate_tasks(self, systems=None, datasets=None, models=None,
+                        paper_only=None):
         return enumerate_tasks(self, systems=systems, datasets=datasets,
-                               models=models)
+                               models=models, paper_only=paper_only)
 
 
 # ===========================================================================
 # Model discovery
 # ===========================================================================
 
-def discover_linear_heads(only=None, skip=frozenset()):
-    """(ssl_name, checkpoint) for every trained linear head on disk."""
+def discover_linear_heads(only=None, skip=frozenset(), paper_only=False):
+    """(ssl_name, checkpoint) for every trained linear head on disk.
+
+    ``paper_only`` keeps just the upstreams Table 5 reports. It is applied only
+    when nothing was asked for by name: naming a model with ``only`` is an
+    explicit request, and a filter that silently discarded it would be a trap of
+    the same kind as the old --only overload.
+    """
     out = []
     if not os.path.isdir(MODELS_ROOT):
         return out
+    keep = paper_models() if (paper_only and not only) else None
     for name in sorted(os.listdir(MODELS_ROOT)):
         d = os.path.join(MODELS_ROOT, name)
         ckpt = os.path.join(d, "swa.pth")
@@ -133,6 +172,8 @@ def discover_linear_heads(only=None, skip=frozenset()):
             continue
         ssl = name[len(LINEAR_HEAD_PREFIX):]
         if ssl in skip or (only and ssl not in only):
+            continue
+        if keep is not None and ssl not in keep:
             continue
         out.append((ssl, ckpt))
     return out
@@ -145,10 +186,11 @@ def resolve_baseline_model(system):
                         "model_weighted_CCE_50_64_aasist_raw_ASV19_none", "swa.pth")
 
 
-def _frontends(job, system, models=None):
+def _frontends(job, system, models=None, paper_only=False):
     """(frontend, checkpoint) pairs for one system."""
     if system == "linear_head":
-        return discover_linear_heads(only=models, skip=job.skip)
+        return discover_linear_heads(only=models, skip=job.skip,
+                                     paper_only=paper_only)
     if models and "none" not in models:
         return []          # this system has no upstream to select
     return [("none", resolve_baseline_model(system))]
@@ -158,18 +200,24 @@ def _frontends(job, system, models=None):
 # The one enumerator
 # ===========================================================================
 
-def enumerate_tasks(job, systems=None, datasets=None, models=None):
+def enumerate_tasks(job, systems=None, datasets=None, models=None,
+                    paper_only=None):
     """Every (system, dataset, frontend) this job selects.
 
     The three filters are the three axes of the task space, so any slice of it
     can be named directly: one model on one dataset, every model on one
     dataset, one model everywhere.
+
+    ``paper_only`` defaults to True: the 21 upstreams Table 5 reports, rather
+    than all 24 heads on disk. Naming models explicitly overrides it.
     """
+    if paper_only is None:
+        paper_only = True
     chosen_systems = [s for s in job.systems if not systems or s in systems]
     chosen_datasets = ordered_datasets(datasets or job.datasets)
     tasks = []
     for system in chosen_systems:
-        for frontend, ckpt in _frontends(job, system, models):
+        for frontend, ckpt in _frontends(job, system, models, paper_only):
             for dataset in chosen_datasets:
                 out_file = score_path(system, dataset, frontend)
                 argv = [*DRIVER, "--model", system, "--model_path", ckpt,
@@ -177,7 +225,7 @@ def enumerate_tasks(job, systems=None, datasets=None, models=None):
                         "--cuda_device", "cuda:0",
                         "--batch_size", str(job.batch_size),
                         "--num_workers", str(job.num_workers),
-                        "--n_jobs", str(job.n_jobs)]
+                        "--n_jobs", str(job.gmm_processes)]
                 if system == "linear_head":
                     argv += ["--ssl_model", frontend]
 

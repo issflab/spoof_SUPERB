@@ -30,7 +30,14 @@ SYSTEMS=""
 DATASETS=""
 
 # SSL upstreams, e.g. "xls_r_300m wavlm_large". Applies to linear_head only.
+# Empty means "the models Table 5 reports" -- see PAPER_ONLY below, not "all 24".
 MODELS=""
+
+# "yes" scores only the 21 SSL upstreams Table 5 reports, out of the 24 trained
+# heads on disk. The roster is read from tests/baseline_table5.json, so it cannot
+# drift from the paper. "no" scores every head.
+# Naming models in MODELS above overrides this either way.
+PAPER_ONLY="yes"
 
 # --- runtime ----------------------------------------------------------------
 
@@ -38,7 +45,13 @@ MODELS=""
 GPUS="0 1 2"
 
 # Parallel workers. 0 = one per GPU. Use 1 for a sequential run.
+# (This is --workers. Not --job, which picks the job above.)
 WORKERS=0
+
+# Identity for this run. Empty = a timestamp. Two runs of one job no longer
+# share a status file, so there is no reason to set this unless you want a
+# memorable name in {scores_root}/_runs/{job}/.
+RUN_NAME=""
 
 # "yes" re-scores even when a complete, NaN-free output already exists.
 FORCE="no"
@@ -53,11 +66,13 @@ PROGRESS="auto"
 
 # ------------------------------------------------------------ END SETTINGS --
 
-ARGS=(--job "$JOB" --jobs "$WORKERS" --gpus $GPUS --progress "$PROGRESS")
-[ -n "$SYSTEMS" ]  && ARGS+=(--systems $SYSTEMS)
-[ -n "$DATASETS" ] && ARGS+=(--datasets $DATASETS)
-[ -n "$MODELS" ]   && ARGS+=(--models $MODELS)
-[ "$FORCE" = "yes" ] && ARGS+=(--force)
+ARGS=(--job "$JOB" --workers "$WORKERS" --gpus $GPUS --progress "$PROGRESS")
+[ -n "$SYSTEMS" ]   && ARGS+=(--systems $SYSTEMS)
+[ -n "$DATASETS" ]  && ARGS+=(--datasets $DATASETS)
+[ -n "$MODELS" ]    && ARGS+=(--models $MODELS)
+[ -n "$RUN_NAME" ]  && ARGS+=(--run-name "$RUN_NAME")
+[ "$FORCE" = "yes" ]      && ARGS+=(--force)
+[ "$PAPER_ONLY" != "yes" ] && ARGS+=(--all-models)
 
 echo "+ python -m spoof_superb.orchestration.driver ${ARGS[*]} $*"
 exec "$PY" -m spoof_superb.orchestration.driver "${ARGS[@]}" "$@"

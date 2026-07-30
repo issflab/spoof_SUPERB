@@ -37,27 +37,53 @@ before executing, so you can always see which won.
 | `--datasets` | `DATASETS` | any registry key | restrict datasets |
 | `--models` | `MODELS` | s3prl upstream names | restrict SSL upstreams (`linear_head` only) |
 | `--gpus` | `GPUS` | e.g. `0 1 2` | devices to spread over |
-| `--jobs` | `WORKERS` | `0` = one per GPU, `1` = sequential | parallel workers. **Not** `--job`, and not `Job.n_jobs` -- see below |
+| `--workers` | `WORKERS` | `0` = one per GPU, `1` = sequential | parallel workers. **Not** `--job` -- see below |
 | `--force` | `FORCE="yes"` | flag | re-score even when a complete NaN-free output exists |
 | `--progress` | `PROGRESS` | `auto` `bar` `plain` `none` | live display; see [Watching a run](#watching-a-run) |
+| `--all-models` | `PAPER_ONLY="no"` | flag | score all 24 trained heads, not just the 21 Table 5 reports |
+| `--run-name` | `RUN_NAME` | any string | identity for this run; defaults to a timestamp |
 | `--list` | — | flag | print the tasks and exit, running nothing |
 | `--python` | — | path | interpreter for the scoring subprocesses; defaults to `cfg.python` |
 
 Empty settings mean "all of them", so `DATASETS=""` is not a restriction.
 
-### "job" means three different things
+### `--job` vs `--workers`
 
-They differ by one character and are unrelated. Worth knowing before you edit
-anything:
+`--jobs` used to mean "worker threads", one character away from `--job`, which
+picks the named job. A third spelling, `Job.n_jobs`, meant the LFCC-GMM pool
+size. All three were unrelated. They are now:
 
-| | Is | Not |
-|---|---|---|
-| `--job all` | which named `Job` to run | anything to do with parallelism |
-| `--jobs 3` | how many worker *threads* the orchestrator runs | how many named jobs |
-| `Job.n_jobs` (=16) | processes in the LFCC-GMM pool, forwarded to the scoring driver as `--n_jobs` | anything the orchestrator uses itself |
+| | Is |
+|---|---|
+| `--job all` | which named `Job` to run |
+| `--workers 3` | how many worker threads the orchestrator runs (`WORKERS`) |
+| `Job.gmm_processes` (=16) | processes in the LFCC-GMM pool, forwarded to the scoring driver as `--n_jobs` |
 
-Only `--jobs` is settable from the shell script (`WORKERS`). `Job.n_jobs` is a
-`jobs.py` constant and affects the CPU baseline only.
+`--jobs` still works as a hidden deprecated alias for `--workers` and prints a
+notice, so existing scripts keep running. `Job.gmm_processes` is a `jobs.py`
+constant and affects the CPU baseline only. The scoring driver's own `--n_jobs`
+flag is unchanged -- in that context "GMM worker processes" is unambiguous.
+
+### Only the paper's models are scored by default
+
+24 trained linear heads are on disk; Table 5 reports 21. `audio_albert_960hr`,
+`byol_a_2048` and `modified_cpc` were trained and scored but never reported, so
+scoring them everywhere spends 36 of 288 tasks on columns nobody reads.
+
+The roster is **read from `tests/baseline_table5.json`**, the same file the
+zero-tolerance regression gate compares against, so it cannot drift from the
+paper. Add a row to Table 5 and it becomes scoreable with no code change; lose
+the file and the orchestrator refuses to start rather than silently widening
+back to 24.
+
+```bash
+bin/orchestrate.sh --list                       # 21 heads + 2 baselines
+bin/orchestrate.sh --all-models --list          # all 24 + 2
+bin/orchestrate.sh --models byol_a_2048 --list  # naming one always works
+```
+
+Naming a model with `--models` overrides the filter, in the paper or not -- an
+explicit request is never silently dropped.
 
 ### Three ways to lose work
 
@@ -69,12 +95,10 @@ prompt. Read the echoed command before pressing return.
 flag, so if `FORCE="yes"` is in the settings block it is already in the argument
 list and nothing you pass removes it. Edit the file.
 
-**Two runs of the same `--job` overwrite each other's record.** Run state lives
-at `{scores_root}/_runs/{job}/`, keyed by job name and nothing else, so a second
-`--job all` clobbers the first's `run_status.json` and `SUMMARY.txt` even if the
-two select different tasks. Score files are unaffected, and resume reads the
-score files rather than the status file, so this costs the audit trail and not
-the work. Use a different `--job`, or wait.
+**Two runs of the same `--job` used to overwrite each other's record.** Fixed:
+run state now lives at `{scores_root}/_runs/{job}/{run}/`, where `{run}` is a
+timestamp unless you pass `--run-name`. Concurrent runs of one job no longer
+share a `run_status.json` or interleave their logs.
 
 ### Detached runs
 
@@ -99,10 +123,10 @@ do five unrelated things:
 | Role | Fields | Overridable from the CLI? |
 |---|---|---|
 | **Selection** -- which tasks exist | `systems` `datasets` `skip` | yes, by `--systems` `--datasets` `--models` |
-| **Resources** -- how much machine | `gpus` `batch_size` `num_workers` `n_jobs` | only `--gpus` |
+| **Resources** -- how much machine | `gpus` `batch_size` `num_workers` `gmm_processes` | only `--gpus` |
 | **Failure handling** | `max_attempts` `cuda_wait_s` | no |
 | **Post-check** | `verify` | no |
-| **Identity** -- where the record goes | `name` `log_dir` | no (`--job` picks a whole job) |
+| **Identity** -- where the record goes | `name` `run` `log_dir` | `--job` picks the job, `--run-name` the run |
 
 Selection is fully expressible with the three filters. Nothing else is, and
 that is the only reason the dataset-specific jobs exist.
@@ -112,18 +136,21 @@ mutates `job.gpus` in place, while `--systems/--datasets/--models` are passed as
 arguments to `enumerate_tasks()` and never touch the job. So a filter narrows
 what a job produces; it does not redefine the job.
 
-| `JOB` | Selects | Policy it adds |
-|---|---|---|
-| `all` | every system on every dataset (312 tasks) | — |
-| `linear_head` | every SSL head on every dataset (288) | — |
-| `baselines` | `aasist_raw` + `lfcc_gmm` everywhere (24) | `batch_size=64` |
-| `mlaad` | every SSL head on MLAAD v10 (22) | verify `mlaad`; 1 attempt; skips `byol_a_2048`, `mockingjay` |
-| `mailabs` | every SSL head on M-AILABS (22) | as `mlaad` |
-| `spoofceleb` | every SSL head on SpoofCeleb (24) | verify `spoofceleb`; 6 attempts; 3 h CUDA wait |
+Counts below are at the default (paper models only); the figure in brackets is
+what `--all-models` gives.
+
+| `JOB` | Selects | Tasks | Policy it adds |
+|---|---|---|---|
+| `all` | every system on every dataset | 276 (312) | — |
+| `linear_head` | every SSL head on every dataset | 252 (288) | — |
+| `baselines` | `aasist_raw` + `lfcc_gmm` everywhere | 24 (24) | `batch_size=64` |
+| `mlaad` | every SSL head on MLAAD v10 | 20 (22) | verify `mlaad`; 1 attempt; skips `byol_a_2048`, `mockingjay` |
+| `mailabs` | every SSL head on M-AILABS | 20 (22) | as `mlaad` |
+| `spoofceleb` | every SSL head on SpoofCeleb | 21 (24) | verify `spoofceleb`; 6 attempts; 3 h CUDA wait |
 
 So `--job mlaad` is **not** the same as `--job all --datasets Multilingual`. The
-latter is 26 tasks: it adds the two baselines and the two skipped upstreams, and
-runs no verification.
+latter is 23 tasks: it adds the two baselines and `mockingjay`, and runs no
+verification.
 
 Why the policies differ:
 

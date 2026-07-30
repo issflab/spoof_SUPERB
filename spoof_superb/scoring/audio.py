@@ -33,6 +33,8 @@ bit-identical output across the three paths on files libsndfile refuses.
 PyAV is optional. Without it this module behaves exactly as before, slowly.
 """
 
+import os
+
 import numpy as np
 
 __all__ = ["load_wave", "have_pyav", "DECODERS"]
@@ -119,34 +121,70 @@ def native_rate(path):
             return c.streams.audio[0].rate
 
 
+_announced = set()
+
+
+def _announce(decoder, path, why):
+    """Say once per process that a decoder is in use, and why.
+
+    This exists because of a real hour lost: a sweep silently decoded through
+    audioread despite ``av`` being installed, and the only evidence in the log
+    was librosa's own "PySoundFile failed" -- which names the decoder that
+    *failed*, never the one that ran or the reason the fallback happened.
+    Diagnosing it needed a separate reproduction.
+
+    Once per (decoder, reason) per process: enough to see which path a run took
+    in its log, without reprinting for 611,829 files.
+    """
+    key = (decoder, str(why)[:60])
+    if key in _announced:
+        return
+    _announced.add(key)
+    print(f"  [audio] using {decoder} for {os.path.basename(path)} "
+          f"and files like it: {why}", flush=True)
+
+
 def load_wave(path, sr=16000, _stats=None):
     """Mono float32 at ``sr``, by whichever decoder can read the file.
 
     Raises only when every decoder fails, so the caller's missing-audio policy
     still sees a genuinely unreadable file rather than an install problem.
     """
+    def count(decoder):
+        if _stats is not None:
+            _stats[decoder] = _stats.get(decoder, 0) + 1
+
+    # try/except/else throughout: the bookkeeping lives in `else`, which the
+    # except clauses do not cover. Putting it inside `try` made a NameError in
+    # the reporting code look like a decoder failure, and silently demoted
+    # every file to the slow path.
     try:
         x = _load_soundfile(path, sr)
-        if _stats is not None:
-            _stats["soundfile"] = _stats.get("soundfile", 0) + 1
-        return x
     except Exception as sf_err:
         first = sf_err
+    else:
+        count("soundfile")
+        return x
 
     try:
         x = _load_pyav(path, sr)
-        if _stats is not None:
-            _stats["pyav"] = _stats.get("pyav", 0) + 1
-        return x
     except ImportError:
-        pass
-    except Exception:
-        pass
+        pyav_err = ("av is not installed -- pip install av==17.1.0 "
+                    "for a ~35x faster fallback")
+    except Exception as exc:
+        pyav_err = f"av failed too ({type(exc).__name__}: {exc})"
+    else:
+        count("pyav")
+        _announce("pyav", path, f"libsndfile refused it ({first})")
+        return x
 
     try:
         x = _load_audioread(path, sr)
-        if _stats is not None:
-            _stats["audioread"] = _stats.get("audioread", 0) + 1
-        return x
     except Exception:
         raise first
+    else:
+        count("audioread")
+        # Deliberately loud: this path is ~35x slower and avoiding it is the
+        # entire reason av is a dependency. A run that lands here must say so.
+        _announce("audioread (SLOW)", path, pyav_err)
+        return x

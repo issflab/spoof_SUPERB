@@ -6,12 +6,17 @@ pinning, their status file, their resume logic and their summary table, and
 differed only in the constants now living in jobs.py.
 
     python -m spoof_superb.orchestration.driver --job spoofceleb
-    python -m spoof_superb.orchestration.driver --job baselines --jobs 1
-    python -m spoof_superb.orchestration.driver --job mlaad --only xls_r_300m
+    python -m spoof_superb.orchestration.driver --job baselines --workers 1
+    python -m spoof_superb.orchestration.driver --job mlaad --models xls_r_300m
     python -m spoof_superb.orchestration.driver --job baselines --list
 
-`--jobs 1` reproduces orchestrate_baselines.py's sequential behaviour; the
+`--workers 1` reproduces orchestrate_baselines.py's sequential behaviour; the
 other three ran a pool over GPUS=[0,1,2], which is the default.
+
+Two defaults worth knowing: only the 21 SSL upstreams Table 5 reports are
+scored (`--all-models` for all 24), and each invocation gets its own
+`_runs/{job}/{run}/` so two runs of one job cannot overwrite each other's
+record.
 """
 
 import argparse
@@ -232,11 +237,18 @@ def main(argv=None):
                     help="restrict to these SSL upstreams (linear_head only)")
     ap.add_argument("--only", nargs="*", default=None,
                     help=argparse.SUPPRESS)   # deprecated alias for --models
-    ap.add_argument("--jobs", type=int, default=0,
+    ap.add_argument("--workers", type=int, default=None,
                     help="parallel workers; 0 = one per GPU in the job spec, 1 = sequential")
+    ap.add_argument("--jobs", type=int, default=None,
+                    help=argparse.SUPPRESS)   # deprecated alias for --workers
     ap.add_argument("--gpus", nargs="*", type=int, default=None)
     ap.add_argument("--force", action="store_true", help="re-score even if the output is complete")
     ap.add_argument("--list", action="store_true", help="list tasks and exit")
+    ap.add_argument("--all-models", dest="all_models", action="store_true",
+                    help="score every trained head, not just the 21 Table 5 reports")
+    ap.add_argument("--run-name", dest="run_name", default=None,
+                    help="identity for this run; defaults to a timestamp. Two runs "
+                         "of one job no longer share a status file.")
     ap.add_argument("--progress", choices=("auto", "bar", "plain", "none"),
                     default="auto",
                     help="auto = redrawing bar on a terminal, periodic lines "
@@ -248,13 +260,26 @@ def main(argv=None):
     job = JOBS[args.job]
     if args.gpus:
         job.gpus = tuple(args.gpus)
+    if args.run_name:
+        job.run = args.run_name
+    # --jobs wins whenever it is present, rather than only when --workers is
+    # absent: bin/orchestrate.sh always emits --workers from its settings block,
+    # so "only if --workers is unset" made a hand-typed --jobs silently do
+    # nothing through the wrapper. Nothing but a human types --jobs.
+    if args.jobs is not None:
+        print("[orchestrate] --jobs is deprecated; use --workers "
+              "(--job selects the job; --jobs used to mean worker count)")
+        args.workers = args.jobs
+    if args.workers is None:
+        args.workers = 0
     if args.only and not args.models:
         print("[orchestrate] --only is deprecated; use --models (SSL upstreams) "
               "or --datasets")
         args.models = args.only
     tasks = job.enumerate_tasks(systems=args.systems,
                                 datasets=args.datasets,
-                                models=args.models)
+                                models=args.models,
+                                paper_only=not args.all_models)
 
     if not tasks:
         print(f"[orchestrate] {job.name}: no tasks (checked {job.out_dir})")
@@ -282,12 +307,13 @@ def main(argv=None):
 
     os.makedirs(job.out_dir, exist_ok=True)
     os.makedirs(job.logs(), exist_ok=True)
+    job.link_latest()
 
     work_q = queue.Queue()
     for t in tasks:
         work_q.put(t)
 
-    n_workers = args.jobs if args.jobs else len(job.gpus)
+    n_workers = args.workers if args.workers else len(job.gpus)
     print(f"[orchestrate] {job.name}: {len(tasks)} tasks over {n_workers} worker(s), "
           f"gpus={list(job.gpus)}", flush=True)
 

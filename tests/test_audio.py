@@ -162,3 +162,63 @@ def test_a9_missing_pyav_is_not_an_error(tmp_path):
     sf.write(p, np.zeros(1600, dtype=np.float32), 16000, subtype="PCM_16")
     assert load_wave(str(p), 16000).shape == (1600,)
     assert have_pyav() in (True, False)
+
+
+# ===========================================================================
+# A10-A12: the loader says which decoder ran, and why
+# ===========================================================================
+
+def test_a10_announces_the_fallback_and_its_reason(capsys):
+    """A silent fallback cost an hour of diagnosis; it must be in the log.
+
+    librosa's own warning names the decoder that FAILED, never the one that
+    ran. Without this a sweep using the 35x-slower path looks identical in the
+    log to one using the fast path.
+    """
+    import spoof_superb.scoring.audio as A
+    _, bad = _corpus(n=3)
+    A._announced.clear()
+    for p in bad[:3]:
+        load_wave(p, 16000)
+    out = capsys.readouterr().out
+    assert "[audio] using" in out
+    expected = "pyav" if have_pyav() else "audioread (SLOW)"
+    assert expected in out, f"expected {expected!r} in:\n{out}"
+    assert "libsndfile refused it" in out or "av is not installed" in out
+
+
+def test_a11_announces_once_per_reason_not_once_per_file(capsys):
+    """611,829 files must not produce 611,829 lines."""
+    import spoof_superb.scoring.audio as A
+    _, bad = _corpus(n=8)
+    A._announced.clear()
+    for p in bad:
+        load_wave(p, 16000)
+    lines = [l for l in capsys.readouterr().out.splitlines() if "[audio]" in l]
+    # libsndfile fails three distinct ways, so at most three reasons.
+    assert 1 <= len(lines) <= 3, lines
+
+
+def test_a12_reporting_errors_are_not_mistaken_for_decoder_failures(monkeypatch):
+    """A bug in the announcement must not demote every file to the slow path.
+
+    It did: _announce sat inside the try, so a NameError in it was caught by
+    `except Exception` and recorded as "av failed", silently routing the whole
+    corpus through audioread.
+    """
+    import spoof_superb.scoring.audio as A
+    _, bad = _corpus(n=2)
+    if not have_pyav():
+        pytest.skip("PyAV not installed")
+
+    def boom(*a, **k):
+        raise NameError("deliberate bug in the reporting path")
+
+    monkeypatch.setattr(A, "_announce", boom)
+    stats = {}
+    with pytest.raises(NameError):
+        A.load_wave(bad[0], 16000, _stats=stats)
+    # It counted pyav before announcing: the decode did succeed, and the error
+    # propagated instead of being laundered into a fallback.
+    assert stats.get("pyav") == 1
+    assert "audioread" not in stats
