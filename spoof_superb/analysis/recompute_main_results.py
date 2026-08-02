@@ -63,11 +63,75 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 from spoof_superb.core.metrics import compute_eer  # type: ignore
 
 from spoof_superb.config import cfg
+from spoof_superb.core.scorepath import score_path
 
-LEGACY_DIR = Path(cfg.reference_dir)
-V10_DIR = Path(f"{cfg.scores_root}/linear_head_MLAAD_v10")
-RECOMP_DIR = Path(
-    f"{cfg.scores_root}/asvld_rerun/Recompression")
+# Path resolution is layout-aware: this script must be able to read the legacy
+# tree (to prove, via the zero-tolerance gate, that a port moved no number) and
+# the current tree (to produce the values that go in the paper).
+#
+# The two layouts are not merely spelled differently. Two columns differ in
+# COMPOSITION, and pretending otherwise would silently compare different things:
+#
+#   ASVLD  legacy is TWO files pooled -- linear_head_asvspoofLD_<m>.txt
+#          (1,207,509 rows: noise x10, reverb x3, resample x4) plus
+#          asvld_rerun/Recompression/linear_head_Recompression_<m>.txt
+#          (427,422 = 71,237 x 6 bitrates), folded in by commit 6bf39a0.
+#          Reading only the first reproduces a pre-6bf39a0 column.
+#          v3 is ONE file, scored from the combined protocol built by
+#          data.prep.build_protocols asvld, which already pools all conditions.
+#
+#   MLAAD  legacy reads the v10 .tsv, which ALREADY has M-AILABS bonafide pooled
+#          into it (1,040,006 rows = 456,000 spoof + 584,006 bonafide).
+#          v3 keeps them as two separate single-class datasets, so the column
+#          cannot be formed until they are pooled. That is P8, and it is open --
+#          so under v3 this script reports MLAAD, Mean and Pooled as unavailable
+#          rather than inventing a number from spoof-only scores.
+
+
+#   DFEval24  legacy scored deepfake_eval_2024: ONE 4 s window per recording,
+#          1,976 published trials. The v3 tree deliberately scores
+#          deepfake_eval_2024_segmented instead -- every 4 s window of every
+#          recording, 56,481 trials -- because a 4 s model never saw the rest of
+#          a minutes-long file. The EERs are NOT comparable: per-segment trials
+#          weight long recordings far more heavily. This is a different
+#          measurement, not a corrected one.
+DATASET_KEY_BY_LAYOUT = {
+    "deepfake_eval_2024": {"v2": "deepfake_eval_2024_segmented",
+                           "v3": "deepfake_eval_2024_segmented"},
+}
+
+
+def dataset_key(layout, dataset):
+    """The registry key this column reads under a given layout."""
+    return DATASET_KEY_BY_LAYOUT.get(dataset, {}).get(layout, dataset)
+
+
+def column_paths(layout, scores_root, dataset, slug):
+    """Every score file that makes up one (dataset, model) cell, in pool order."""
+    if layout == "legacy":
+        # Derived from the scores_root PASSED IN, not from cfg.reference_dir.
+        # cfg.reference_dir is relative to the CONFIGURED root, so reading it
+        # here made --scores_root silently ineffective for legacy columns: the
+        # gate only worked because it also sets SPOOF_SUPERB_SCORES_ROOT.
+        legacy_dir = Path(scores_root) / "linear_head"
+        paths = [legacy_dir / f"linear_head_{dataset}_{slug}.txt"]
+        if dataset == "asvspoofLD":
+            paths.append(Path(scores_root) / "asvld_rerun" / "Recompression"
+                         / f"linear_head_Recompression_{slug}.txt")
+        return paths
+    return [Path(score_path("linear_head", dataset_key(layout, dataset), slug,
+                            scores_root=scores_root, layout=layout))]
+
+
+def mlaad_paths(layout, scores_root, slug):
+    """(full_pool, balanced) for the MLAAD column, or (None, None) if unformable."""
+    if layout == "legacy":
+        v10 = Path(scores_root) / "linear_head_MLAAD_v10"
+        return (v10 / "tsv" / f"linear_head_MLAAD_v10_{slug}.tsv",
+                v10 / "balanced" / f"linear_head_MLAAD_v10_balanced_{slug}.txt")
+    # v2/v3: MLAAD and M-AILABS are separate single-class datasets. Pooling them
+    # is P8 and does not exist yet.
+    return (None, None)
 
 # Main results column header -> legacy file prefix.  MLAAD is handled separately.
 #
@@ -273,7 +337,14 @@ def nan_frac(scores):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out_dir", default=str(REPO_ROOT / "scripts" / "verification_out"))
+    ap.add_argument("--scores_root", default=None,
+                    help="score tree to read (default: the configured scores_root)")
+    ap.add_argument("--layout", default=None, choices=("legacy", "v2", "v3"),
+                    help="layout of that tree (default: the configured score_layout)")
     args = ap.parse_args()
+    scores_root = args.scores_root or cfg.scores_root
+    layout = args.layout or getattr(cfg, "score_layout", "legacy")
+    print(f"reading {scores_root}  (layout={layout})", flush=True)
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -281,7 +352,7 @@ def main():
     problems = []
 
     for disp, slug in MODELS:
-        row = {"slug": slug, "datasets": {}, "asserts": []}
+        row = {"slug": slug, "datasets": {}, "asserts": [], "sources": {}}
         pooled_labels, pooled_scores = [], []
 
         # ---- legacy datasets -------------------------------------------
@@ -289,13 +360,14 @@ def main():
         for col, prefix in DATASETS:
             if prefix is None:
                 continue
-            paths = [LEGACY_DIR / f"linear_head_{prefix}_{slug}.txt"]
-            if col == "ASVLD":
-                paths.append(RECOMP_DIR / f"linear_head_Recompression_{slug}.txt")
+            key = dataset_key(layout, prefix)
+            if key != prefix:
+                row["sources"][col] = key
+            paths = column_paths(layout, scores_root, prefix, slug)
             missing = [p for p in paths if not p.exists()]
             if missing:
                 row["datasets"][col] = None
-                problems.append(f"{disp}: MISSING legacy file {missing[0].name}")
+                problems.append(f"{disp}: MISSING {col} file {missing[0]}")
                 continue
             chunks = [read_legacy(p) for p in paths]
             lab = np.concatenate([c[0] for c in chunks])
@@ -321,8 +393,15 @@ def main():
             pooled_scores.append(sc[finite])
 
         # ---- MLAAD v10, full pool --------------------------------------
-        tsv = V10_DIR / "tsv" / f"linear_head_MLAAD_v10_{slug}.tsv"
-        bal = V10_DIR / "balanced" / f"linear_head_MLAAD_v10_balanced_{slug}.txt"
+        tsv, bal = mlaad_paths(layout, scores_root, slug)
+        if tsv is None:
+            row["datasets"]["MLAAD"] = None
+            problems.append(
+                f"{disp}: MLAAD is not formable under layout={layout} -- MLAAD and "
+                f"M-AILABS are separate single-class sets and pooling them is P8, "
+                f"still open. Mean and Pooled are withheld for this row.")
+            results[disp] = row
+            continue
         if not tsv.exists():
             row["datasets"]["MLAAD"] = None
             problems.append(f"{disp}: MISSING MLAAD v10 file {tsv.name} "
