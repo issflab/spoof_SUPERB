@@ -24,7 +24,7 @@ $EDITOR configs/paths.yaml
 python -m spoof_superb.config          # check what it resolved to
 
 # 3. reproduce the paper's tables from the published score files
-bin/reproduce_table5.sh
+bin/reproduce_main_results.sh
 ```
 
 If step 3 passes, your installation and your score files are good. It reads
@@ -73,7 +73,7 @@ spoof_superb/
 ├── analysis/          EER/FAR tables, figures, protocol construction
 ├── train/             LFCC-GMM trainer
 └── tools/             checkpoint selection helpers
-tests/                 contract tests + the Table 5 numerical baseline
+tests/                 contract tests + the main-results numerical baseline
 main.py                training entry point
 ```
 
@@ -92,7 +92,7 @@ They print the command they run, and pass any extra arguments through, so
 
 | Script | Does |
 |---|---|
-| `bin/reproduce_table5.sh` | regenerate the paper's tables and check them |
+| `bin/reproduce_main_results.sh` | regenerate the paper's tables and check them |
 | `bin/score.sh` | score one model on one evaluation set |
 | `bin/orchestrate.sh` | score every model for a job, across GPUs |
 | `bin/verify.sh` | compare a new score file against its reference |

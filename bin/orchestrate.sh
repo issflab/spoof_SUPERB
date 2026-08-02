@@ -32,11 +32,11 @@ SYSTEMS=""
 DATASETS=""
 
 # SSL upstreams, e.g. "xls_r_300m wavlm_large". Applies to linear_head only.
-# Empty means "the models Table 5 reports" -- see PAPER_ONLY below, not "all 24".
+# Empty means "the models the paper reports" -- see PAPER_ONLY below, not "all 24".
 MODELS=""
 
-# "yes" scores only the 21 SSL upstreams Table 5 reports, out of the 24 trained
-# heads on disk. The roster is read from tests/baseline_table5.json, so it cannot
+# "yes" scores only the 21 SSL upstreams the paper reports, out of the 24 trained
+# heads on disk. The roster is read from tests/baseline_main_results_table.json, so it cannot
 # drift from the paper. "no" scores every head.
 # Naming models in MODELS above overrides this either way.
 PAPER_ONLY="yes"

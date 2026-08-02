@@ -177,8 +177,8 @@ def relative_resolver(base_dir):
 # for columns whose published source lives outside linear_head/. A list means the
 # paper's column is the POOL of those files, and it is assembled in that order.
 #
-# Sources here must match analysis/recompute_table5_mlaad_v10.py, which is the
-# authority for what Table 5 actually reports. Two columns are NOT the obvious
+# Sources here must match analysis/recompute_main_results.py, which is the
+# authority for what the main results table actually reports. Two columns are NOT the obvious
 # linear_head/ file:
 #   MLAAD  -> the v10 re-run (1,040,006 rows), not legacy linear_head_Multilingual
 #             (307,998). Different corpus scale entirely.

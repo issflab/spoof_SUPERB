@@ -16,11 +16,11 @@ will fail with `ModuleNotFoundError`.
 ## The paper's main table
 
 ```bash
-python -m spoof_superb.analysis.recompute_table5_mlaad_v10 --out_dir outputs/table5
+python -m spoof_superb.analysis.recompute_main_results --out_dir outputs/main_results
 ```
 
 See [reproducing results](02-reproducing-results.md) -- this is the authority
-on what Tables 5 and 6 report.
+on what the two results tables report.
 
 ## Acoustic degradation (Section 5.2)
 

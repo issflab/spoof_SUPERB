@@ -3,7 +3,7 @@
 The loader sits under every score in the benchmark, so the contract that
 matters is not "it decodes" but "it decodes to exactly what the previous
 implementation produced". A decoder swap that shifted samples by 1 LSB would
-change every EER in Table 5 without failing anything else.
+change every EER in the main results table without failing anything else.
 
 FLAC is lossless, so bit-identity across decoders is a property that must hold,
 not an approximation to tolerate. These tests assert it on real corpus files --

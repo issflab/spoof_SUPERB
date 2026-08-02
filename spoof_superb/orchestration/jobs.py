@@ -218,7 +218,7 @@ def enumerate_tasks(job, systems=None, datasets=None, models=None,
     can be named directly: one model on one dataset, every model on one
     dataset, one model everywhere.
 
-    ``paper_only`` defaults to True: the 21 upstreams Table 5 reports, rather
+    ``paper_only`` defaults to True: the 21 upstreams the paper reports, rather
     than all 24 heads on disk. Naming models explicitly overrides it.
     """
     if paper_only is None:

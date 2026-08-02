@@ -40,14 +40,14 @@ python -m spoof_superb.config | head -3
 
 Nothing else in that file matters for reproduction.
 
-## Step 2 -- reproduce Tables 5 and 6
+## Step 2 -- reproduce the results tables
 
 ```bash
-bin/reproduce_table5.sh
+bin/reproduce_main_results.sh
 ```
 
 This recomputes every per-model, per-dataset EER behind the paper's main table
-and diffs it against the committed baseline `tests/baseline_table5.json` at
+and diffs it against the committed baseline `tests/baseline_main_results_table.json` at
 **zero tolerance**. It takes about 2m40s and reads roughly 15 GB.
 
 Expected output ends with:
@@ -61,13 +61,13 @@ fraction is unchanged, the reproducer's own internal gate over the untouched
 published cells still passes, and no new problems appeared.
 
 To write the tables out instead of checking them, set `MODE="compute"` in
-`bin/reproduce_table5.sh`, or:
+`bin/reproduce_main_results.sh`, or:
 
 ```bash
-python -m spoof_superb.analysis.recompute_table5_mlaad_v10 --out_dir outputs/table5
+python -m spoof_superb.analysis.recompute_main_results --out_dir outputs/main_results
 ```
 
-That writes `table5_mlaad_v10.json` plus a printed table.
+That writes `main_results.json` plus a printed table.
 
 ## What the reproducer actually does
 

@@ -22,7 +22,7 @@ from spoof_superb.orchestration.jobs import (
 )
 from spoof_superb.scoring.models import (
     PAPER_TABLE_ROWS,
-    TABLE5_BASELINE,
+    MAIN_RESULTS_BASELINE,
     _slug_by_display,
     is_paper_model,
     non_paper_models,
@@ -31,7 +31,7 @@ from spoof_superb.scoring.models import (
 
 
 # ===========================================================================
-# M1-M6: the roster comes from Table 5 and cannot drift from it
+# M1-M6: the roster comes from the paper and cannot drift from it
 # ===========================================================================
 
 PAPER_TEX = os.path.join(os.path.dirname(os.path.dirname(
@@ -39,7 +39,7 @@ PAPER_TEX = os.path.join(os.path.dirname(os.path.dirname(
     "access.tex")
 
 
-def _table6_rows():
+def _main_results_rows():
     """The SSL row labels actually printed by the paper's main results table.
 
     Parsed from access.tex, which is the authority for what the paper reports.
@@ -65,12 +65,12 @@ def _table6_rows():
 def test_m1_roster_matches_the_paper_table_exactly():
     """The reconciliation this module exists for.
 
-    The first implementation derived the roster from baseline_table5.json and
+    The first implementation derived the roster from baseline_main_results_table.json and
     claimed it "cannot drift from the paper". It had already drifted: the
     baseline carries FBANK and Mockingjay, which the table does not print. This
     test is what makes the explicit list trustworthy.
     """
-    printed = _table6_rows()
+    printed = _main_results_rows()
     assert list(PAPER_TABLE_ROWS) == printed, (
         f"PAPER_TABLE_ROWS disagrees with the paper's results table.\n"
         f"  only in code : {[r for r in PAPER_TABLE_ROWS if r not in printed]}\n"
@@ -83,7 +83,7 @@ def test_m2_the_baseline_is_a_superset_of_the_paper():
     That is fine -- it guards computed columns -- but it means the baseline is
     not the roster, which is the mistake this replaced.
     """
-    with open(TABLE5_BASELINE) as f:
+    with open(MAIN_RESULTS_BASELINE) as f:
         rows = json.load(f)["results"]
     tracked = {r["slug"] for r in rows.values() if r.get("slug")}
     assert paper_models() < tracked, "the baseline should track at least the paper's models"
@@ -444,7 +444,7 @@ def test_d5_the_segmented_column_is_not_the_published_one():
     more, so the EERs are different quantities.
     """
     from spoof_superb.orchestration.jobs import expected_rows
-    with open(TABLE5_BASELINE) as f:
+    with open(MAIN_RESULTS_BASELINE) as f:
         published = json.load(f)["results"]["XLS-R"]["datasets"]["DFEval24"]["n"]
     assert published == 1976
     assert expected_rows("deepfake_eval_2024_segmented") > 10 * published

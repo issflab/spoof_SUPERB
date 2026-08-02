@@ -15,7 +15,7 @@ question is answered, **queued** = decided and waiting on something,
 
 ## P1  Score only the models the paper reports  [DONE 2026-07-29, corrected]
 
-24 trained linear heads exist. The paper's main results table -- **Table 6**,
+24 trained linear heads exist. The paper's main results table --
 `\label{tab:results_main}` in access.tex -- prints **19**, plus the two non-SSL
 reference systems. Five were trained and scored but never reported:
 
@@ -25,7 +25,7 @@ That is 60 of 288 tasks (21%) on columns nobody reads, including the two most
 expensive corpora.
 
 **The first implementation got the roster wrong, and the reason is worth keeping.**
-It derived the 21 names from `tests/baseline_table5.json`, arguing that a
+It derived the 21 names from `tests/baseline_main_results_table.json`, arguing that a
 hand-maintained list would drift from the paper while the regression baseline
 could not. The argument was right about the risk and wrong about the remedy: the
 baseline had *already* drifted. It tracks 21 models, two of which the paper does
@@ -233,7 +233,7 @@ Both are single-class, so neither yields an EER alone:
 
 The orchestrator will score both and mark them `ok`; any per-dataset EER for
 either is undefined. **No tooling in the repo pools them** -- checked
-`analysis/` and `recompute_table5_mlaad_v10.py`. `MAILABS` is in
+`analysis/` and `recompute_main_results.py`. `MAILABS` is in
 `NON_BENCHMARK`, which records the fact, but nothing consumes it.
 
 This blocks the MLAAD column, not the sweep. Scoring can proceed; the merge has

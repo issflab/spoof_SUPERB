@@ -49,7 +49,7 @@ PREFIX = "model_weighted_CCE_50_64_linear_head_ASV19_"
 OUT_DIR = Path(__file__).resolve().parent.parent / "outputs" / "layer_weights"
 
 # Display name + branch/family grouping for the heatmap row order.
-# Branch labels follow the Table 7 lineage: contrastive (wav2vec 2.0 -> XLS-R)
+# Branch labels follow the tab:top_ssl_lineage branches: contrastive (wav2vec 2.0 -> XLS-R)
 # vs predictive (HuBERT and descendants). Generative and spectrogram models are
 # grouped separately.
 MODELS = [

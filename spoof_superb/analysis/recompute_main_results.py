@@ -1,7 +1,15 @@
 """
-Recompute Table 5 (tab:results_main) and Table 6 (tab:top_ssl_lineage) of the
-Spoof-SUPERB IEEE Access paper after replacing the corrupted MLAAD reference
-scores with the freshly computed MLAAD v10 + M-AILABS score files.
+Recompute the Spoof-SUPERB IEEE Access paper's two results tables:
+
+    tab:results_main        the main results table  (EER per model per dataset)
+    tab:top_ssl_lineage     the top-SSL-lineage table
+
+Referred to by LaTeX label, never by number. The numbers move between drafts --
+tab:results_main has been Table 5 and is currently Table 6 -- so encoding one in
+a filename or a docstring guarantees the code goes stale against the paper.
+
+This exists because the old MLAAD reference scores were corrupted and had to be
+replaced with the freshly computed MLAAD v10 + M-AILABS score files.
 
 Why this script exists
 ----------------------
@@ -39,7 +47,7 @@ polarity bug and is reported as a FAIL rather than silently resolved.
 
 Usage
 -----
-    python -m spoof_superb.analysis.recompute_table5_mlaad_v10 \
+    python -m spoof_superb.analysis.recompute_main_results \
         --out_dir scripts/verification_out
 """
 
@@ -61,7 +69,7 @@ V10_DIR = Path(f"{cfg.scores_root}/linear_head_MLAAD_v10")
 RECOMP_DIR = Path(
     f"{cfg.scores_root}/asvld_rerun/Recompression")
 
-# Table 5 column header -> legacy file prefix.  MLAAD is handled separately.
+# Main results column header -> legacy file prefix.  MLAAD is handled separately.
 #
 # ASVLD is TWO files, not one.  Commit 6bf39a0 ("Fold ASVLD recompression into
 # main benchmark") folded the six-bitrate re-compression variants into this
@@ -96,7 +104,7 @@ NAN_CORRUPT = {
     "TERA":            ["ASVLD", "SpoofCeleb"],
 }
 
-# Table 5 row order -> score-file model slug.
+# Main results row order -> score-file model slug.
 MODELS = [
     ("FBANK",             "fbank"),
     ("APC",               "apc"),
@@ -121,7 +129,7 @@ MODELS = [
     ("MAE-AST-FRAME",     "mae_ast_frame"),
 ]
 
-# Table 6 lineage rows, in the order the paper prints them.
+# tab:top_ssl_lineage rows, in the order the paper prints them.
 LINEAGE = [
     ("wav2vec 2.0",   "wav2vec",      "Masked latent prediction"),
     ("HuBERT Base",   "wav2vec 2.0",  "Hidden-unit prediction"),
@@ -132,10 +140,10 @@ LINEAGE = [
     ("UniSpeech-SAT", "HuBERT",       "Speaker-aware SSL"),
     ("XLS-R",         "wav2vec 2.0",  "Multilingual SSL"),
 ]
-# Table 6 "wav2vec 2.0" is the Base variant (paper text: 32.88 == wav2vec 2.0 Base).
-LINEAGE_ROW_TO_TABLE5 = {"wav2vec 2.0": "wav2vec 2.0 Base"}
+# In tab:top_ssl_lineage, "wav2vec 2.0" is the Base variant (paper text: 32.88 == wav2vec 2.0 Base).
+LINEAGE_ROW_TO_MAIN = {"wav2vec 2.0": "wav2vec 2.0 Base"}
 
-# Published Table 5 values (commit fa16daa), used purely as a regression gate:
+# Published main-results values (commit fa16daa), used purely as a regression gate:
 # the eight columns this task does not touch, plus ASVLD, must reproduce to
 # +/-0.01.  If they do not, the parsing or the score sources have drifted and
 # no recomputed MLAAD/Mean/Pooled number can be trusted.
@@ -432,14 +440,14 @@ def main():
 
     payload = {"results": results, "bold": bold, "problems": problems,
                "reproduction_failures": repro}
-    (out_dir / "table5_mlaad_v10.json").write_text(json.dumps(payload, indent=2))
+    (out_dir / "main_results.json").write_text(json.dumps(payload, indent=2))
 
     print("\n=== PROBLEMS / ASSERT FAILURES ===")
     for p in problems:
         print("  " + p)
     if not problems:
         print("  none")
-    print(f"\nWrote {out_dir / 'table5_mlaad_v10.json'}")
+    print(f"\nWrote {out_dir / 'main_results.json'}")
 
 
 if __name__ == "__main__":

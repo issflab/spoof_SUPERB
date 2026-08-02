@@ -47,6 +47,9 @@ TSV_DIR = SCORE_ROOT / "linear_head_MLAAD_v10" / "tsv"
 MLAAD_ROOT = Path(f"{cfg.data_root}/MLAAD")
 
 ARCH_CSV = SCORE_ROOT / "mlaad_v10_tts_architecture_groups.csv"
+# `table4` here is a COLUMN NAME in an external CSV (`table4_label_as_printed`),
+# not a reference to a paper table, so it is deliberately not renamed along with
+# the table5 -> main_results sweep. Renaming it would break reading that file.
 PROVENANCE_CSV = SCORE_ROOT / "mlaad_v10_table4_provenance.csv"
 
 DEFAULT_OUT = Path(__file__).resolve().parent / "mlaad_v10_dir_to_system.csv"

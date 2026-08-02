@@ -1,5 +1,5 @@
 """
-Independent verification of the MLAAD column written into Table 5.
+Independent verification of the MLAAD column written into the main results table.
 
 This deliberately does NOT reuse evaluation.compute_eer, the repo's own EER
 routine, nor the recompute script's parsing.  It re-reads the MLAAD v10 score
@@ -37,7 +37,7 @@ from spoof_superb.config import cfg
 
 V10 = Path(f"{cfg.scores_root}/linear_head_MLAAD_v10")
 
-# Table 5 display name -> score-file slug.  Non-960h Mockingjay is excluded:
+# Main results display name -> score-file slug.  Non-960h Mockingjay is excluded:
 # it has no v10 scores and its row is struck from the table.
 MODELS = [
     ("FBANK", "fbank"), ("APC", "apc"), ("VQ-APC", "vq_apc"), ("NPC", "npc"),
@@ -99,7 +99,7 @@ def eer_independent(labels, scores):
 
 
 def parse_tex_mlaad(tex_path):
-    """Pull the MLAAD cell (9th data column) out of each live Table 5 row."""
+    """Pull the MLAAD cell (9th data column) out of each live main-results row."""
     out = {}
     for line in Path(tex_path).read_text().split("\n"):
         s = line.strip()

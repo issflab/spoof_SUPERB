@@ -14,7 +14,7 @@ differed only in the constants now living in jobs.py.
 
 Three defaults worth knowing:
 
-  * Only the 21 SSL upstreams Table 5 reports are scored (`--all-models` for
+  * Only the 21 SSL upstreams the paper reports are scored (`--all-models` for
     all 24).
   * Each invocation gets its own `_runs/{job}/{run}/`, so two runs of one job
     cannot overwrite each other's record.
@@ -279,7 +279,7 @@ def main(argv=None):
     ap.add_argument("--force", action="store_true", help="re-score even if the output is complete")
     ap.add_argument("--list", action="store_true", help="list tasks and exit")
     ap.add_argument("--all-models", dest="all_models", action="store_true",
-                    help="score every trained head, not just the 21 Table 5 reports")
+                    help="score every trained head, not just the 21 the paper reports")
     ap.add_argument("--verify-against", dest="verify_against", default=None,
                     metavar="SCORES_ROOT",
                     help="after each task, compare its output against the same "

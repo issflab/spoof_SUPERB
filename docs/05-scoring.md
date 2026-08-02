@@ -252,7 +252,7 @@ M-AILABS into MLAAD and check the tables:
 ```bash
 python -m spoof_superb.data.prep.append_mailabs --dry-run
 python -m spoof_superb.data.prep.append_mailabs
-bin/reproduce_table5.sh
+bin/reproduce_main_results.sh
 ```
 
 A `MANIFEST.csv` over the finished tree, if you want one, is generated last by

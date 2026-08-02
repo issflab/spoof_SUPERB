@@ -46,7 +46,7 @@ Lowest priority first. Each layer overrides the one above it.
 # permanent: edit configs/paths.yaml
 
 # just this once:
-SPOOF_SUPERB_SCORES_ROOT=/tmp/experiment bin/reproduce_table5.sh
+SPOOF_SUPERB_SCORES_ROOT=/tmp/experiment bin/reproduce_main_results.sh
 
 # just this run:
 bin/score.sh --cuda_device cuda:1

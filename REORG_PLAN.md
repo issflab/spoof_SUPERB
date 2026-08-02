@@ -1,5 +1,13 @@
 # REORG_PLAN.md — Phase 0 Audit
 
+> **Names in this document are as they were at audit time (2026-07-27) and are
+> deliberately not updated.** Since then: `scripts/recompute_table5_mlaad_v10.py`
+> became `spoof_superb/analysis/recompute_main_results.py`,
+> `tests/baseline_table5.json` became `tests/baseline_main_results_table.json`,
+> and prose that said "Table 5" now says "the main results table", because the
+> paper's table number changes between drafts. This file is a record of the
+> starting state, not a description of the current one.
+
 Read-only audit of `/home/alhashim/ASD_SUPERB/spoof_SUPERB` at commit `b28fd63` (working tree clean).
 No code file was moved, edited, or created for this audit.
 

@@ -428,8 +428,8 @@ them as new columns (`asvspoof2021_DF_full`, `Famous_Figures_full`) alongside
 the published ones rather than overwriting, so the two are directly comparable
 and the delta can be stated.
 
-Missing: nothing converts a raw protocol into a trial list. `bin/reproduce_table5.sh`
-will fail once this lands, correctly; re-capture `tests/baseline_table5.json`
+Missing: nothing converts a raw protocol into a trial list. `bin/reproduce_main_results.sh`
+will fail once this lands, correctly; re-capture `tests/baseline_main_results_table.json`
 only when the new numbers are the intended ones.
 
 ### RP-8  Sweeping every column for the SSL models  [CLOSED 2026-07-28]

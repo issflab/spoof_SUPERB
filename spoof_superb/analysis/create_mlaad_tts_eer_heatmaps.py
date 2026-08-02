@@ -51,7 +51,7 @@ EXPECTED_RETAINED = 431_000
 EXPECTED_BONAFIDE = 584_006
 LOW_SUPPORT = 100
 
-# Table 5 row order, extended with the two models the MLAAD v10 run adds.
+# Main results row order, extended with the two models the MLAAD v10 run adds.
 MODELS = [
     ("FBANK", "fbank"),
     ("APC", "apc"),

@@ -2,7 +2,7 @@
 
 ```bash
 pytest tests/ -q                  # ~16 s, no GPU, no corpora
-RUN_TABLE5=1 pytest tests/ -q     # + the numerical gate (~2m40s, reads ~15 GB)
+RUN_MAIN_RESULTS=1 pytest tests/ -q     # + the numerical gate (~2m40s, reads ~15 GB)
 ```
 
 Run the first after any code change. Run the second after anything touching
@@ -18,7 +18,7 @@ scoring, metrics, or the score-file format.
 | `test_lfcc_frontend.py` | the vendored LFCC front-end reproduces the reference spafe implementation bit-for-bit on real audio |
 | `test_scoring_driver.py` | the parsers and writer behind the merged scoring driver: right-peeled fields, pooled column order, atomic writes, the `.tsv` twin, walk filtering, per-utterance labels, restrict semantics, fp32 default |
 | `test_verification.py` | the two grade policies genuinely differ, and an unusable reference is not our failure |
-| `test_table5_regression.py` | every published EER is unchanged (opt-in) |
+| `test_main_results_regression.py` | every published EER is unchanged (opt-in) |
 
 `test_lfcc_frontend.py` skips rather than fails when its external dependencies
 (a second interpreter with `spafe`, the reference checkout, ASVspoof2019 audio)
@@ -26,8 +26,8 @@ are absent. Unevaluatable is not the same as broken.
 
 ## The numerical gate
 
-`tests/baseline_table5.json` is the output of the Table 5 reproducer captured
-on a known-good tree. `test_table5_regression.py` re-runs the reproducer and
+`tests/baseline_main_results_table.json` is the output of the main-results reproducer captured
+on a known-good tree. `test_main_results_regression.py` re-runs the reproducer and
 diffs every per-model, per-dataset EER, row count and NaN fraction against it at
 **zero tolerance**.
 
@@ -36,7 +36,7 @@ re-inferring, so it is deterministic -- confirmed by two consecutive runs
 producing byte-identical output. Any drift at all means something moved that
 should not have.
 
-It is opt-in via `RUN_TABLE5=1` because a run reads ~15 GB and takes ~2m40s.
+It is opt-in via `RUN_MAIN_RESULTS=1` because a run reads ~15 GB and takes ~2m40s.
 
 ### If the gate fails
 
@@ -50,8 +50,8 @@ Only when you have deliberately re-scored something and the new numbers are the
 intended ones:
 
 ```bash
-python -m spoof_superb.analysis.recompute_table5_mlaad_v10 --out_dir /tmp/t5
-cp /tmp/t5/table5_mlaad_v10.json tests/baseline_table5.json
+python -m spoof_superb.analysis.recompute_main_results --out_dir /tmp/t5
+cp /tmp/t5/main_results.json tests/baseline_main_results_table.json
 ```
 
 Say why in the commit message. Silently refreshing this file defeats its

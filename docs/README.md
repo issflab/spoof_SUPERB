@@ -21,7 +21,7 @@ Read these in order if you are new. Each one stands alone if you are not.
 ```bash
 conda env create -f environment.yaml && conda activate spoof_SUPERB
 $EDITOR configs/paths.yaml        # point it at your data
-bin/reproduce_table5.sh           # regenerate the paper's tables and check them
+bin/reproduce_main_results.sh           # regenerate the paper's tables and check them
 ```
 
 If that last command passes, your installation and your score files are good.

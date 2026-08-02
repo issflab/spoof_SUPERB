@@ -1,6 +1,6 @@
 """Which SSL upstreams the paper reports, and where that list comes from.
 
-24 trained linear heads exist on disk. The paper's main results table -- Table 6,
+24 trained linear heads exist on disk. The paper's main results table --
 ``\\label{tab:results_main}`` in access.tex -- prints 19 of them, plus the two
 non-SSL reference systems. Scoring the other five spends tasks on columns nobody
 reads, and on the two biggest corpora that is hours per model.
@@ -8,7 +8,7 @@ reads, and on the two biggest corpora that is hours per model.
 WHY THE LIST IS EXPLICIT HERE
 -----------------------------
 The first version of this module derived the roster from
-``tests/baseline_table5.json`` on the argument that a hand-kept list would drift
+``tests/baseline_main_results_table.json`` on the argument that a hand-kept list would drift
 from the paper. That argument was right about the risk and wrong about the
 remedy: the baseline had **already** drifted. It carries 21 rows, two of which
 the paper does not print --
@@ -40,9 +40,9 @@ import os
 from spoof_superb import REPO_ROOT
 
 __all__ = ["paper_models", "paper_table_rows", "is_paper_model",
-           "non_paper_models", "TABLE5_BASELINE", "PAPER_TABLE_ROWS"]
+           "non_paper_models", "MAIN_RESULTS_BASELINE", "PAPER_TABLE_ROWS"]
 
-TABLE5_BASELINE = os.path.join(str(REPO_ROOT), "tests", "baseline_table5.json")
+MAIN_RESULTS_BASELINE = os.path.join(str(REPO_ROOT), "tests", "baseline_main_results_table.json")
 
 #: The SSL rows of the paper's main results table, in printed order. The two
 #: non-SSL reference systems (LFCC-GMM, AASIST) are excluded: they are not
@@ -77,16 +77,16 @@ def paper_table_rows():
 @functools.lru_cache(maxsize=None)
 def _slug_by_display(path=None):
     """Table-row display name -> model slug, read from the regression baseline."""
-    path = path or TABLE5_BASELINE
+    path = path or MAIN_RESULTS_BASELINE
     try:
         with open(path) as f:
             results = json.load(f)["results"]
     except FileNotFoundError:
         raise FileNotFoundError(
             f"cannot map the paper's model roster to slugs: {path} is missing. "
-            f"Pass explicit --models, or restore the Table 5 baseline.")
+            f"Pass explicit --models, or restore the main-results baseline.")
     except (KeyError, ValueError) as exc:
-        raise ValueError(f"{path} is not a readable Table 5 baseline: {exc}")
+        raise ValueError(f"{path} is not a readable main-results baseline: {exc}")
     return {name: row["slug"] for name, row in results.items() if row.get("slug")}
 
 
@@ -102,7 +102,7 @@ def paper_models(path=None):
     missing = [n for n in PAPER_TABLE_ROWS if n not in mapping]
     if missing:
         raise ValueError(
-            f"these paper table rows have no slug in {path or TABLE5_BASELINE}: "
+            f"these paper table rows have no slug in {path or MAIN_RESULTS_BASELINE}: "
             f"{missing}. PAPER_TABLE_ROWS and the baseline have diverged.")
     return frozenset(mapping[n] for n in PAPER_TABLE_ROWS)
 

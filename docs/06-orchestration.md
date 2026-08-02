@@ -40,7 +40,7 @@ before executing, so you can always see which won.
 | `--workers` | `WORKERS` | `0` = one per GPU, `1` = sequential | parallel workers. **Not** `--job` -- see below |
 | `--force` | `FORCE="yes"` | flag | re-score even when a complete NaN-free output exists |
 | `--progress` | `PROGRESS` | `auto` `bar` `plain` `none` | live display; see [Watching a run](#watching-a-run) |
-| `--all-models` | `PAPER_ONLY="no"` | flag | score all 24 trained heads, not just the 21 Table 5 reports |
+| `--all-models` | `PAPER_ONLY="no"` | flag | score all 24 trained heads, not just the 21 the paper reports |
 | `--verify-against` | `VERIFY_AGAINST` | path to a score tree | compare each finished column against that tree. Off by default |
 | `--verify-layout` | `VERIFY_LAYOUT` | `legacy` `v2` | layout of the tree above |
 | `--run-name` | `RUN_NAME` | any string | identity for this run; defaults to a timestamp |
@@ -70,7 +70,7 @@ flag is unchanged -- in that context "GMM worker processes" is unambiguous.
 
 ### Only the paper's models are scored by default
 
-24 trained linear heads are on disk. The paper's main results table -- Table 6,
+24 trained linear heads are on disk. The paper's main results table --
 `\label{tab:results_main}` -- prints **19** of them, plus the two non-SSL
 reference systems. Five were trained and scored but never reported:
 
@@ -81,7 +81,7 @@ including the two most expensive corpora.
 
 The roster lives in `spoof_superb/scoring/models.py` as `PAPER_TABLE_ROWS`,
 stated once as the display names the table prints. It is **not** derived from
-`tests/baseline_table5.json`: that file tracks 21 models, two of which
+`tests/baseline_main_results_table.json`: that file tracks 21 models, two of which
 (`FBANK`, `Mockingjay`) the paper does not print, and nothing in it distinguishes
 them. The regression gate deliberately guards more columns than the paper
 reports, so the baseline is not the roster.

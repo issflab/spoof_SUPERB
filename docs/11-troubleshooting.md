@@ -12,7 +12,7 @@
 | `[config] ignoring unknown key 'x'` | Typo in `configs/paths.yaml`. Run `python -m spoof_superb.config` to see what actually loaded. |
 | Config changes have no effect | An environment variable is overriding your YAML. `python -m spoof_superb.config` marks those `[env]`. |
 | A figure landed in an unexpected directory | `create_taxonomy` and `create_SSL_taxonomy` write CWD-relative. Run from the repo root. |
-| Table 5 gate fails after a refactor | Read the printed diff; it names the model, dataset and field. Usually a moved path or a changed parser. |
+| Main-results gate fails after a refactor | Read the printed diff; it names the model, dataset and field. Usually a moved path or a changed parser. |
 | `bin/*.sh` says `interpreter 'python' not found` | Activate the conda environment, or set `SPOOF_SUPERB_PYTHON=/path/to/python`. |
 | Trial counts differ from the paper | You re-derived the trial list from a raw protocol instead of the published score file. Several published sets are subsets whose selection rule is not recorded. Use `--source benchmark`. |
 | Famous Figures scores zero bonafide trials | The `/-/` → `Bonafide` path remap did not apply. Check the corpus layout in [datasets](04-datasets.md). |

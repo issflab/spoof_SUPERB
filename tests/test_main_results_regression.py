@@ -1,15 +1,15 @@
 """
-test_table5_regression.py
+test_main_results_regression.py
 -------------------------
 Contract: the reorganisation must not move a single published number.
 
-tests/baseline_table5.json is the output of
+tests/baseline_main_results_table.json is the output of
 
-    python -m spoof_superb.analysis.recompute_table5_mlaad_v10 --out_dir <tmp>
+    python -m spoof_superb.analysis.recompute_main_results --out_dir <tmp>
 
 captured on the pre-reorg tree at commit 018115d, with that script's own
 "REPRODUCTION GATE (untouched columns)" passing. Every per-model, per-dataset
-EER in the paper's Tables 5 and 6 is in there.
+EER in the paper's two results tables is in there.
 
 This is the gate for the package migration: file moves, import rewrites, and
 the eval/orchestrator merges are all behaviour-preserving refactors, so a fresh
@@ -17,7 +17,7 @@ run must reproduce this payload exactly.
 
 Opt-in, because a run reads ~15 GB of score files off /data and takes minutes:
 
-    RUN_TABLE5=1 pytest tests/test_table5_regression.py
+    RUN_MAIN_RESULTS=1 pytest tests/test_main_results_regression.py
 
 TOL is 0.0 by design. These are deterministic recomputations over fixed score
 files -- not a re-inference -- so any drift at all means something moved that
@@ -34,15 +34,15 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-BASELINE = Path(__file__).resolve().parent / "baseline_table5.json"
-RECOMPUTE = REPO_ROOT / "spoof_superb" / "analysis" / "recompute_table5_mlaad_v10.py"
+BASELINE = Path(__file__).resolve().parent / "baseline_main_results_table.json"
+RECOMPUTE = REPO_ROOT / "spoof_superb" / "analysis" / "recompute_main_results.py"
 
 TOL = 0.0
 
 
 pytestmark = pytest.mark.skipif(
-    os.getenv("RUN_TABLE5") != "1",
-    reason="slow (~minutes, reads ~15 GB); set RUN_TABLE5=1 to run",
+    os.getenv("RUN_MAIN_RESULTS") != "1",
+    reason="slow (~minutes, reads ~15 GB); set RUN_MAIN_RESULTS=1 to run",
 )
 
 
@@ -56,7 +56,7 @@ def fresh_payload():
         # themselves. PYTHONPATH makes that work from any cwd.
         env = dict(os.environ, PYTHONPATH=f"{REPO_ROOT}:{os.environ.get('PYTHONPATH', '')}")
         proc = subprocess.run(
-            [sys.executable, "-m", "spoof_superb.analysis.recompute_table5_mlaad_v10",
+            [sys.executable, "-m", "spoof_superb.analysis.recompute_main_results",
              "--out_dir", td],
             capture_output=True, text=True, cwd=str(REPO_ROOT), env=env,
         )
@@ -64,7 +64,7 @@ def fresh_payload():
             f"reproducer failed rc={proc.returncode}\n"
             f"stdout: {proc.stdout[-3000:]}\nstderr: {proc.stderr[-3000:]}"
         )
-        out = Path(td) / "table5_mlaad_v10.json"
+        out = Path(td) / "main_results.json"
         assert out.is_file(), f"reproducer wrote no {out.name}"
         return json.loads(out.read_text())
 
