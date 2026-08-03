@@ -644,6 +644,32 @@ Each matches the Table 5 composition arithmetic exactly.
 `create_mlaad_tts_eer_heatmaps` to max|d| = 0.000000 across all 11 architecture
 groups, for both models checked.
 
+### Run against v3, 19 models
+
+    acoustic_degradation   6 conditions   4,501,761 rows/model   view 3.7 GB
+    tts_systems           91 systems        431,000 rows/model   view 2.0 GB
+                          + 584,006 shared bonafide
+
+Both views are now on disk under `{scores_root}/views/`, each with a manifest
+recording its sources, per-group row counts and build time.
+
+Two results worth carrying into the paper:
+
+* **Codec compression collapses the ranking.** The four strongest models under
+  the Baseline (XLS-R 8.09, WavLM 8.73, MR-HuBERT 10.30, UniSpeech-SAT 10.55)
+  degrade by +108% to +166%, while the weakest barely move (NPC +4%, VQ-APC
+  +8%). Under codec every model lands between 21% and 36%. Bandwidth reduction
+  does the opposite -- most models IMPROVE slightly.
+* **Autoregressive systems are consistently harder to detect than
+  non-autoregressive**, for 19 of 19 models. Among architecture groups,
+  Flow + LLM is hardest (mean EER 43.69) and LLM -- the largest group, 34
+  systems -- is 40.57.
+
+One bug this surfaced: `_figures` wrote its absolute matrix as
+`eer_by_condition.csv`, the same name the report used, so the figure step
+clobbered the report -- no Model column, no dEER columns, no error. Fixed by
+naming the figure CSVs `figure_*.csv`.
+
 ### Still open
 
 `compute_eer_matrix` and `compute_eer_tts` are not ported. They read the legacy
