@@ -43,7 +43,6 @@ from typing import Dict, List, Optional
 import numpy as np
 import pandas as pd
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
 
 from spoof_superb.core.metrics import compute_eer  # type: ignore
 

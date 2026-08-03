@@ -89,6 +89,8 @@ def apply_sigmoid_and_pool(
     linear_head_dir: str,
     norm_dir: str,
     combined_dir: str,
+    scores_root=None,
+    layout=None,
 ) -> None:
     os.makedirs(norm_dir, exist_ok=True)
     os.makedirs(combined_dir, exist_ok=True)
@@ -100,9 +102,7 @@ def apply_sigmoid_and_pool(
 
         with open(combined_path, "w") as combined_out:
             for dataset in DATASETS:
-                in_path = os.path.join(
-                    linear_head_dir, f"linear_head_{dataset}_{stem}.txt"
-                )
+                in_path = raw_score_path(dataset, stem, linear_head_dir, scores_root, layout)
                 if not os.path.exists(in_path):
                     print(f"    [WARN] missing: linear_head_{dataset}_{stem}.txt")
                     continue
@@ -183,7 +183,7 @@ def main() -> None:
         description="Apply sigmoid normalization to score files and pool by SSL model."
     )
     parser.add_argument(
-        "--linear_head_dir", required=True,
+        "--linear_head_dir", default=None,
         help="Directory containing raw linear_head_<dataset>_<stem>.txt files.",
     )
     parser.add_argument(
@@ -194,7 +194,15 @@ def main() -> None:
         "--out_base", required=True,
         help="Base output directory. Three subdirs will be created here.",
     )
+    parser.add_argument("--scores_root", default=None,
+                        help="score tree to read raw files from, when "
+                             "--linear_head_dir is not given")
+    parser.add_argument("--layout", default=None, choices=("legacy", "v2", "v3"),
+                        help="layout of that tree (default: the configured one)")
     args = parser.parse_args()
+    scores_root = args.scores_root or cfg.scores_root
+    layout = args.layout or getattr(cfg, "score_layout", "legacy")
+
 
     norm_dir     = os.path.join(args.out_base, "linear_head_normalized_scores")
     combined_dir = os.path.join(args.out_base, "normalized_scores_by_ssl_model")
@@ -203,7 +211,8 @@ def main() -> None:
     print("=" * 60)
     print("Step 1+2 — sigmoid + pool linear_head files")
     print("=" * 60)
-    apply_sigmoid_and_pool(args.linear_head_dir, norm_dir, combined_dir)
+    apply_sigmoid_and_pool(args.linear_head_dir, norm_dir, combined_dir,
+                           scores_root, layout)
 
     print()
     print("=" * 60)

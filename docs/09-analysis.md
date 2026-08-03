@@ -13,6 +13,51 @@ python -m spoof_superb.analysis.<name> --help
 Running them by file path (`python spoof_superb/analysis/create_heatmap.py`)
 will fail with `ModuleNotFoundError`.
 
+## Which tree a script reads
+
+Every script that reads RAW score files takes `--scores_root` and `--layout`,
+and resolves paths through `core.scorepath`. Omit them and the configured tree
+is used.
+
+```bash
+python -m spoof_superb.analysis.recompute_main_results \
+    --scores_root /data/ssl_anti_spoofing/spoof_superb_score_files --layout v3
+```
+
+Scripts that read DERIVED views -- the per-condition and per-TTS trees -- take
+an explicit `--*_dir` instead, because a view is a directory somebody built, not
+a path the layout can compute. Those are marked below.
+
+| reads | scripts |
+|---|---|
+| raw score files | `recompute_main_results`, `verify_mlaad_column`, `organize_mlaad_scores`, `build_mlaad_dir_map`, `create_mlaad_tts_eer_heatmaps`, `compare_trees` |
+| raw, then writes a view | `apply_zscore_and_pool`, `apply_sigmoid_and_pool`, `plot_score_distributions` |
+| a view only | `compute_eer_matrix`, `compute_eer_tts`, `compute_far_matrix`, `create_*_heatmaps` |
+| neither (checkpoints, corpus metadata) | `layer_weight_analysis`, `create_combined_mlaad_meta_all` |
+
+The v3 tree currently holds `raw/` only, so the view-consuming scripts have
+nothing to read there yet. They still run against the legacy tree.
+
+## Comparing two score trees
+
+```bash
+python -m spoof_superb.tools.compare_trees \
+    --a /data/ssl_anti_spoofing/asd_superb_score_files   --a-layout legacy \
+    --b /data/ssl_anti_spoofing/spoof_superb_score_files --b-layout v3 \
+    --out outputs/tree_comparison "--a-id-rewrite=-=Bonafide"
+```
+
+Reports, per (dataset, model) cell, whether the two trees differ because they
+scored different utterances or because they assigned different scores to the
+same ones. Only the second is a reproducibility problem, and a single EER delta
+cannot tell them apart -- so the tool computes both trees' EER restricted to the
+utterances they share.
+
+`--a-id-rewrite` renames whole path components before matching. Famous Figures
+needs it: the old tree names the bonafide directory `-`, the new one names it
+`Bonafide`. It is deliberately not automatic -- asserting that two id
+conventions denote the same utterances is a claim the caller makes.
+
 ## The paper's main table
 
 ```bash

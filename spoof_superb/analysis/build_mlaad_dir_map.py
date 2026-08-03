@@ -40,17 +40,19 @@ from pathlib import Path
 
 import pandas as pd
 
+from spoof_superb.analysis import metadata_csv
 from spoof_superb.config import cfg
+from spoof_superb.core.scorefile import read_scored
+from spoof_superb.core.scorepath import available_frontends, mlaad_pool_paths
 
 SCORE_ROOT = Path(cfg.scores_root)
-TSV_DIR = SCORE_ROOT / "linear_head_MLAAD_v10" / "tsv"
 MLAAD_ROOT = Path(f"{cfg.data_root}/MLAAD")
 
-ARCH_CSV = SCORE_ROOT / "mlaad_v10_tts_architecture_groups.csv"
+ARCH_NAME = "mlaad_v10_tts_architecture_groups.csv"
 # `table4` here is a COLUMN NAME in an external CSV (`table4_label_as_printed`),
 # not a reference to a paper table, so it is deliberately not renamed along with
 # the table5 -> main_results sweep. Renaming it would break reading that file.
-PROVENANCE_CSV = SCORE_ROOT / "mlaad_v10_table4_provenance.csv"
+PROVENANCE_NAME = "mlaad_v10_table4_provenance.csv"
 
 DEFAULT_OUT = Path(__file__).resolve().parent / "mlaad_v10_dir_to_system.csv"
 
@@ -99,17 +101,21 @@ def norm(text: str) -> str:
     return re.sub(r"[^a-z0-9]", "", text.lower())
 
 
-def load_utt_index(tsv_path: Path) -> pd.DataFrame:
+def load_utt_index(scores_root, layout, ssl: str) -> pd.DataFrame:
     """Return spoof rows with language / raw_dir columns parsed from utt_id.
 
-    The tsv MUST be read with an explicit tab separator: ~8.6% of utt_ids
-    contain literal spaces (``Cartesia.ai (Sonic-3)``, ``OpenAI TTS-1 HD``).
+    Only the utt_ids are used -- this builds a directory map, not a metric -- so
+    any model's file serves. It is read through ``mlaad_pool_paths`` so that the
+    tab-separated copy is used: ~8.6% of utt_ids contain literal spaces
+    (``Cartesia.ai (Sonic-3)``, ``OpenAI TTS-1 HD``).
     """
-    df = pd.read_csv(tsv_path, sep="\t", dtype=str)
+    paths = mlaad_pool_paths(ssl, scores_root=scores_root, layout=layout)
+    utt, lab, _sc = read_scored(paths)
+    df = pd.DataFrame({"utt_id": utt, "label": lab})
     spoof = df[df["label"] == "spoof"].copy()
     parts = spoof["utt_id"].str.split("/", expand=True)
     if parts.shape[1] != 5:
-        sys.exit(f"FATAL: utt_id does not have 5 segments in {tsv_path}")
+        sys.exit(f"FATAL: utt_id does not have 5 segments in {paths}")
     spoof["language"] = parts[2]
     spoof["raw_dir"] = parts[3]
     return spoof[["utt_id", "language", "raw_dir"]]
@@ -187,28 +193,38 @@ def resolve(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--tsv-dir", type=Path, default=TSV_DIR)
+    parser.add_argument("--scores_root", default=None,
+                        help="score tree to read (default: the configured one)")
+    parser.add_argument("--layout", default=None, choices=("legacy", "v2", "v3"),
+                        help="layout of that tree (default: the configured one)")
     parser.add_argument("--mlaad-root", type=Path, default=MLAAD_ROOT)
-    parser.add_argument("--arch-csv", type=Path, default=ARCH_CSV)
-    parser.add_argument("--provenance-csv", type=Path, default=PROVENANCE_CSV)
+    parser.add_argument("--arch-csv", type=Path, default=None)
+    parser.add_argument("--provenance-csv", type=Path, default=None)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUT)
     args = parser.parse_args()
 
-    tsvs = sorted(args.tsv_dir.glob("*.tsv"))
-    if not tsvs:
-        sys.exit(f"FATAL: no tsv files under {args.tsv_dir}")
-    index = load_utt_index(tsvs[0])
+    scores_root = args.scores_root or cfg.scores_root
+    layout = args.layout or getattr(cfg, "score_layout", "legacy")
+    arch_csv = args.arch_csv or metadata_csv(ARCH_NAME)
+    provenance_csv = args.provenance_csv or metadata_csv(PROVENANCE_NAME)
+
+    models = available_frontends("linear_head", "Multilingual",
+                                 scores_root=scores_root, layout=layout,
+                                 ext=".tsv")
+    if not models:
+        sys.exit(f"FATAL: no MLAAD score files under {scores_root} ({layout})")
+    index = load_utt_index(scores_root, layout, models[0])
     counts = Counter(index["raw_dir"])
     total_spoof = int(sum(counts.values()))
-    print(f"Reference tsv: {tsvs[0].name}")
+    print(f"Reference model: {models[0]}  ({scores_root}, layout={layout})")
     print(f"  spoof rows: {total_spoof}   distinct dirs: {len(counts)}")
 
     if total_spoof != EXPECTED_TOTAL_SPOOF:
         sys.exit(f"FATAL: expected {EXPECTED_TOTAL_SPOOF} spoof rows, got {total_spoof}")
 
-    arch_df = pd.read_csv(args.arch_csv)
+    arch_df = pd.read_csv(arch_csv)
     canonical = arch_df["tts_system"].tolist()
-    prov_df = pd.read_csv(args.provenance_csv)
+    prov_df = pd.read_csv(provenance_csv)
     table4 = dict(
         zip(prov_df["table4_label_as_printed"], prov_df["canonical_name"])
     )

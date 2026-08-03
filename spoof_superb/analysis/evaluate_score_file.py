@@ -8,7 +8,6 @@ import sys
 import pandas as pd
 import yaml
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
 
 from spoof_superb.core.metrics import calculate_EER
 

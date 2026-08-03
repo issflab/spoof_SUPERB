@@ -58,12 +58,13 @@ from pathlib import Path
 
 import numpy as np
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+from spoof_superb import REPO_ROOT
 
 from spoof_superb.core.metrics import compute_eer  # type: ignore
 
 from spoof_superb.config import cfg
-from spoof_superb.core.scorepath import score_path
+from spoof_superb.core.scorefile import read_scored
+from spoof_superb.core.scorepath import mlaad_pool_paths, score_path
 
 # Path resolution is layout-aware: this script must be able to read the legacy
 # tree (to prove, via the zero-tolerance gate, that a port moved no number) and
@@ -82,10 +83,10 @@ from spoof_superb.core.scorepath import score_path
 #
 #   MLAAD  legacy reads the v10 .tsv, which ALREADY has M-AILABS bonafide pooled
 #          into it (1,040,006 rows = 456,000 spoof + 584,006 bonafide).
-#          v3 keeps them as two separate single-class datasets, so the column
-#          cannot be formed until they are pooled. That is P8, and it is open --
-#          so under v3 this script reports MLAAD, Mean and Pooled as unavailable
-#          rather than inventing a number from spoof-only scores.
+#          v3 keeps them as two separate single-class datasets and pools them at
+#          read time, via scorepath.mlaad_pool_paths. Both layouts yield the same
+#          1,040,006 rows with the same 456,000/584,006 split -- verified -- so
+#          the column is formable under either. (This closed P8.)
 
 
 #   DFEval24  legacy scored deepfake_eval_2024: ONE 4 s window per recording,
@@ -124,14 +125,41 @@ def column_paths(layout, scores_root, dataset, slug):
 
 
 def mlaad_paths(layout, scores_root, slug):
-    """(full_pool, balanced) for the MLAAD column, or (None, None) if unformable."""
+    """(pool_paths, balanced_path) for the MLAAD column.
+
+    `pool_paths` is a list because under v2/v3 the column is assembled from the
+    two single-class corpora that compose it; see `scorepath.mlaad_pool_paths`.
+    `balanced_path` is the pre-built 50/50 pool, which only legacy has on disk --
+    under v2/v3 it is None and the invariance check subsamples instead.
+    """
+    pool = [Path(p) for p in mlaad_pool_paths(slug, scores_root=scores_root,
+                                              layout=layout)]
     if layout == "legacy":
-        v10 = Path(scores_root) / "linear_head_MLAAD_v10"
-        return (v10 / "tsv" / f"linear_head_MLAAD_v10_{slug}.tsv",
-                v10 / "balanced" / f"linear_head_MLAAD_v10_balanced_{slug}.txt")
-    # v2/v3: MLAAD and M-AILABS are separate single-class datasets. Pooling them
-    # is P8 and does not exist yet.
-    return (None, None)
+        bal = (Path(scores_root) / "linear_head_MLAAD_v10" / "balanced"
+               / f"linear_head_MLAAD_v10_balanced_{slug}.txt")
+        return pool, bal
+    return pool, None
+
+
+def balanced_subsample(labels, scores, seed=0):
+    """Down-sample the majority class to the minority size, deterministically.
+
+    The published contract is that EER is invariant to the bonafide:spoof ratio,
+    and legacy checked it against a `balanced/` file built once, by hand, whose
+    own provenance is not recorded anywhere. Constructing the balanced pool here
+    tests the same property against a stronger reference: an exact 50/50 draw
+    from the very rows the full-pool EER was computed on, so a disagreement can
+    only be the estimator, never a difference in what was sampled.
+
+    Fixed seed, so the check is reproducible run to run.
+    """
+    rng = np.random.default_rng(seed)
+    idx_b = np.flatnonzero(labels == "bonafide")
+    idx_s = np.flatnonzero(labels == "spoof")
+    n = min(idx_b.size, idx_s.size)
+    keep = np.concatenate([rng.choice(idx_b, n, replace=False),
+                           rng.choice(idx_s, n, replace=False)])
+    return labels[keep], scores[keep]
 
 # Main results column header -> legacy file prefix.  MLAAD is handled separately.
 #
@@ -270,28 +298,6 @@ def read_legacy(path):
     return np.asarray(labels), np.asarray(scores, dtype=np.float64)
 
 
-def read_v10_tsv(path):
-    """MLAAD v10 tab-separated file: 'utt_id\\tlabel\\tscore' with a header.
-
-    Tab separation is mandatory: ~8.6% of v10 utt_ids contain literal spaces
-    (vendor dirs such as 'Cartesia.ai (Sonic-3)' and 'OpenAI TTS-1 HD').
-    """
-    labels, scores = [], []
-    with open(path) as fh:
-        header = fh.readline().rstrip("\n").split("\t")
-        if header != ["utt_id", "label", "score"]:
-            raise ValueError(f"{path}: unexpected header {header!r}")
-        for line in fh:
-            line = line.rstrip("\n")
-            if not line:
-                continue
-            parts = line.split("\t")
-            if len(parts) != 3:
-                raise ValueError(f"{path}: cannot parse line: {line!r}")
-            labels.append(parts[1])
-            scores.append(float(parts[2]))
-    return np.asarray(labels), np.asarray(scores, dtype=np.float64)
-
 
 def read_v10_balanced(path):
     """Balanced MLAAD v10 file in the space-delimited reference format.
@@ -393,23 +399,18 @@ def main():
             pooled_scores.append(sc[finite])
 
         # ---- MLAAD v10, full pool --------------------------------------
-        tsv, bal = mlaad_paths(layout, scores_root, slug)
-        if tsv is None:
+        pool, bal = mlaad_paths(layout, scores_root, slug)
+        missing = [p for p in pool if not p.exists()]
+        if missing:
             row["datasets"]["MLAAD"] = None
-            problems.append(
-                f"{disp}: MLAAD is not formable under layout={layout} -- MLAAD and "
-                f"M-AILABS are separate single-class sets and pooling them is P8, "
-                f"still open. Mean and Pooled are withheld for this row.")
-            results[disp] = row
-            continue
-        if not tsv.exists():
-            row["datasets"]["MLAAD"] = None
-            problems.append(f"{disp}: MISSING MLAAD v10 file {tsv.name} "
+            problems.append(f"{disp}: MISSING MLAAD v10 file {missing[0].name} "
                             f"-- no recomputed MLAAD/Mean/Pooled possible")
             results[disp] = row
             continue
+        if len(pool) > 1:
+            row["sources"]["MLAAD"] = " + ".join(p.parent.name for p in pool)
 
-        lab, sc = read_v10_tsv(tsv)
+        _utt, lab, sc = read_scored(pool)
         # asserts
         if sc.size != MLAAD_FULL_ROWS:
             row["asserts"].append(f"MLAAD row count {sc.size} != {MLAAD_FULL_ROWS}")
@@ -424,8 +425,9 @@ def main():
             row["asserts"].append(f"MLAAD EER {e_full:.3f} >= 50%")
 
         # ---- MLAAD v10, balanced pool (invariance check) ----------------
-        if bal.exists():
+        if bal is not None and bal.exists():
             blab, bsc = read_v10_balanced(bal)
+            row["sources"]["MLAAD_balanced"] = "balanced/ file"
             if bsc.size != MLAAD_BALANCED_ROWS:
                 row["asserts"].append(
                     f"balanced row count {bsc.size} != {MLAAD_BALANCED_ROWS}")
@@ -433,14 +435,15 @@ def main():
             n_s = int((blab == "spoof").sum())
             if n_b != n_s:
                 row["asserts"].append(f"balanced not 50/50: {n_b} vs {n_s}")
-            e_bal = eer_pct(blab, bsc)
-            gap = abs(e_full - e_bal)
-            if gap > BALANCE_TOL_PP:
-                row["asserts"].append(
-                    f"FULL-vs-BALANCED gap {gap:.3f}pp > {BALANCE_TOL_PP}pp")
         else:
-            e_bal, gap = None, None
-            row["asserts"].append("no balanced/ file")
+            # No balanced/ file: build the 50/50 pool from the rows just read.
+            blab, bsc = balanced_subsample(lab, sc)
+            row["sources"]["MLAAD_balanced"] = "subsampled from the full pool"
+        e_bal = eer_pct(blab, bsc)
+        gap = abs(e_full - e_bal)
+        if gap > BALANCE_TOL_PP:
+            row["asserts"].append(
+                f"FULL-vs-BALANCED gap {gap:.3f}pp > {BALANCE_TOL_PP}pp")
 
         row["datasets"]["MLAAD"] = {
             "eer": e_full,

@@ -23,7 +23,6 @@ from typing import Optional
 
 import numpy as np
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
 
 from spoof_superb.core.metrics import compute_eer   # type: ignore
 

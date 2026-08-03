@@ -38,6 +38,9 @@ from pathlib import Path
 
 import numpy as np
 
+from spoof_superb.analysis import raw_score_path
+from spoof_superb.config import cfg
+
 DATASETS = [
     "eval_2019",
     "asvspoof2021_LA",
@@ -91,7 +94,7 @@ TTS_DATASET_MAP = {
 # ---------------------------------------------------------------------------
 # Step 1: compute z-score statistics
 # ---------------------------------------------------------------------------
-def compute_stats(linear_head_dir: str) -> dict:
+def compute_stats(linear_head_dir: str, scores_root=None, layout=None) -> dict:
     """
     Compute mean and std for each (stem, dataset) from raw linear_head files.
     Returns {stem: {dataset: {'mean': float, 'std': float | None, 'degenerate': bool}}}.
@@ -104,7 +107,7 @@ def compute_stats(linear_head_dir: str) -> dict:
     for stem in SSL_STEMS:
         stats[stem] = {}
         for dataset in DATASETS:
-            in_path = os.path.join(linear_head_dir, f"linear_head_{dataset}_{stem}.txt")
+            in_path = raw_score_path(dataset, stem, linear_head_dir, scores_root, layout)
             if not os.path.exists(in_path):
                 done += 1
                 continue
@@ -149,6 +152,8 @@ def apply_zscore_linear_head(
     linear_head_dir: str,
     norm_dir: str,
     stats: dict,
+    scores_root=None,
+    layout=None,
 ) -> None:
     os.makedirs(norm_dir, exist_ok=True)
 
@@ -157,7 +162,7 @@ def apply_zscore_linear_head(
         print(f"\n  {stem}")
 
         for dataset in DATASETS:
-            in_path = os.path.join(linear_head_dir, f"linear_head_{dataset}_{stem}.txt")
+            in_path = raw_score_path(dataset, stem, linear_head_dir, scores_root, layout)
             out_path = os.path.join(norm_dir, f"linear_head_{dataset}_{stem}.txt")
 
             if not os.path.exists(in_path):
@@ -281,13 +286,21 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Apply z-score normalization to score files and pool by SSL model."
     )
-    parser.add_argument("--linear_head_dir", required=True,
+    parser.add_argument("--linear_head_dir", default=None,
                         help="Raw linear_head_{dataset}_{stem}.txt files.")
     parser.add_argument("--tts_dir", required=True,
                         help="Root of scores_by_TTS directory (AR/ and NAR/).")
     parser.add_argument("--out_base", required=True,
                         help="Base output directory.")
+    parser.add_argument("--scores_root", default=None,
+                        help="score tree to read raw files from, when "
+                             "--linear_head_dir is not given")
+    parser.add_argument("--layout", default=None, choices=("legacy", "v2", "v3"),
+                        help="layout of that tree (default: the configured one)")
     args = parser.parse_args()
+    scores_root = args.scores_root or cfg.scores_root
+    layout = args.layout or getattr(cfg, "score_layout", "legacy")
+
 
     norm_dir     = os.path.join(args.out_base, "linear_head_normalized_scores")
     combined_dir = os.path.join(args.out_base, "normalized_scores_by_ssl_model")
@@ -297,7 +310,7 @@ def main() -> None:
     print("=" * 60)
     print("Step 1 — Computing z-score statistics")
     print("=" * 60)
-    stats = compute_stats(args.linear_head_dir)
+    stats = compute_stats(args.linear_head_dir, scores_root, layout)
     os.makedirs(norm_dir, exist_ok=True)
     with open(stats_path, "w") as f:
         json.dump(stats, f, indent=2)
@@ -307,7 +320,8 @@ def main() -> None:
     print("=" * 60)
     print("Step 2 — Applying z-score to linear_head files")
     print("=" * 60)
-    apply_zscore_linear_head(args.linear_head_dir, norm_dir, stats)
+    apply_zscore_linear_head(args.linear_head_dir, norm_dir, stats,
+                             scores_root, layout)
 
     print()
     print("=" * 60)

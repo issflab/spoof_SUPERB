@@ -39,6 +39,11 @@ RECOMPUTE = REPO_ROOT / "spoof_superb" / "analysis" / "recompute_main_results.py
 
 TOL = 0.0
 
+#: The tree the baseline was measured on. The baseline records the PUBLISHED
+#: numbers, so the gate must read the tree those numbers came from, whatever
+#: tree the working config currently points at.
+LEGACY_TREE = "/data/ssl_anti_spoofing/asd_superb_score_files"
+
 
 pytestmark = pytest.mark.skipif(
     os.getenv("RUN_MAIN_RESULTS") != "1",
@@ -55,9 +60,16 @@ def fresh_payload():
         # modules now and no longer inject the repo root into sys.path
         # themselves. PYTHONPATH makes that work from any cwd.
         env = dict(os.environ, PYTHONPATH=f"{REPO_ROOT}:{os.environ.get('PYTHONPATH', '')}")
+        # Pin BOTH the tree and its layout. Pinning only the root left the gate
+        # hermetic by accident: legacy paths were the reproducer's only
+        # behaviour, so the configured score_layout could not affect it. Once
+        # the reproducer became layout-aware and the shipped config moved to v3,
+        # an unpinned gate read the legacy tree through v3 paths and reported
+        # every column missing -- a failure about configuration, not numbers.
         proc = subprocess.run(
             [sys.executable, "-m", "spoof_superb.analysis.recompute_main_results",
-             "--out_dir", td],
+             "--out_dir", td,
+             "--scores_root", LEGACY_TREE, "--layout", "legacy"],
             capture_output=True, text=True, cwd=str(REPO_ROOT), env=env,
         )
         assert proc.returncode == 0, (

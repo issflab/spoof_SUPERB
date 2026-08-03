@@ -5,7 +5,6 @@ from collections import defaultdict
 from pathlib import Path
 import sys
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
 
 from spoof_superb.core.metrics import calculate_EER
 

@@ -223,7 +223,36 @@ order-of-magnitude gap so nobody compares the two by accident.
 
 ---
 
-## P8  MLAAD has no EER until M-AILABS is pooled into it  [OPEN -- blocking]
+## P8  MLAAD has no EER until M-AILABS is pooled into it  [DONE 2026-08-03]
+
+Closed by `scorepath.mlaad_pool_paths`, which returns the score files composing
+the MLAAD column: one pre-pooled tsv under legacy, and the two single-class
+files under v2/v3, concatenated at read time by `scorefile.read_scored`.
+
+Verified by execution -- both layouts yield the same pool:
+
+    legacy  1,040,006 rows   456,000 spoof + 584,006 bonafide   0 NaN
+    v3      1,040,006 rows   456,000 spoof + 584,006 bonafide   0 NaN
+
+and 39,000 utt_ids containing spaces are read intact on both, because the spoof
+half is taken from its tab-separated twin.
+
+Pooling at read time rather than on disk is the better arrangement, and not for
+tidiness: a file that silently contains two corpora cannot be re-pooled at a
+different ratio, cannot have either corpus's row count checked independently,
+and answers "how many MLAAD utterances are there" with the wrong number.
+
+Consumed by `recompute_main_results`, `verify_mlaad_column`,
+`organize_mlaad_scores`, `build_mlaad_dir_map`, `create_mlaad_tts_eer_heatmaps`
+and `tools/compare_trees`. Contracts in `tests/test_score_reading.py` (R3).
+
+The MLAAD column now reproduces the published table from the v3 tree: 20 of 21
+rows match to 3 decimals, AASIST is the single exception (published 21.942 vs
+recomputed 26.336).
+
+---
+
+## P8-original  [superseded by the entry above]
 
 Both are single-class, so neither yields an EER alone:
 
@@ -241,7 +270,23 @@ to exist before that column can be reported.
 
 ---
 
-## P9  The migration comparison reaches only 3 of 12 columns  [OPEN]
+## P9  The migration comparison reaches only 3 of 12 columns  [DONE 2026-08-03]
+
+Resolved by the second option the entry proposed -- explicit per-dataset paths --
+rather than by filling in `scorepath._LEGACY_LINEAR_HEAD` for the nine.
+
+`tools/compare_trees` builds the legacy path for a column itself, from the tree
+it was given, and does the same on the other side through `score_path`. So the
+old tree stays readable without teaching `scorepath` to WRITE nine paths it
+should never write again: the legacy convention is a fact about a tree that
+already exists, not a layout the code should be able to produce.
+
+All 10 benchmark columns now resolve on both sides. Two required normalising an
+id convention rather than a path, which is recorded in P12.
+
+---
+
+## P9-original  [superseded by the entry above]
 
 `score_path(layout="legacy")` raises `KeyError` for nine datasets -- the old tree
 had no single naming convention for them, which `scorepath.py` documents
@@ -289,3 +334,91 @@ Still open there, unchanged by the reorganisation:
   aggregation; FAR has no home in `core/metrics.py`.
 * **RP-5** -- the old score directory holds ~19 GB of duplicated or regenerable
   views. Reorganisation deferred.
+
+---
+
+## P12  Provenance of the published columns  [DONE 2026-08-03 -- record, not a change]
+
+Measured by `tools/compare_trees` over all 10 benchmark columns x 19 paper
+models (190 cells), legacy vs v3. Both levels the comparison needs are
+reported: whether the two trees scored the same UTTERANCES, and whether they
+assigned the same SCORES to the ones they share.
+
+Reproduction is graded on the EER over the SHARED trials, because that is the
+number the paper prints and the only one a reproduction claim is about.
+
+### Result
+
+| column     | reproduce | coverage change | verdict |
+|---|---|---|---|
+| MLAAD      | 19/19 | none            | bit-identical |
+| ASV21 LA   | 18/19 | none            | reproduces |
+| ASVLD      | 17/19 | +430,942 trials | reproduces |
+| SpoofCeleb | 16/19 | none            | reproduces |
+| ASV5 Eval  | 10/19 | none            | mixed |
+| ASV21 DF   |  9/19 | +458,874 trials | mixed |
+| FF         |  3/19 | +1,665 trials   | mostly differs |
+| ASV19 LA   |  0/19 | none            | **does not reproduce** |
+| ITW        |  0/19 | none            | **does not reproduce** |
+| DFEval24   |  0/19 | 1,976 -> 56,481 | not comparable by design |
+
+### What each row means
+
+**MLAAD reproduces exactly.** All 19 cells are bit-identical, and 20 of the 21
+published MLAAD values in `tab:results_main` recompute to 3 decimals from the
+v3 tree. AASIST is the one exception: published 21.942, recomputed 26.336.
+
+**Coverage growth is not divergence.** ASV21 DF, ASVLD and FF grew, and in
+every one of those the old trials are a strict SUBSET of the new (`onlyA = 0`,
+except one FF utterance). Restricted to the shared trials, ASVLD reproduces
+17/19 and ASV21 DF 9/19. The old measurement is recoverable from the new tree;
+the reverse is not.
+
+**DFEval24 is a different measurement, not a broken one.** 1,976 whole-file
+trials versus 56,481 four-second windows, zero overlap by construction. The
+numbers are not comparable and should not be presented as a correction.
+
+**ASV19 LA and In-the-Wild do not reproduce, and coverage does not explain it.**
+Identical trial counts, identical ids, zero label disagreement -- and every one
+of the 38 cells moves. Score correlation runs 0.72-0.95 and the EER moves by up
+to 14.46 pp (ITW/tera). Resampling is ruled out: both corpora are natively
+16 kHz, so RP-1 cannot apply. The pattern is per (dataset, model) cell rather
+than per dataset, which points at the legacy tree having accreted from several
+runs, checkpoints or precisions rather than at a single systematic cause.
+
+**Consequence.** The published ASV19 LA and ITW columns cannot be regenerated
+by the current pipeline. That is a provenance gap in the OLD tree, not a defect
+in the new one -- but it means those two columns have no reproducible source.
+
+### A caveat this surfaced, which matters for the paper
+
+Score agreement and EER agreement are not the same question. Five cells have
+score correlation >= 0.99999 and still move the EER by more than 0.05 pp;
+SpoofCeleb/tera moves 4.15 pp on a maximum score difference of 0.043. Those are
+models operating near chance, where the DET curve is flat at the crossing point
+and a hair's movement reorders many trials.
+
+Reporting a three-decimal EER for a model that cannot separate the classes
+implies a precision that is not there. The `groups_mean_gt_50` and AUC
+reporting already in `create_mlaad_tts_eer_heatmaps` makes the same point for
+MLAAD.
+
+### Reproducing this record
+
+    python -m spoof_superb.tools.compare_trees \
+        --a /data/ssl_anti_spoofing/asd_superb_score_files   --a-layout legacy \
+        --b /data/ssl_anti_spoofing/spoof_superb_score_files --b-layout v3 \
+        --out outputs/tree_comparison "--a-id-rewrite=-=Bonafide"
+
+Two id conventions had to be reconciled first, and neither is a score
+difference:
+
+* Famous Figures records ABSOLUTE paths in the old tree and corpus-relative
+  ones in the new. Stripped automatically -- a shared absolute prefix is
+  detectable, and relative ids are never touched.
+* Famous Figures names the bonafide directory `-` in the old tree and
+  `Bonafide` in the new. NOT automatic: asserting that two conventions denote
+  the same utterances is a claim the caller makes, so it is a command-line flag.
+
+Without the second, the FF intersection is all-spoof and every FF cell reports
+"not comparable" -- true, but it hides that the spoof half matched perfectly.

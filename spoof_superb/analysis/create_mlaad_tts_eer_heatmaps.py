@@ -39,11 +39,13 @@ import seaborn as sns
 
 from spoof_superb.core.metrics import compute_eer  # noqa: E402
 
+from spoof_superb.analysis import metadata_csv
 from spoof_superb.config import cfg
+from spoof_superb.core.scorefile import read_scored
+from spoof_superb.core.scorepath import mlaad_pool_paths
 
 SCORE_ROOT = Path(cfg.scores_root)
-TSV_DIR = SCORE_ROOT / "linear_head_MLAAD_v10" / "tsv"
-ARCH_CSV = SCORE_ROOT / "mlaad_v10_tts_architecture_groups.csv"
+ARCH_NAME = "mlaad_v10_tts_architecture_groups.csv"
 DIR_MAP = Path(__file__).resolve().parent / "mlaad_v10_dir_to_system.csv"
 DEFAULT_OUT = Path(__file__).resolve().parent.parent / "outputs" / "figures_mlaad_tts"
 
@@ -77,8 +79,34 @@ MODELS = [
     ("MAE-AST-FRAME", "mae_ast_frame"),
 ]
 
-# After FBANK; after the generative block; after the discriminative block.
-SEPARATOR_ROWS = [1, 8, 20]
+#: Pretraining family of each row, in MODELS order. The heatmap draws a rule
+#: wherever this changes.
+#:
+#: This used to be `SEPARATOR_ROWS = [1, 8, 20]` -- the boundaries as ROW
+#: INDICES into the 22-model list above. That is correct only while every one of
+#: those 22 models is present, and the v3 tree scores the 19 paper models, so
+#: the rules would have been drawn across the middle of a family without any
+#: error. Naming each row's family instead makes the boundaries follow whatever
+#: subset is actually plotted.
+FAMILY = {
+    "FBANK": "baseline",
+    "APC": "generative", "VQ-APC": "generative", "NPC": "generative",
+    "Mockingjay-960h": "generative", "AudioALBERT-960h": "generative",
+    "TERA": "generative", "DeCoAR 2.0": "generative",
+    "Modified CPC": "discriminative", "wav2vec": "discriminative",
+    "wav2vec 2.0 Base": "discriminative", "wav2vec 2.0 Large": "discriminative",
+    "HuBERT Base": "discriminative", "HuBERT Large": "discriminative",
+    "MR-HuBERT": "discriminative", "XLS-R": "discriminative",
+    "UniSpeech-SAT": "discriminative", "Data2Vec": "discriminative",
+    "WAVLABLM": "discriminative", "WavLM Large": "discriminative",
+    "SSAST": "spectrogram", "MAE-AST-FRAME": "spectrogram",
+}
+
+
+def separator_rows(displays):
+    """Row indices where the pretraining family changes, for the rows plotted."""
+    return [i for i in range(1, len(displays))
+            if FAMILY.get(displays[i]) != FAMILY.get(displays[i - 1])]
 
 MODE_LABEL = {"AR": "AR", "NAR": "NAR", "unknown": "Closed / Undisclosed"}
 MODE_ORDER = ["AR", "NAR", "Closed / Undisclosed"]
@@ -96,14 +124,19 @@ def auc_bonafide_vs_spoof(bonafide: np.ndarray, spoof: np.ndarray) -> float:
     return float((ranks[:n_b].sum() - n_b * (n_b + 1) / 2) / (n_b * n_s))
 
 
-def load_model_scores(tsv_path: Path, dir_map: pd.DataFrame) -> tuple[np.ndarray, pd.DataFrame]:
+def load_model_scores(scores_root, layout, slug: str,
+                      dir_map: pd.DataFrame) -> tuple[np.ndarray, pd.DataFrame]:
     """Return (pooled bonafide scores, retained spoof rows with canonical_system).
 
-    The tab separator is mandatory: ~8.6% of utt_ids contain literal spaces.
+    The MLAAD pool is one file under legacy and two under v2/v3; either way the
+    spoof half is read from its tab-separated copy, which is mandatory because
+    ~8.6% of utt_ids contain literal spaces.
     """
-    df = pd.read_csv(tsv_path, sep="\t")
+    paths = mlaad_pool_paths(slug, scores_root=scores_root, layout=layout)
+    utt, lab, sc = read_scored(paths)
+    df = pd.DataFrame({"utt_id": utt, "label": lab, "score": sc})
     if df["score"].isna().any():
-        sys.exit(f"FATAL: NaN scores in {tsv_path}")
+        sys.exit(f"FATAL: NaN scores in {paths}")
 
     bonafide = df.loc[df["label"] == "bonafide", "score"].to_numpy(dtype=float)
     spoof = df[df["label"] == "spoof"].copy()
@@ -111,11 +144,11 @@ def load_model_scores(tsv_path: Path, dir_map: pd.DataFrame) -> tuple[np.ndarray
 
     merged = spoof.merge(dir_map, on="raw_dir", how="left", validate="many_to_one")
     if merged["canonical_system"].isna().any():
-        sys.exit("FATAL: unmapped directories in " + tsv_path.name)
+        sys.exit(f"FATAL: unmapped directories in {paths}")
     retained = merged[merged["canonical_system"] != "EXCLUDED"]
 
-    assert len(bonafide) == EXPECTED_BONAFIDE, f"{tsv_path.name}: {len(bonafide)} bonafide"
-    assert len(retained) == EXPECTED_RETAINED, f"{tsv_path.name}: {len(retained)} spoof"
+    assert len(bonafide) == EXPECTED_BONAFIDE, f"{slug}: {len(bonafide)} bonafide"
+    assert len(retained) == EXPECTED_RETAINED, f"{slug}: {len(retained)} spoof"
     return bonafide, retained[["canonical_system", "score"]]
 
 
@@ -183,7 +216,7 @@ def plot_heatmap(
     ax.tick_params(axis="x", labelsize=xtick_size, rotation=xtick_rotation)
 
     xlim = ax.get_xlim()
-    for y in SEPARATOR_ROWS + [len(df)]:
+    for y in separator_rows(list(df.index)) + [len(df)]:
         ax.hlines(y, *xlim, colors="black", linewidth=1.2)
 
     plt.tight_layout()
@@ -194,16 +227,21 @@ def plot_heatmap(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--tsv-dir", type=Path, default=TSV_DIR)
+    parser.add_argument("--scores_root", default=None,
+                        help="score tree to read (default: the configured one)")
+    parser.add_argument("--layout", default=None, choices=("legacy", "v2", "v3"),
+                        help="layout of that tree (default: the configured one)")
     parser.add_argument("--dir-map", type=Path, default=DIR_MAP)
-    parser.add_argument("--arch-csv", type=Path, default=ARCH_CSV)
+    parser.add_argument("--arch-csv", type=Path, default=None)
     parser.add_argument("--out-dir", type=Path, default=DEFAULT_OUT)
     args = parser.parse_args()
 
+    scores_root = args.scores_root or cfg.scores_root
+    layout = args.layout or getattr(cfg, "score_layout", "legacy")
     args.out_dir.mkdir(parents=True, exist_ok=True)
 
     dir_map = pd.read_csv(args.dir_map)[["raw_dir", "canonical_system"]]
-    arch = pd.read_csv(args.arch_csv)
+    arch = pd.read_csv(args.arch_csv or metadata_csv(ARCH_NAME))
     arch_group = dict(zip(arch["tts_system"], arch["architecture_group"]))
     mode_group = dict(zip(arch["tts_system"], arch["ar_nar"].map(MODE_LABEL)))
     voc_group = dict(zip(arch["tts_system"], arch["vocoder_family"]))
@@ -215,13 +253,20 @@ def main() -> None:
         "vocoder": {},
     }
     support: dict[str, int] = {}
+    skipped: list[str] = []
 
     for display, slug in MODELS:
-        tsv_path = args.tsv_dir / f"linear_head_MLAAD_v10_{slug}.tsv"
-        if not tsv_path.is_file():
-            sys.exit(f"FATAL: missing {tsv_path}")
-        print(f"[{display}] {tsv_path.name}")
-        bonafide, spoof = load_model_scores(tsv_path, dir_map)
+        paths = [Path(p) for p in mlaad_pool_paths(slug, scores_root=scores_root,
+                                                   layout=layout)]
+        absent = [p for p in paths if not p.is_file()]
+        if absent:
+            # Not fatal: a tree legitimately holds a subset of the roster (the
+            # v3 tree scores the paper's 19 models, not all 22). Exiting here
+            # made one absent model suppress the whole figure.
+            skipped.append(f"{display} ({absent[0].name})")
+            continue
+        print(f"[{display}] {slug}")
+        bonafide, spoof = load_model_scores(scores_root, layout, slug, dir_map)
         system = spoof["canonical_system"]
 
         if not support:
@@ -279,7 +324,10 @@ def main() -> None:
     for key, stem, title, expected_cols, style in figures:
         df = pd.DataFrame(results[key]).T
         df.index.name = "Model"
-        df = df.reindex([d for d, _ in MODELS])
+        # Order by the roster, but keep only models this tree actually scored:
+        # reindexing to the full roster would re-add the skipped models as
+        # all-NaN rows, giving blank bands in the figure and NaN rows in the CSV.
+        df = df.reindex([d for d, _ in MODELS if d in df.index])
 
         if expected_cols is not None:
             defined = list(expected_cols)
@@ -325,9 +373,12 @@ def main() -> None:
     summary_df = pd.DataFrame(summary)
     summary_df.to_csv(args.out_dir / "figure_summary.csv", index=False)
     print("\n" + summary_df.to_string(index=False))
+    if skipped:
+        print(f"\nNot scored on this tree, omitted from the figures "
+              f"({len(skipped)}): {', '.join(skipped)}")
     print(
         f"\n✅ STEP 4 — {args.out_dir} — 4 heatmaps + 4 EER CSVs, "
-        f"{len(MODELS)} SSL models, {len(support)} systems, "
+        f"{len(MODELS) - len(skipped)} SSL models, {len(support)} systems, "
         f"{EXPECTED_RETAINED} spoof vs {EXPECTED_BONAFIDE} pooled bonafide utts"
     )
 
