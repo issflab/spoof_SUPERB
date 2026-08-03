@@ -1,0 +1,95 @@
+tts_system,ar_nar,detailed_group,architecture_group,vocoder,vocoder_family
+Azzurra-Voice,AR,Transformer + LLM,LLM,Mimi,Mimi
+Bark,AR,Transformer + LLM,LLM,EnCodec,EnCodec
+Capacitron,AR,RNN,RNN,WaveNet,WaveNet
+CaroTTS,NAR,Transformer,Transformer,HiFi-GAN,HiFi-GAN
+Cartesia-Sonic,unknown,Commercial,Commercial,unknown,unknown
+Chatterbox,AR,Transformer + Flow + LLM,Flow + LLM,HiFTNet (HiFi-GAN),HiFTNet
+ChatTTS,AR,Transformer + LLM,LLM,Vocos,Vocos
+DeepGram,unknown,Commercial,Commercial,unknown,unknown
+Dual-AR,AR,Transformer + LLM,LLM,Firefly-GAN (FF-GAN),Firefly-GAN
+E2-TTS,NAR,Transformer + Flow,Flow,BigVGAN,BigVGAN
+Edge-TTS,unknown,Commercial,Commercial,unknown,unknown
+ElevenLabs,unknown,Commercial,Commercial,unknown,unknown
+F5-TTS,NAR,Transformer + Flow,Flow,Vocos,Vocos
+FastPitch,NAR,Transformer,Transformer,WaveGlow,WaveGlow
+FireRedTTS,AR,Transformer + Flow + LLM,Flow + LLM,"super-resolution neural vocoder (AudioSR-based, unnamed)",unknown
+FishTTS,AR,Transformer + LLM,LLM,Firefly-GAN (FF-GAN),Firefly-GAN
+Gemini-TTS,unknown,Commercial,Commercial,unknown,unknown
+GLM-TTS,AR,Transformer + Flow + LLM,Flow + LLM,Vocos2D,Vocos
+GlowTTS,NAR,Transformer + Flow,Flow,WaveGlow,WaveGlow
+Higgs-Audio-V2,AR,Transformer + LLM,LLM,higgs-audio-v2 unified audio tokenizer (decoder),Higgs-Audio tokenizer
+Index-TTS,AR,Transformer + LLM,LLM,BigVGAN2,BigVGAN
+IndicF5,NAR,Transformer + Flow,Flow,Vocos,Vocos
+Indri-TTS,AR,Transformer + LLM,LLM,Mimi,Mimi
+Jenny,NAR,Transformer + Flow,Flow,HiFi-GAN (integrated VITS decoder),HiFi-GAN
+Kani-TTS,AR,Transformer + LLM,LLM,NVIDIA NanoCodec,NanoCodec
+Kitten-TTS,unknown,Unknown,Unknown,unknown,unknown
+Kokoro,NAR,RNN + Transformer,Transformer,iSTFTNet,iSTFTNet
+KugelAudio,AR,Transformer + Diffusion + LLM,Diffusion + LLM,VibeVoice continuous acoustic tokenizer (VAE) decoder,VibeVoice tokenizer
+Kyutai-TTS,AR,Transformer + LLM,LLM,Mimi (finetuned),Mimi
+LFM2.5-Audio,AR,Transformer + LLM,LLM,LFM audio detokenizer (Mimi in LFM2-Audio),Mimi
+Llasa,AR,Transformer + LLM,LLM,X-codec2 decoder (Vocos-style iSTFT head),X-Codec2
+LongCat-AudioDiT,NAR,Transformer + Flow,Flow,Wav-VAE decoder (no separate vocoder),VAE decoder
+LuxTTS,NAR,Transformer + Flow,Flow,"unknown (48 kHz neural vocoder, unnamed)",unknown
+Magpie-TTS,AR,Transformer,Transformer,NanoCodec,NanoCodec
+Mars5,AR,Transformer + Diffusion,Diffusion,EnCodec,EnCodec
+MatchaTTS,NAR,Transformer + Flow,Flow,HiFi-GAN,HiFi-GAN
+Maya1-TTS,AR,Transformer + LLM,LLM,SNAC,SNAC
+MegaTTS3,NAR,Transformer + Diffusion + Flow,Diffusion + Flow,WaveVAE decoder (HiFi-GAN-style wave decoder),HiFi-GAN
+MeloTTS,NAR,Transformer + Flow,Flow,HiFi-GAN (VITS decoder),HiFi-GAN
+Metavoice-1B,AR,Transformer + LLM,LLM,Multi-band diffusion + EnCodec decoder,EnCodec
+Ming-omni-tts,AR,Transformer + LLM,LLM,"unknown (CosyVoice-style audio detokenizer, not named in paper)",unknown
+MiniCPM-o-2.6,AR,Transformer + LLM,LLM,unknown (ChatTTS-200M speech decoder),unknown
+MiniMax-Speech,AR,Transformer + Flow,Flow,Flow-VAE decoder,VAE decoder
+MiraTTS,AR,Transformer + LLM,LLM,BiCodec,BiCodec
+MOSS-TTS,AR,Transformer + LLM,LLM,MOSS-Audio-Tokenizer decoder (causal-transformer RVQ-GAN),MOSS-Audio-Tokenizer
+Nari-Dia,AR,Transformer,Transformer,Descript Audio Codec (DAC),DAC
+NeuralHMM,AR,RNN,RNN,WaveGlow,WaveGlow
+NeuTTS,AR,Transformer + LLM,LLM,NeuCodec,NeuCodec
+OmniVoice,NAR,Transformer + Diffusion,Diffusion,Higgs-Audio tokenizer decoder,Higgs-Audio tokenizer
+OpenAI-TTS-1-HD,unknown,Commercial,Commercial,unknown,unknown
+OpenAudio-S1-Mini,AR,Transformer + LLM,LLM,Firefly-GAN (FF-GAN),Firefly-GAN
+OpenVoiceV2,NAR,Transformer + Flow,Flow,HiFi-GAN,HiFi-GAN
+Optispeech,NAR,CNN,CNN,WaveNeXt (Vocos/ConvNeXt-style iSTFT head),WaveNeXt
+Orpheus-TTS,AR,Transformer + LLM,LLM,SNAC,SNAC
+OuteTTS,AR,Transformer + LLM,LLM,DAC (WavTokenizer in v0.1-0.3),WavTokenizer
+Overflow,AR,RNN + Flow,Flow,HiFi-GAN,HiFi-GAN
+Parler-TTS,AR,Transformer + LLM,LLM,"DAC (Descript Audio Codec, 44.1 kHz)",DAC
+PocketTTS,AR,Transformer + Diffusion,Diffusion,Mimi-based VAE decoder,Mimi
+Qwen2.5-Omni,AR,Transformer + Flow + LLM,Flow + LLM,modified BigVGAN (via flow-matching DiT code-to-mel),BigVGAN
+Qwen3-Omni,AR,Transformer + LLM,LLM,Code2Wav (lightweight causal ConvNet),Code2Wav
+Raon-OpenTTS,NAR,Transformer + Flow,Flow,HiFi-GAN,HiFi-GAN
+Resemble-AI,unknown,Commercial,Commercial,unknown,unknown
+Ringg-Squirrel-TTS,unknown,Commercial,Commercial,unknown,unknown
+RVC,NAR,Transformer + Flow,Flow,NSF-HiFiGAN (VITS decoder),NSF-HiFiGAN
+Sesame-CSM-1B,AR,Transformer + LLM,LLM,Mimi,Mimi
+SopranoTTS,AR,Unknown,Unknown,Vocos,Vocos
+SoulX-Podcast,AR,Transformer + Flow + LLM,Flow + LLM,unknown,unknown
+Spark-TTS,AR,Transformer + LLM,LLM,BiCodec,BiCodec
+SpeechT5,AR,Transformer,Transformer,HiFi-GAN,HiFi-GAN
+SpeedySpeech,NAR,CNN,CNN,MelGAN,MelGAN
+Step-Audio-EditX,AR,Transformer + Flow + LLM,Flow + LLM,BigVGANv2,BigVGAN
+StyleTTS2,NAR,RNN + Transformer + Diffusion,Diffusion,HiFi-GAN / iSTFTNet decoder (integrated),HiFi-GAN
+Supertonic,NAR,Transformer + Flow,Flow,Vocos-style latent decoder (speech autoencoder),Vocos
+SvaraTTS,AR,Transformer + LLM,LLM,SNAC,SNAC
+Tacotron,AR,RNN,RNN,Griffin-Lim,Griffin-Lim
+Tacotron2,AR,RNN,RNN,WaveNet,WaveNet
+TADA,AR,Transformer + Flow + LLM,Flow + LLM,"TADA VAE decoder (Transformer + CNN, GAN-trained; no separate vocoder)",VAE decoder
+Tortoise,AR,Transformer + Diffusion + LLM,Diffusion + LLM,UnivNet,UnivNet
+Veena,AR,Transformer + LLM,LLM,SNAC,SNAC
+VibeVoice,AR,Transformer + Diffusion + LLM,Diffusion + LLM,VibeVoice sigma-VAE acoustic tokenizer decoder,VibeVoice tokenizer
+VieNeu-TTS,AR,Transformer + LLM,LLM,NeuCodec (v3 Turbo: MOSS-Audio-Tokenizer-Nano),NeuCodec
+VITS,NAR,Transformer + Flow,Flow,HiFi-GAN (integrated decoder),HiFi-GAN
+VITS-MMS,NAR,Transformer + Flow,Flow,HiFi-GAN (integrated decoder),HiFi-GAN
+VITS2,NAR,Transformer + Flow,Flow,HiFi-GAN (integrated decoder),HiFi-GAN
+VixTTS,AR,Transformer + LLM,LLM,HiFi-GAN,HiFi-GAN
+VoiceCore,AR,Transformer + LLM,LLM,SNAC,SNAC
+VoxCPM,AR,Transformer + Flow + LLM,Flow + LLM,"causal audio VAE decoder (DAC-style causal CNN, 25 Hz latents)",DAC
+Voxtral,unknown,Transformer,Transformer,-,-
+VoXtream,AR,Transformer + LLM,LLM,Mimi,Mimi
+WhisperSpeech,AR,Transformer,Transformer,Vocos (EnCodec tokens),EnCodec
+XTTS,AR,Transformer + LLM,LLM,HiFi-GAN,HiFi-GAN
+YarnGPT,AR,Transformer + LLM,LLM,WavTokenizer,WavTokenizer
+ZipVoice,NAR,Transformer + Flow,Flow,Vocos,Vocos
+Zonos,AR,Transformer + LLM,LLM,DAC (Descript Audio Codec),DAC

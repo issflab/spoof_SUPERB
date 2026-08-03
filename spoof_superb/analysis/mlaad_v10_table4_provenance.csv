@@ -1,0 +1,106 @@
+table4_label_as_printed,canonical_name,disposition,note
+Azzurra-Voice,Azzurra-Voice,kept,
+Bark,Bark,kept,
+Capacitron,Capacitron,kept,
+CaroTTS,CaroTTS,kept,
+Cartesia.ai (Sonic-3),Cartesia-Sonic,kept,renamed to canonical form
+Chatterbox,Chatterbox,kept,
+ChatTTS,ChatTTS,kept,
+DeepGram,DeepGram,kept,
+Dual-AR,Dual-AR,kept,
+E2 TTS,E2-TTS,kept,renamed to canonical form
+Edge-TTS,Edge-TTS,kept,
+ElevenLabs,ElevenLabs,kept,
+F5 TTS,F5-TTS,merged,one of 2 Table IV labels merged into F5-TTS
+F5-TTS,F5-TTS,merged,one of 2 Table IV labels merged into F5-TTS
+FastPitch,FastPitch,kept,
+FireRedTTS,FireRedTTS,kept,
+FishTTS,FishTTS,kept,
+Gemini,Gemini-TTS,kept,renamed to canonical form
+GLM-TTS,GLM-TTS,kept,
+GlowTTS,GlowTTS,kept,
+Higgs-Audio-V2,Higgs-Audio-V2,kept,
+Index-TTS,Index-TTS,kept,
+IndicF5,IndicF5,kept,
+Indri-TTS-0.1,Indri-TTS,kept,renamed to canonical form
+Jenny,Jenny,kept,
+Kani-TTS,Kani-TTS,kept,
+Kitten-TTS,Kitten-TTS,kept,
+Kokoro,Kokoro,kept,
+KugelAudio,KugelAudio,kept,
+Kyutai-TTS,Kyutai-TTS,kept,
+LFM2.5-Audio,LFM2.5-Audio,kept,
+Llasa,Llasa,kept,
+LongCat-AudioDiT,LongCat-AudioDiT,kept,
+LuxTTS,LuxTTS,kept,
+NVidia Magpie-TTS,Magpie-TTS,kept,renamed to canonical form
+Mars5,Mars5,kept,
+MatchaTTS,MatchaTTS,kept,
+Maya1 TTS,Maya1-TTS,kept,renamed to canonical form
+MegaTTS3,MegaTTS3,kept,
+MeloTTS,MeloTTS,kept,
+Metavoice-1B,Metavoice-1B,kept,
+Ming-omni-tts,Ming-omni-tts,kept,
+MiniCPM-o-2.6,MiniCPM-o-2.6,kept,
+MiniMax-Speech,MiniMax-Speech,merged,one of 2 Table IV labels merged into MiniMax-Speech
+minimax/speech-02,MiniMax-Speech,merged,one of 2 Table IV labels merged into MiniMax-Speech
+MiraTTS,MiraTTS,kept,
+MOSS-TTS,MOSS-TTS,kept,
+Nari Dia-1.6B,Nari-Dia,merged,one of 2 Table IV labels merged into Nari-Dia
+Nari Dia2,Nari-Dia,merged,one of 2 Table IV labels merged into Nari-Dia
+NeuralHMM,NeuralHMM,kept,
+NeuTTS,NeuTTS,merged,one of 2 Table IV labels merged into NeuTTS
+NeuTTS-Air,NeuTTS,merged,one of 2 Table IV labels merged into NeuTTS
+OmniVoice,OmniVoice,kept,
+OpenAI TTS-1 HD,OpenAI-TTS-1-HD,kept,renamed to canonical form
+Openaudio-S1-Mini,OpenAudio-S1-Mini,kept,renamed to canonical form
+OpenVoiceV2,OpenVoiceV2,kept,
+Optispeech,Optispeech,kept,
+Orpheus TTS v0.1,Orpheus-TTS,kept,renamed to canonical form
+OuteTTS,OuteTTS,kept,
+Overflow,Overflow,kept,
+Parler TTS,Parler-TTS,kept,renamed to canonical form
+PocketTTS,PocketTTS,kept,
+Qwen2.5-Omni,Qwen2.5-Omni,kept,
+Qwen3-Omni,Qwen3-Omni,kept,
+Raon-OpenTTS,Raon-OpenTTS,kept,
+"Resemble.ai (April 12th, 2025)",Resemble-AI,kept,renamed to canonical form
+Ringg Squirrel TTS,Ringg-Squirrel-TTS,kept,renamed to canonical form
+RVC,RVC,kept,
+Sesame CSM 1B,Sesame-CSM-1B,merged,one of 2 Table IV labels merged into Sesame-CSM-1B
+Sesame CSM-1B,Sesame-CSM-1B,merged,one of 2 Table IV labels merged into Sesame-CSM-1B
+Soprano11,SopranoTTS,merged,one of 2 Table IV labels merged into SopranoTTS
+SopranoTTS,SopranoTTS,merged,one of 2 Table IV labels merged into SopranoTTS
+SoulX-Podcast,SoulX-Podcast,kept,
+Spark TTS,Spark-TTS,kept,renamed to canonical form
+SpeechT5,SpeechT5,kept,
+Speedy Speech,SpeedySpeech,kept,renamed to canonical form
+Step-Audio-EditX,Step-Audio-EditX,kept,
+StyleTTS 2,StyleTTS2,kept,renamed to canonical form
+Supertonic,Supertonic,kept,
+SvaraTTS v1,SvaraTTS,kept,renamed to canonical form
+Tacotron,Tacotron,kept,
+Tacotron 2,Tacotron2,kept,renamed to canonical form
+TADA,TADA,kept,
+Tortoise,Tortoise,kept,
+Veena,Veena,kept,
+Microsoft VibeVoice,VibeVoice,kept,renamed to canonical form
+VieNeu-TTS,VieNeu-TTS,kept,
+VITS,VITS,merged,one of 2 Table IV labels merged into VITS
+VITS Neon,VITS,merged,one of 2 Table IV labels merged into VITS
+VITS-MMS,VITS-MMS,kept,
+VITS2,VITS2,kept,
+VixTTS,VixTTS,kept,
+VoiceCore,VoiceCore,kept,
+VoxCPM,VoxCPM,merged,one of 2 Table IV labels merged into VoxCPM
+VoxCPM-1.5,VoxCPM,merged,one of 2 Table IV labels merged into VoxCPM
+Voxtral,Voxtral,kept,
+VoXtream,VoXtream,merged,one of 2 Table IV labels merged into VoXtream
+Voxtream,VoXtream,merged,one of 2 Table IV labels merged into VoXtream
+WhisperSpeech,WhisperSpeech,kept,
+XTTS v1.1,XTTS,merged,one of 2 Table IV labels merged into XTTS
+XTTS v2,XTTS,merged,one of 2 Table IV labels merged into XTTS
+YarnGPT,YarnGPT,kept,
+ZipVoice,ZipVoice,kept,
+ZonosTTS v0.1,Zonos,kept,renamed to canonical form
+Griffin Lim,,excluded,"vocoder / phase-reconstruction algorithm, not a TTS system"

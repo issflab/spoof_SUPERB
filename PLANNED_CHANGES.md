@@ -425,10 +425,42 @@ Without the second, the FF intersection is all-spoof and every FF cell reports
 
 ---
 
-## P11  Analysis views for the v3 tree  [PROPOSAL -- needs decision before anything is created]
+## P11  Analysis views for the v3 tree  [DONE 2026-08-03 -- D1-D7, D9 approved; D8 dropped]
 
-Nothing has been created. `/data/ssl_anti_spoofing/spoof_superb_score_files`
-still holds `raw/` and `_runs/` only.
+Approved as proposed, less D8: normalised scores are not used, so no normalised
+view exists and `apply_zscore_and_pool`, `apply_sigmoid_and_pool` and
+`compute_eer_tts` stay legacy-only.
+
+**Nothing has been written to the score tree.** It still holds `raw/` and
+`_runs/` only. The builder defaults to writing beside `raw/`, but every run so
+far used `--out_root` to a scratch directory or `--dry-run`. Building into the
+score tree is a one-line command whenever you want it.
+
+Shipped: `analysis/views.py` (the registry and `load_view`) and
+`tools/build_view.py` (the materialiser). Contracts in `tests/test_views.py`
+(V0-V5), 22 tests.
+
+Verified by execution against v3, per model:
+
+    asvld_conditions   29 groups   2,065,873 rows   2 levels
+    mlaad_language     54 groups     456,000 rows   1 level   + 584,006 bonafide
+    mlaad_tts          91 groups     431,000 rows   2 levels  + 584,006 bonafide
+
+The MLAAD counts match `organize_mlaad_scores`' asserts exactly (431,000
+retained, 25,000 excluded, 584,006 bonafide, 91 systems, 54 languages), and the
+ASVLD view is a LOSSLESS PARTITION: concatenating all 29 groups and sorting
+gives a file byte-identical to the raw score file. No row invented, none lost.
+
+utt_ids containing spaces survive the round trip -- `Cartesia.ai (Sonic-3)` is
+written and read back intact, because views hold the same canonical format raw
+does rather than inventing one.
+
+Two corpus metadata CSVs moved from the score tree into the repo, beside the
+`mlaad_v10_dir_to_system.csv` that was already there:
+`mlaad_v10_tts_architecture_groups.csv` and `mlaad_v10_table4_provenance.csv`.
+They describe the corpus, not any model's scores, and keeping them in the score
+tree meant they vanished the moment you pointed the tools at a different one --
+which is exactly how the `mlaad_tts` view failed on first run.
 
 ### What the legacy tree did, and what it cost
 
@@ -447,31 +479,75 @@ recompression"). That is the drift, already realised.
 
 ### The finding that decides the design
 
-**Every legacy view is a GROUP-BY over a raw file, and the grouping key is
-already in the utt_id.**
-
-Acoustic degradation is ASVLD. The 29 condition suffixes in
-`raw/linear_head/asvspoof_ld/{model}.txt` are 71,237 utterances each, totalling
-exactly the 2,065,873 rows in the file:
-
-    babble|cafe|street|volvo|white _ {0,10,20}   15   Additive_Noise
-    RT_{0_3,0_6,0_9}                              3   Reverberation
-    resample_{8000,11025,22050,44100}             4   Resampling
-    recompression_{16k..320k}                     6   Codec_Compression
-    lpf_7000                                      1   Channel_Distortions
-
-The raw file is strictly RICHER than the view built from it. Legacy
-`Additive_Noise/APC.txt` carries bare ids (`LA_E_1736545`), so within that file
-you cannot tell babble from white, or 0 dB from 20 dB. The v3 raw file can
-answer per-noise and per-SNR; the view that replaced it cannot.
-
-MLAAD TTS is the same story, and there is already proof: at Phase 2c
-`create_mlaad_tts_eer_heatmaps` was ported to read `raw/` + the directory map
-and produced all four figures without `scores_by_TTS_MLAAD` existing at all.
+**A legacy view is a GROUP-BY over a raw file, and the grouping key is already
+in the utt_id** -- for the MLAAD views. There is proof rather than an argument:
+at Phase 2c `create_mlaad_tts_eer_heatmaps` was ported to read `raw/` plus the
+directory map and produced all four figures with `scores_by_TTS_MLAAD` not
+existing at all.
 
 So a view is a QUERY, not a second copy. This is the same argument
 `scorepath.py` already makes for ASVLD conditions -- "splitting by directory
 would add a level that carries no information" -- applied one layer out.
+
+### CORRECTION: acoustic degradation is NOT ASVLD
+
+An earlier version of this proposal claimed the legacy degradation tree was a
+lossy view of `raw/linear_head/asvspoof_ld/`. **That is wrong**, and it was
+load-bearing, so it is corrected here rather than quietly edited.
+
+The v3 ASVLD decomposition is right: 29 condition suffixes, 71,237 utterances
+each, totalling exactly the file's 2,065,873 rows.
+
+    babble|cafe|street|volvo|white _ {0,10,20}   15
+    RT_{0_3,0_6,0_9}                              3
+    resample_{8000,11025,22050,44100}             4
+    recompression_{16k..320k}                     6
+    lpf_7000                                      1
+
+What is wrong is the claim that the legacy view is the same population. It is a
+MIXTURE OF THREE CORPORA, and mostly untagged:
+
+    file                  LA_E      DF_E      E_00      condition-tagged?
+    Additive_Noise      738,308    17,131   171,602     no
+    Channel_Distortions 226,865    17,131    46,610     no
+    Codec_Compression   453,360   135,824   462,562     partly (6 x 71,237)
+    Reverberation             --        --        --    yes (3 x ~70,000)
+    Resampling                --        --        --    yes (4 x 71,237)
+
+`DF_E_*` is ASVspoof2021 DF and `E_00*` is ASVspoof5. The v3 tree has scores
+for those corpora **clean only** -- 0 of their utt_ids carry any condition
+suffix. The degraded audio for them was never scored into v3.
+
+So the legacy Section 5.2 population **cannot be rebuilt from the v3 raw tree**.
+Doing so needs the degraded ASV19/DF/ASV5 audio re-scored, which is a scoring
+job, not an analysis one, and is not started here.
+
+Two further things the audit turned up, both properties of the legacy tree:
+
+* Its reverberation conditions are not equally populated -- RT_0_9 has 71,237
+  rows but RT_0_6 has 70,533 and RT_0_3 has 68,421. 3,520 utterances are
+  missing, silently, with no record of why.
+* `Codec_Compression` mixes 624,324 untagged rows in with the six tagged
+  recompression conditions, so an EER computed over that file is over a
+  population that cannot be described.
+
+### What this changes in the proposal
+
+D1-D7 and D9 are unaffected -- they are about shape, and the shape is right.
+
+The view list changes. Two views are fully derivable and are built now; the
+third is renamed to what it actually is:
+
+    mlaad_tts          from mlaad_v10 + mailabs      derivable, verified
+    mlaad_language     from mlaad_v10 + mailabs      derivable, verified
+    asvld_conditions   from asvspoof_ld              derivable, but NOT the
+                       (29 conditions, 5 families)   legacy 5.2 population
+
+`asvld_conditions`, not `acoustic_degradation`, for the reason `scorepath.py`
+already gives for writing `mlaad_v10` rather than `mlaad`: two different
+populations must not share a name. A reader who sees `acoustic_degradation` in
+the v3 tree would reasonably assume it reproduces the published Section 5.2,
+and it does not -- it is a cleaner, per-condition measurement over one corpus.
 
 ### Proposal
 

@@ -38,6 +38,51 @@ a path the layout can compute. Those are marked below.
 The v3 tree currently holds `raw/` only, so the view-consuming scripts have
 nothing to read there yet. They still run against the legacy tree.
 
+## Analysis views
+
+A view groups raw score rows by something recoverable from the utt_id -- the
+TTS system that made an utterance, its language, the acoustic condition applied
+to it. Views are declared once in `analysis/views.py`:
+
+| view | source | groups |
+|---|---|---|
+| `mlaad_tts` | `mlaad_v10` + `mailabs` | 91 TTS systems under AR / NAR / closed_undisclosed |
+| `mlaad_language` | `mlaad_v10` + `mailabs` | 54 languages |
+| `asvld_conditions` | `asvspoof_ld` | 29 conditions under 5 families |
+
+Analysis does not need them on disk -- `load_view` returns the same grouping in
+memory, and the MLAAD figures work that way already. Build one to browse it, to
+feed a tool that wants directories, or to publish a subset:
+
+```bash
+python -m spoof_superb.tools.build_view --view mlaad_tts \
+    --scores_root /data/ssl_anti_spoofing/spoof_superb_score_files --layout v3
+
+# check what it would write, first
+python -m spoof_superb.tools.build_view --view asvld_conditions --dry-run
+
+# build somewhere else, leaving the score tree untouched
+python -m spoof_superb.tools.build_view --view mlaad_tts --out_root /tmp/views
+```
+
+```
+views/{view}/{group}/[{subgroup}/]{frontend}.txt
+views/{view}/_bonafide/{frontend}.txt      shared reference pool
+views/{view}/_manifest.json                sources, row counts, build time
+```
+
+The frontend is always the last component, so `views/*/*/xls_r_300m.txt` finds
+one model everywhere -- the same property `raw/` has. A view is a lossless
+partition of its source: concatenating every group reproduces the raw file
+exactly.
+
+**There is no `acoustic_degradation` view.** The legacy
+`scores_by_acoustic_degradation` mixes ASVspoof2019 LA, ASVspoof2021 DF and
+ASVspoof5 utterances, and this tree holds those three corpora clean only --
+none of their utt_ids carry a condition suffix, so the degraded audio was never
+scored into it. `asvld_conditions` is a different, self-consistent measurement
+over one corpus and is named so the two cannot be confused. See P11.
+
 ## Comparing two score trees
 
 ```bash
