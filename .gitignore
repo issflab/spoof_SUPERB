@@ -161,6 +161,9 @@ dmypy.json
 # logs
 logs/
 outputs/
+# The configurable analysis output root (configs/paths.yaml: outputs_root).
+# Generated tables and figures; the published copies live in reference/.
+/spoof_superb_outputs/
 
 # model directories
 model_*
@@ -176,3 +179,13 @@ model_*
 /trials/
 /reference/*
 !/reference/manifest.json
+# The level-2 reference: the six analysis tables verification grades against,
+# plus their provenance. Tens of KB, and unlike the score files they ARE the
+# artefact a reproduction is compared to -- so they are versioned, and a change
+# to any of them shows up in review.
+!/reference/analysis/
+!/reference/analysis/**
+# `*.json` above is a global rule and would swallow provenance.json, which is
+# the record of WHICH tree and WHICH commit these tables came from -- the part
+# that makes them a reference rather than six loose CSVs.
+!/reference/analysis/provenance.json

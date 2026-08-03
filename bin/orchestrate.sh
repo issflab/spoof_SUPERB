@@ -58,17 +58,10 @@ RUN_NAME=""
 # "yes" re-scores even when a complete, NaN-free output already exists.
 FORCE="no"
 
-# Compare each finished score file against the same column in an OLDER score
-# tree, as the sweep runs. Empty = no comparison, which is the default and the
-# right choice for a from-scratch build: scoring must not depend on a score file
-# it did not just write, or the new tree can only reproduce the old one's
-# coverage.
-#
-# Set this only once you want the migration check, or run
-#   bin/verify.sh
-# afterwards, which does the same thing without re-scoring anything.
-VERIFY_AGAINST=""
-VERIFY_LAYOUT="legacy"   # layout of the tree above: legacy | v2
+# NOTE: this sweep does not compare anything. Scoring must not depend on a
+# score file it did not just write, or the new tree can only ever reproduce the
+# old one's coverage. To check a finished tree against the published reference,
+# run  bin/verify.sh  -- it re-scores nothing.
 
 # Live progress display.
 #   auto   a redrawing bar on a terminal, one status line a minute when the
@@ -87,7 +80,6 @@ ARGS=(--job "$JOB" --workers "$WORKERS" --gpus $GPUS --progress "$PROGRESS")
 [ -n "$RUN_NAME" ]  && ARGS+=(--run-name "$RUN_NAME")
 [ "$FORCE" = "yes" ]      && ARGS+=(--force)
 [ "$PAPER_ONLY" != "yes" ] && ARGS+=(--all-models)
-[ -n "$VERIFY_AGAINST" ] && ARGS+=(--verify-against "$VERIFY_AGAINST" --verify-layout "$VERIFY_LAYOUT")
 
 echo "+ python -m spoof_superb.orchestration.driver ${ARGS[*]} $*"
 exec "$PY" -m spoof_superb.orchestration.driver "${ARGS[@]}" "$@"

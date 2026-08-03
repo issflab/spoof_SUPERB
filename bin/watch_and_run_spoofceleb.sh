@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 # watch_and_run_spoofceleb.sh
 # ---------------------------
+# HISTORICAL, one-off. This ran once, against the LEGACY tree, and its canary
+# check calls spoof_superb.verification.driver -- a module nothing else uses any
+# more. Do not copy this pattern: scoring no longer compares itself against
+# anything, and verification is a separate step over a finished tree
+# (`bin/verify.sh`). Kept as a record of how the SpoofCeleb batch was launched.
+#
 # The SpoofCeleb batch is blocked only by a host-wide CUDA driver fault
 # (cuInit -> error 3) that needs root to clear; see humanpending.md. Rather than
 # lose the run to the wait, poll until CUDA comes back and then launch the full

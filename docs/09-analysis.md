@@ -31,7 +31,7 @@ a path the layout can compute. Those are marked below.
 | reads | scripts |
 |---|---|
 | raw, and builds its own view | `acoustic_degradation`, `tts_systems`, `build_view` |
-| raw score files | `recompute_main_results`, `verify_mlaad_column`, `organize_mlaad_scores`, `build_mlaad_dir_map`, `compare_trees` |
+| raw score files | `recompute_main_results`, `verify_mlaad_column`, `organize_mlaad_scores`, `build_mlaad_dir_map`, `compare_trees`, `verification.scores` |
 | raw, then writes a legacy tree | `apply_zscore_and_pool`, `apply_sigmoid_and_pool`, `plot_score_distributions` |
 | a LEGACY view tree | `compute_eer_matrix`, `compute_eer_tts`, `compute_far_matrix`, `create_*_heatmaps` |
 | neither (checkpoints, corpus metadata) | `layer_weight_analysis`, `create_combined_mlaad_meta_all` |

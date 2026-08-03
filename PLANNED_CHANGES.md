@@ -713,3 +713,117 @@ change stated.
 
 This is the same class as the ASV19 LA / ITW finding in P12 -- scores moving on
 identical trials -- but here the cause is known rather than unexplained.
+
+## P14  Verification is a separate step, at two levels  [DONE 2026-08-03]
+
+**The problem.** Comparison was embedded in three producers, and in each case
+the producer graded itself:
+
+* **Scoring.** `orchestration/driver.py` ran `verification.driver` on every
+  finished file, against `--verify-against OLD_ROOT --verify-layout legacy`.
+  A build that reads a score file it did not just write can only reproduce the
+  older tree's coverage. The verdict landed in `run_status.json` and `SUMMARY.txt`
+  and was never read again, and the grade came from per-dataset thresholds
+  (`VERIFY_POLICY`) tuned to the legacy environment's constant logit offset.
+* **Analysis.** `recompute_main_results` carried a "REPRODUCTION GATE": a dict
+  of published values, in its own source, that it compared its own output
+  against. An analysis marking its own homework cannot distinguish *the code
+  changed* from *the scores changed*, and the reference was a literal nobody
+  could refresh.
+* Both pinned the **legacy layout**, which is no longer the authoritative tree.
+
+**What replaced it.** One command, `python -m spoof_superb.verification`, with
+two levels that fail independently.
+
+### Level 1 -- score files
+
+Two reference modes. Manifest mode reads `reference/manifest.json` and costs no
+download; tree mode compares every utterance.
+
+The manifest gained a `cells` block beside its existing per-file block, because
+they answer different questions: `files` is what a DOWNLOAD needs (path, size,
+sha256), `cells` is what VERIFICATION needs -- the POOLED counts and EER for a
+benchmark column (MLAAD and ASVLD are two files each, so a per-file EER is not
+the number the paper prints) plus a **digest of the sorted trial list**.
+
+That digest is what makes offline verification meaningful rather than
+suggestive. Matching row counts prove nothing: two different 71,237-trial sets
+are still different trial sets, and without trial-set identity comparing two
+EERs is meaningless. `build_release_manifest` also had to be made layout-aware
+-- it enumerated through `reference_paths`, which is legacy-only, so it could
+not index the v3 tree at all.
+
+**What is reported.** Coverage in both directions, label agreement, sha256 and
+`frac_exact`, non-finite counts, Pearson/Spearman/offset, and four EERs: each
+tree's own, and each tree's restricted to the shared trials. The last pair is
+the one a reproduction claim rests on -- `eer_a` vs `eer_a_common` is coverage
+alone, `eer_a_common` vs `eer_b_common` is the scores alone.
+
+**The verdict is a ladder, not a boolean.** `IDENTICAL`, `EQUIVALENT`,
+`SENSITIVE`, `COVERAGE_DIFFERS`, `SCORES_DIFFER`, `LABELS_DIFFER`,
+`CANDIDATE_INVALID`, `MISSING`, `ERROR`. Two of these are load-bearing:
+
+* **`EQUIVALENT` is the target outcome, not `IDENTICAL`.** A different
+  GPU/cuDNN/torch shifts every logit by a near-constant offset. A check that
+  demands bit-exactness fails every honest reproduction and gets ignored.
+* **`SENSITIVE` exists because P12 measured it.** Five cells have corr >= 0.99999
+  and still move the EER past 0.05 pp; SpoofCeleb/`tera` moves 4.15 pp on a
+  maximum score difference of 0.043. Near-chance models sit where the DET curve
+  is flat. That is a caveat on the metric, not a defect in the run, so it does
+  not fail.
+
+Manifest mode cannot separate `SENSITIVE` from `SCORES_DIFFER` -- rank agreement
+is not in the manifest. It reports `SCORES_DIFFER` and names `--ref-root` as the
+way to decide, rather than guessing.
+
+### Level 2 -- analysis tables
+
+Reference is `reference/analysis/` -- the six tables the three analyses produce,
+frozen by `tools/build_reference.py`. **Deliberately not the paper's LaTeX:**
+P12 established that ASV19 LA and ITW do not regenerate from any score file in
+either tree. A reference nobody, including us, can reproduce is not a reference.
+
+**Grading on `max |delta|` would be wrong in both directions.** A run can miss
+every cell by 0.3 pp and support every sentence in the paper; a run can miss one
+cell by 0.4 pp and change which model is best on a column -- which is a
+sentence. So three layers are reported: structure, cells (diagnostic), and
+claims (the grade).
+
+The claims checked are the paper's own: best-in-column with the non-SSL rows
+excluded as the caption specifies, the top-five set under Mean, the **ordering
+of columns by mean EER** (which IS the sentence in 4.4.2 / 4.4.3), per-column
+rank correlation, **sign flips against the degradation Baseline**, and -- where
+the CSV carries them -- the `*` emphasis markers compared directly, so the
+published bolding is checked as published with no rule restated to drift from.
+
+Verdicts: `IDENTICAL`, `EQUIVALENT`, `CONCLUSIONS_HOLD`, `CONCLUSIONS_DIFFER`,
+`STRUCTURE_DIFFERS`, `MISSING`, `ERROR`.
+
+### Verified by execution
+
+Level 2 on four perturbations of the real reference tables, all six verdicts as
+designed: jitter <= 0.02 pp -> `EQUIVALENT`; a runner-up promoted in ASV19 LA
+-> `CONCLUSIONS_DIFFER` naming both the changed best-in-column and the moved
+emphasis marker; AR/NAR swapped -> `CONCLUSIONS_DIFFER` on the column ordering;
+a dropped model row -> `STRUCTURE_DIFFERS`; the two untouched tables
+`IDENTICAL`. 23 new unit tests pin the ladder boundaries.
+
+### Removed
+
+`--verify-against` / `--verify-layout` and `_verify` / `reference_for` from the
+orchestrator; `Task.verify` from `jobs.py`; `VERIFY_POLICY` / `verify_policy`
+from `scoring/datasets.py`; `VERIFY_AGAINST` from `bin/orchestrate.sh`; and
+`PUBLISHED` / `CHANGED_COLS` / `REPRO_TOL` / the gate from
+`recompute_main_results`. `tests/test_paper_models.py` J3/J7/J8 now assert the
+ABSENCE of the hook rather than its behaviour.
+
+`verification/driver.py` and `verification/policies.py` are orphaned but not
+deleted (deletion is the user's call); both carry a SUPERSEDED header.
+`tests/test_verification.py` still pins the reasoning in them.
+
+`tests/test_main_results_regression.py` keeps its baseline JSON untouched. It is
+now explicitly a **code**-regression gate -- it pins the reproducer to the
+legacy tree the baseline was captured on so a refactor cannot move a number --
+not the reproducibility check a benchmark user runs. Only
+`test_reproduction_gate_still_passes` was dropped, because the field it read no
+longer exists.

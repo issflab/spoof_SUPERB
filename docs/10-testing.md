@@ -17,7 +17,8 @@ scoring, metrics, or the score-file format.
 | `test_grad_accum.py` | gradient accumulation is behaviour-preserving, plus a guard proving that claim is not vacuous |
 | `test_lfcc_frontend.py` | the vendored LFCC front-end reproduces the reference spafe implementation bit-for-bit on real audio |
 | `test_scoring_driver.py` | the parsers and writer behind the merged scoring driver: right-peeled fields, pooled column order, atomic writes, the `.tsv` twin, walk filtering, per-utterance labels, restrict semantics, fp32 default |
-| `test_verification.py` | the two grade policies genuinely differ, and an unusable reference is not our failure |
+| `test_verification.py` | (superseded module) the two legacy grade policies genuinely differ |
+| `test_verification_levels.py` | each verdict on both ladders means exactly one thing, and the boundaries are where the reasoning says |
 | `test_main_results_regression.py` | every published EER is unchanged (opt-in) |
 
 `test_lfcc_frontend.py` skips rather than fails when its external dependencies

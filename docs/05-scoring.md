@@ -165,8 +165,9 @@ verify against a published subset.
   EER = 7.4210 %
 ```
 
-The inline EER is a diagnostic, not a verification. To check a file against the
-published reference, see [verification](08-verification.md).
+The inline EER is a diagnostic computed from the file just written; it is
+compared against nothing. To check a finished tree against the published
+reference, see [verification](08-verification.md).
 
 ## Missing and undecodable audio
 
@@ -239,11 +240,11 @@ minute:
 
 ```bash
 bin/score.sh --limit 300          # MODEL="lfcc_gmm", DATASET="deepfake_eval_2024"
-bin/verify.sh --check mlaad --new outputs/scores/smoke.txt \
-    --ref $OLD/baselines/lfcc_gmm/lfcc_gmm_deepfake_eval_2024.txt
+python -m spoof_superb.verification scores \
+    --datasets DFEval24 --models lfcc_gmm
 ```
 
-Expect `-> PASS` with `r=1.0000`. A failure here is paths or environment, not
+Expect `IDENTICAL` or `EQUIVALENT`. A failure here is paths or environment, not
 the sweep -- fix it before going further.
 
 **Step 3 -- sweep.** See [orchestration](06-orchestration.md). Then merge

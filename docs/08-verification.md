@@ -1,119 +1,260 @@
 # 8. Verification
 
-Three different kinds of check. They are deliberately separate.
+Verification is a **separate step**. Nothing in scoring, orchestration or
+analysis compares itself against anything.
 
-## 1. A new score file against its published reference
+That is a design decision, not an omission. A comparison that runs inside the
+producer has three faults, and this repo had all three:
+
+* **Scoring** graded each finished file against an older tree as the sweep ran.
+  A build that reads a score file it did not just write can only ever reproduce
+  the older tree's coverage, and the verdict landed in a run status file nobody
+  opened again.
+* **`recompute_main_results`** carried a "REPRODUCTION GATE" comparing its own
+  output against a dict of published values in its own source. An analysis
+  marking its own homework cannot distinguish *the code changed* from *the
+  scores changed*, and the reference was a literal that no one could refresh.
+* Both graded against the **legacy layout**, which pinned a tree that is no
+  longer authoritative.
+
+All of that is gone. One command replaces it:
 
 ```bash
-bin/verify.sh                 # edit CHECK / NEW_FILE / REF_FILE at the top
+python -m spoof_superb.verification all      # or: bin/verify.sh
 ```
 
-or:
+## The two levels
+
+| | asks | reference | fails when |
+|---|---|---|---|
+| **1. Score files** | did the pipeline produce the same scores? | `reference/manifest.json`, or a reference score tree | scores disagree on identical trials |
+| **2. Analysis** | do the same conclusions come out? | `reference/analysis/*.csv` | a claim in the paper changed |
+
+They fail **independently**, and both are worth knowing. Identical scores with a
+changed table means the *analysis code* moved. Drifting scores with an intact
+table means the *finding is robust* to the drift. A single pass/fail cannot say
+either.
 
 ```bash
-python -m spoof_superb.verification.driver \
-    --check spoofceleb --new out.txt --ref reference.txt
+python -m spoof_superb.verification scores      # level 1 only
+python -m spoof_superb.verification analysis    # level 2 only
+python -m spoof_superb.verification all         # both; non-zero if either fails
 ```
 
-Exit 0 = pass, 1 = fail. The orchestrator runs this automatically after each
-task in a job that declares a policy.
+Each writes `{outputs_root}/verification/{level}/*.md` and `*.json` — the
+Markdown is what you paste into an issue, the JSON is what a script reads.
 
-Output always leads with a **coverage** line -- how your trial set relates to the reference, in both directions. Coverage is reported, never enforced: scoring the full protocol where the published column used a subset is a deliberate difference, and it should show up as output rather than silently changing what gets compared. The grade is computed on the overlap.
+## Level 1 — score files
 
-### The policies are not interchangeable
+```bash
+# offline: reference/manifest.json only, no download
+python -m spoof_superb.verification scores
 
-| `--check` | Verdict | NaN tolerance in *your* output |
+# full: every utterance compared against a reference tree
+bin/fetch_scores.sh
+python -m spoof_superb.verification scores \
+    --ref-root /path/to/reference/tree --ref-layout v3
+```
+
+### What is reported, and why each field is there
+
+The whole problem is that two trees disagree for two unrelated reasons — they
+**scored different utterances**, or they **assigned different scores to the same
+ones** — and a single EER delta cannot tell them apart. So the report separates
+them by construction:
+
+| reported | answers |
+|---|---|
+| `n_a`, `n_b`, `n_common`, `n_only_a`, `n_only_b` | coverage, in both directions |
+| `label_mismatch` | do the two runs agree on ground truth at all |
+| `sha256`, `frac_exact`, `max_abs_diff` | integrity, and how far individual scores moved |
+| `nan_a`, `nan_b` | is either side's own output usable |
+| `corr`, `spearman`, `mean_offset ± std` | agreement on value and on rank |
+| `eer_a`, `eer_b` | what each side would publish, on its own trials |
+| **`eer_a_common`, `eer_b_common`** | **each side's EER on the shared trials** |
+
+The last row is the one a reproduction claim rests on. `eer_a` vs
+`eer_a_common` is the effect of coverage alone; `eer_a_common` vs
+`eer_b_common` is the effect of the scores alone, trial set held fixed.
+
+### The verdict ladder
+
+Best to worst. Only some of these are anybody's fault.
+
+| verdict | means | fails |
 |---|---|---|
-| `mlaad`, `mailabs` | Pearson ≥ 0.99 **and** Spearman ≥ 0.99 **and** sign@0 ≥ 0.999 | up to 1% |
-| `spoofceleb` | Spearman ≥ 0.99 alone | none at all |
+| `IDENTICAL` | byte-for-byte the reference | |
+| `EQUIVALENT` | same trials, EER agrees within 0.05 pp | |
+| `SENSITIVE` | same trials, ranks agree, EER still moved | |
+| `COVERAGE_DIFFERS` | different trial sets; EERs below are on the intersection | |
+| `SCORES_DIFFER` | same trials, scores genuinely disagree | ✗ |
+| `LABELS_DIFFER` | a shared utt_id carries a different key | ✗ |
+| `CANDIDATE_INVALID` | your output has > 1% NaN/inf | ✗ |
+| `MISSING` / `ERROR` | no candidate file / the comparison raised | ✗ |
 
-Bit-exact reproduction of a reference is not achievable. The published files
-were produced in a different environment -- different librosa / soxr / torch /
-CUDA -- which introduces a near-constant logit offset (~0.33 for `xls_r_300m`)
-with r > 0.99. That offset is irrelevant to EER, which is rank-based. So every
-policy asks for *detection-equivalence*, not absolute agreement.
+**`EQUIVALENT` is the target outcome, not `IDENTICAL`.** A different
+GPU/cuDNN/torch shifts every logit by a near-constant offset. Demanding
+bit-exactness would fail every honest reproduction, and a check people learn to
+ignore is worse than no check.
 
-SpoofCeleb drops the Pearson requirement because on the MLAAD run a handful of
-tail outliers dragged Pearson to 0.92 on models whose Spearman was 0.996 --
-failing a Pearson-gated check for no detection-relevant reason. It tolerates no
-NaN because SpoofCeleb is natively 16 kHz, no resampling happens, and agreement
-should be near-exact.
-
-If you are tempted to merge these two behind a flag: don't. That erases the
-reasoning above.
-
-### Reading the output
+**`SENSITIVE` exists because it was measured.** Across 190 cells:
 
 ```
-[verify] new=91130 ref=91130 shared=91130 both=91130 r=1.0000 spearman=1.0000
-         sign@0=99.9934% offset=-0.001±0.008 maxΔ=0.200 -> PASS
+corr >= 0.99999   n=92   median dEER 0.0009 pp   max 4.15 pp
+corr <  0.99999   n=79   median dEER 1.6345 pp   max 14.46 pp
 ```
 
-`REF_UNUSABLE` means the *reference* is more than 50% NaN -- the broken side is
-theirs, your output is finite, and it exits 0. It is a report, not a failure.
+Five cells have essentially perfect score correlation and still move the EER
+past tolerance — SpoofCeleb/`tera` moves **4.15 pp on a maximum score difference
+of 0.043**. Those are models operating near chance, where the DET curve is flat
+at the crossing point, so a hair's movement reorders many trials. That is a
+caveat on reporting a three-decimal EER for a model that cannot separate the
+classes; it is not a defect in the run, so it does not fail.
 
-## 1b. Getting a reference file
+### Manifest mode vs tree mode
 
-The published score files are ~6 GB and are **not** in this repo. They are
-released as a per-file archive; `reference/manifest.json` (~100 KB, versioned
-here) records what exists, its size, its sha256 and its EER.
+Manifest mode costs no download. It works because the manifest carries a
+**digest of each cell's sorted trial list** — matching row counts prove nothing,
+since two different 71,237-trial sets are still different trial sets, and
+without trial-set identity comparing two EERs is meaningless.
 
-Files are fetched individually, so checking one model on one dataset costs a
-megabyte rather than a gigabyte:
+What manifest mode *cannot* do is separate `SENSITIVE` from `SCORES_DIFFER`,
+because that needs rank agreement between two score vectors and the manifest
+holds no per-utterance scores. It reports `SCORES_DIFFER` and says so, naming
+`--ref-root` as the way to decide. It never guesses.
+
+## Level 2 — analysis tables
+
+```bash
+python -m spoof_superb.verification analysis --candidate outputs
+```
+
+Six tables, produced by the three analyses:
+
+```
+main_results/main_results_table.csv
+degradation/eer_matrix.csv
+tts/eer_by_tts_system.csv        tts/eer_by_architecture.csv
+tts/eer_by_generation_mode.csv   tts/eer_by_vocoder_family.csv
+```
+
+### Why not just diff the numbers
+
+Grading on `max |delta|` is wrong in both directions. A run can miss every cell
+by 0.3 pp and still support every sentence in the paper. A run can miss one cell
+by 0.4 pp and change which model is best on a column — which *is* a sentence. So
+three layers are reported, in this order:
+
+1. **Structure** — which models and columns each side has. A missing row is an
+   absent measurement, not a small number, and no delta describes it.
+2. **Cells** — per-cell |Δ| in pp: max, median, and the count over tolerance,
+   with the worst named. This is the *diagnostic* layer: it says where to look,
+   not whether you passed.
+3. **Claims** — the things the paper asserts, one at a time:
+   * which model is best in each column (an argmin per column, with the non-SSL
+     reference rows excluded, as the caption specifies)
+   * the top-five set under Mean
+   * **the ordering of the columns by their mean** — "which degradation hurts
+     most", "which architecture group is hardest" are literally the sentences in
+     §4.4.2 and §4.4.3
+   * the model ordering within each column (rank correlation)
+   * **sign flips against the Baseline** in the degradation table — "this
+     condition hurts" reversing is a finding, however small the cells moved
+   * where the CSV carries the paper's own `*` emphasis markers, the marked
+     cells are compared directly, so the published bolding is checked *as
+     published* with no rule restated here to drift from the one that wrote it
+
+| verdict | means | fails |
+|---|---|---|
+| `IDENTICAL` | every cell within 0.005 pp | |
+| `EQUIVALENT` | cells drift, every claim and ranking survives | |
+| `CONCLUSIONS_HOLD` | rankings shift among near-ties, headline claims survive | |
+| `CONCLUSIONS_DIFFER` | a best-in-column, a top-5 set, or an ordering changed | ✗ |
+| `STRUCTURE_DIFFERS` | different models or columns, or a one-sided cell | ✗ |
+
+The cell tolerance (0.005 pp) is tighter than level 1's (0.05 pp) because these
+are recomputations over *fixed* score files — arithmetic, not inference — so the
+only source of drift is the analysis code itself.
+
+## Publishing a reference
+
+Run once when releasing a score tree. Both artefacts go in git; the 6 GB of
+score files do not.
+
+```bash
+# reference/manifest.json -- per-file integrity + per-cell trial digests and EER
+python -m spoof_superb.tools.build_release_manifest --dry-run
+python -m spoof_superb.tools.build_release_manifest --archive_url https://...
+
+# reference/analysis/ -- the six tables, plus provenance.json and REFERENCE.md
+python -m spoof_superb.tools.build_reference --from outputs
+```
+
+`build_reference` copies exactly the list `verification.analysis.TABLES`
+verifies, so the published set and the checked set cannot drift apart. It
+refuses to write a partial reference: a missing table would silently exempt
+that table from verification.
+
+**The reference is not the paper's LaTeX.** Two published columns (ASV19 LA and
+ITW) do not regenerate from any score file in either tree, on identical trials
+with zero label disagreement. A reference nobody — including us — can reproduce
+is not a reference. The tables here were computed by code that ships in this
+repo from score files whose sha256 is published, so every number has a path back
+to bytes anyone can download.
+
+## Getting the reference score files
 
 ```bash
 bin/fetch_scores.sh --list        # what the manifest offers, fetch nothing
 bin/fetch_scores.sh               # edit DATASET / MODEL at the top first
 ```
 
-Every download is checked against its sha256 and written atomically; a file
-already present and matching is skipped, so re-running is cheap.
+Files are fetched individually, so checking one model on one dataset costs a
+megabyte rather than a gigabyte. Every download is checked against its sha256
+and written atomically; a file already present and matching is skipped.
 
-Nothing derived from the score files is committed. Trial lists and score
-subsamples were both considered and rejected: they are recomputable from the
-score files, so shipping them would put two copies of the same information
-under version control with no record of which is authoritative -- the pattern
-that produced the duplication in the score directory.
+Nothing derived from the score files is committed beyond the manifest. Trial
+lists and score subsamples were considered and rejected: they are recomputable,
+so shipping them would put two copies of the same information under version
+control with no record of which is authoritative — the pattern that produced
+the duplication in the score directory.
 
-With a manifest present, verification also reports the published EER for
-context:
+## Comparing two arbitrary trees
 
-```bash
-python -m spoof_superb.verification.driver --check spoofceleb \
-    --new out.txt --ref fetched.txt \
-    --dataset spoofceleb --model apc --manifest
-```
-
-```
-[coverage] scored 91130  reference 91130  overlap 91130
-           reference-not-scored 0  scored-not-in-reference 0
-[expected] published EER = 40.9854% over 91130 rows
-[verify] ... spearman=1.0000 ... -> PASS
-```
-
-Publisher side, run once when releasing a score tree:
+For anything that is not "candidate vs published reference":
 
 ```bash
-python -m spoof_superb.tools.build_release_manifest --dry-run
-python -m spoof_superb.tools.build_release_manifest --archive_url https://...
+python -m spoof_superb.tools.compare_trees \
+    --a /data/ssl_anti_spoofing/asd_superb_score_files   --a-layout legacy \
+    --b /data/ssl_anti_spoofing/spoof_superb_score_files --b-layout v3 \
+    --out outputs/tree_comparison "--a-id-rewrite=-=Bonafide"
 ```
 
-## 2. The fp32 ASVLD noise re-run promotion gate
+Same measurement code (`verification.cells`), an older verdict vocabulary, and
+no notion of a published reference. `--a-id-rewrite` renames whole path
+components before matching; Famous Figures needs it because the old tree names
+the bonafide directory `-` and the new one names it `Bonafide`. It is
+deliberately never inferred — asserting that two id conventions denote the same
+utterances is a claim the caller makes.
+
+## Other checks, unchanged
+
+### The fp32 ASVLD noise re-run promotion gate
 
 ```bash
 python -m spoof_superb.verification.noise_rerun_gate            # verify only
 python -m spoof_superb.verification.noise_rerun_gate --promote  # verify, then swap
 ```
 
-This gates replacing archived score files with the fp32 re-run. Five contracts:
-same utterance sequence and order, same labels, no NaN, Pearson ≥ 0.9998 on
-utterances the archive scored finitely, and |ΔEER| ≤ 0.15 pp for models that
-had no archived NaN. Models *with* archived NaN are exempt by construction --
+Gates replacing archived score files with the fp32 re-run. Five contracts: same
+utterance sequence and order, same labels, no NaN, Pearson ≥ 0.9998 on
+utterances the archive scored finitely, and |ΔEER| ≤ 0.15 pp for models that had
+no archived NaN. Models *with* archived NaN are exempt by construction —
 correcting them is the point, and their EER moves by 5.8 to 8.0 pp.
 
 **`--promote` moves directories.** Run without it first and read the table.
 
-## 3. Descriptive and structural checks
+### Descriptive and structural checks
 
 ```bash
 # ASVLD rerun vs reference, per (model, condition). No pass/fail, just a table.
@@ -135,17 +276,27 @@ python -m spoof_superb.analysis.verify_mlaad_column --tex access.tex
 `verify_mlaad_column` checks the number printed in the paper against a fresh
 recomputation (≤ 0.0005), the repo's EER estimator against an independent
 sklearn/Brent one (≤ 0.01 pp), and the full pool against the balanced pool
-(≤ 0.2 pp).
-
-**Its duplicate EER implementation is deliberate.** It exists so that a bug in
-`core/metrics.py::compute_det_curve` cannot be reproduced by the very code
+(≤ 0.2 pp). **Its duplicate EER implementation is deliberate** — a bug in
+`core/metrics.py::compute_det_curve` must not be reproducible by the very code
 verifying it. Do not "deduplicate" it.
+
+## Superseded
+
+`spoof_superb.verification.driver` and `verification.policies` graded one file
+against one legacy file using per-dataset thresholds tuned to the legacy
+environment's constant logit offset, and were invoked from inside the scoring
+sweep. Nothing calls them. `verdicts.py` replaces them with a ladder that is
+dataset-independent: it grades on the EER over identical trials, and reports the
+correlation statistics beside it rather than thresholding them per corpus.
 
 ## Which one do I want?
 
 | Situation | Use |
 |---|---|
-| I re-scored a model and want to know if it matches | `bin/verify.sh` |
+| I rebuilt the score tree and want to know if it reproduces | `python -m spoof_superb.verification scores` |
+| I re-ran the analyses and want to know if the paper's claims hold | `python -m spoof_superb.verification analysis` |
+| Both | `python -m spoof_superb.verification all` |
+| I have two arbitrary trees to compare | `tools.compare_trees` |
 | I re-ran ASVLD noise in fp32 and want to replace the archive | `noise_rerun_gate` |
-| I changed code and want to know if the paper's numbers moved | [tests](10-testing.md) |
+| I changed code and want to know if it still runs | [tests](10-testing.md) |
 | I want to know if my protocol CSVs are self-consistent | `verify_tts_protocols` |

@@ -1,4 +1,18 @@
-"""Score-file verification entry point.
+"""SUPERSEDED -- single-file score comparison against a legacy tree.
+
+Nothing calls this any more. It graded ONE freshly written file against ONE
+older file, using policies tuned to the legacy environment's constant logit
+offset, and it was invoked from inside the scoring sweep. Both of those are
+gone: verification is now a separate step that sweeps whole trees and grades on
+a shared ladder --
+
+    python -m spoof_superb.verification scores
+
+Kept only because `tests/test_verification.py` pins the policy split it
+documents, and because deleting a file is the user's call.
+
+----------------------------------------------------------------------------
+Score-file verification entry point.
 
     python -m spoof_superb.verification.driver --check spoofceleb \
         --new out.txt --ref reference.txt
@@ -50,7 +64,9 @@ def expected_from_manifest(path, dataset, model):
             manifest = json.load(f)
     except (OSError, ValueError):
         return None
-    entry = manifest.get("datasets", {}).get(dataset, {}).get(model)
+    # "files" was called "datasets" before the manifest grew a per-CELL block.
+    entry = (manifest.get("files") or manifest.get("datasets") or {}) \
+        .get(dataset, {}).get(model)
     if isinstance(entry, list):
         entry = entry[0] if entry else None
     return entry

@@ -41,8 +41,6 @@ before executing, so you can always see which won.
 | `--force` | `FORCE="yes"` | flag | re-score even when a complete NaN-free output exists |
 | `--progress` | `PROGRESS` | `auto` `bar` `plain` `none` | live display; see [Watching a run](#watching-a-run) |
 | `--all-models` | `PAPER_ONLY="no"` | flag | score all 24 trained heads, not just the 21 the paper reports |
-| `--verify-against` | `VERIFY_AGAINST` | path to a score tree | compare each finished column against that tree. Off by default |
-| `--verify-layout` | `VERIFY_LAYOUT` | `legacy` `v2` | layout of the tree above |
 | `--run-name` | `RUN_NAME` | any string | identity for this run; defaults to a timestamp |
 | `--list` | — | flag | print the tasks and exit, running nothing |
 | `--python` | — | path | interpreter for the scoring subprocesses; defaults to `cfg.python` |
@@ -160,15 +158,14 @@ reattach to the live bar.
 ## The jobs
 
 A job is one `Job` dataclass in `jobs.py`. There is no separate policy object --
-"policy" below just names the fields that are not selection. The thirteen fields
-do five unrelated things:
+"policy" below just names the fields that are not selection. The remaining
+fields do four unrelated things:
 
 | Role | Fields | Overridable from the CLI? |
 |---|---|---|
 | **Selection** -- which tasks exist | `systems` `datasets` `skip` | yes, by `--systems` `--datasets` `--models` |
 | **Resources** -- how much machine | `gpus` `batch_size` `num_workers` `gmm_processes` | only `--gpus` |
 | **Failure handling** | `max_attempts` `cuda_wait_s` | no |
-| **Post-check** | `verify` | no |
 | **Identity** -- where the record goes | `name` `run` `log_dir` | `--job` picks the job, `--run-name` the run |
 
 Selection is fully expressible with the three filters. Nothing else is, and
@@ -193,19 +190,13 @@ excluded.
 `spoofceleb`. Each was a dataset name plus three facts about that dataset: which
 policy grades it, its retry budget, and which upstreams to skip on it. Once
 `--datasets` existed the name was redundant, and the facts belonged to the
-dataset, so they moved to the registry:
+dataset, so they moved to the registry.
 
-```python
-# spoof_superb/scoring/datasets.py
-VERIFY_POLICY = {"Multilingual": "mlaad", "MAILABS": "mlaad",
-                 "spoofceleb": "spoofceleb"}
-```
-
-This fixed a real hole rather than just tidying: because the grading policy lived
-on `--job mlaad`, **`--job all` used to score MLAAD and SpoofCeleb with no
-policy attached at all** -- the sweep anyone would actually run was the one that
-skipped the check. The policy now travels with the dataset, so
-`--datasets Multilingual` carries it regardless of which job selected it.
+The grading policy has since gone further and left scoring entirely. It was a
+`VERIFY_POLICY` dict in `scoring/datasets.py`, carried onto each task, and read
+by the sweep to grade finished files against an older tree. Nothing in scoring
+grades anything now, so the dict and the field are gone rather than defaulted
+to `None` -- see [Verification is a separate step](#verification-is-a-separate-step).
 
 There used to be a per-dataset `SKIP_MODELS` here too, holding `mockingjay` and
 `byol_a_2048` off MLAAD and M-AILABS. It was removed: both are outside the
@@ -224,46 +215,29 @@ that changes this. A tree built from scratch therefore cannot inherit an older
 tree's coverage -- which is exactly how the published ASV21-DF column ended up
 at 152,955 rows of a 611,829-row protocol.
 
-That leaves comparison as something you ask for, in one of two places.
-
-**During the sweep**, if you want each column checked as it lands:
-
-```bash
-# in bin/orchestrate.sh
-VERIFY_AGAINST="/data/ssl_anti_spoofing/asd_superb_score_files"
-VERIFY_LAYOUT="legacy"
-```
-
-**Afterwards**, which costs nothing extra and does not slow the sweep:
+There is deliberately **no `--verify-against`**, and no `verify` field on a
+task. Not off by default: absent. A comparison that runs inside the sweep grades
+a tree against whatever happened to be on disk at the time, buries the verdict
+in a run status file nobody opens again, and makes the sweep's exit code depend
+on a second tree. Comparison is its own command, with its own report:
 
 ```bash
-python -m spoof_superb.verification.driver \
-    --check mlaad \
-    --new  {new_root}/raw/linear_head/mlaad_v10/xls_r_300m.txt \
-    --ref  {old_root}/linear_head_MLAAD_v10/linear_head_MLAAD_v10_xls_r_300m.txt
+python -m spoof_superb.verification all      # or: bin/verify.sh
 ```
 
-Either way the reference tree is **named explicitly**. It is never derived from
-`scores_root`, because `scores_root` is where the new files go -- comparing a
-tree against itself is vacuous, and defaulting to some other tree is how a
-"fresh" build silently stops being fresh.
+See [verification](08-verification.md) for the two levels and what each reports.
 
 ### Building a new tree and promoting it
 
-The order matters, and it is the reason verification is not automatic:
-
-1. **Build from scratch.** `bin/orchestrate.sh` with `VERIFY_AGAINST=""`.
-   Every column comes from its protocol. Coverage may legitimately *exceed* the
-   old tree's.
-2. **Compare against the old tree.** Per column, with the dataset's own policy.
-   Expect differences in row counts where the old column was a subset; expect
-   agreement in ranking and EER where it was not.
-3. **Confirm, then promote.** Once the new tree is accepted, build the release
-   manifest from it (`spoof_superb.tools.build_release_manifest`). From that
-   point the new files are the reference and the old tree is history.
-
-A column whose policy is `None` has no published twin to compare against; it
-records `not compared` and that is not a failure.
+1. **Build from scratch.** `bin/orchestrate.sh`. Every column comes from its
+   protocol. Coverage may legitimately *exceed* the old tree's.
+2. **Compare, as a separate step.** `python -m spoof_superb.verification all`.
+   Expect `COVERAGE_DIFFERS` where the old column was a subset; expect
+   `EQUIVALENT` where it was not.
+3. **Confirm, then publish.** Once the new tree is accepted, build both
+   reference artefacts from it -- `tools.build_release_manifest` for the score
+   files and `tools.build_reference` for the analysis tables. From that point
+   the new tree is the reference and the old one is history.
 
 ## Watching a run
 
@@ -315,11 +289,11 @@ switches to `plain`.
 ```
 {out_dir}/run_status.json    live, one entry per task
 {out_dir}/SUMMARY.txt        final table
-{out_dir}/logs/              per-task stdout, plus per-task verify logs
+{out_dir}/logs/              per-task stdout
 ```
 
-`run_status.json` records status, GPU, wall time, attempts, row counts, NaN
-count and the verification verdict for each task. Tail it while a sweep runs,
+`run_status.json` records status, GPU, wall time, attempts, row counts and NaN
+count for each task. It records no verdict: this sweep compares nothing. Tail it while a sweep runs,
 or from another shell if the sweep is detached.
 
 `logs/{job}_{system}_{dataset}_{frontend}.log` is the full subprocess output for

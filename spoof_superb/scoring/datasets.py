@@ -316,28 +316,6 @@ NATIVE_TRIALS = {
 #: MLAAD, scored separately and merged in afterwards.
 NON_BENCHMARK = {"MAILABS", "deepfake_eval_2024_segmented"}
 
-#: Which grading policy applies when a fresh run of this dataset is compared
-#: against an older one. A property of the dataset, not of whoever launched the
-#: sweep: the two policies differ because the corpora differ, and previously
-#: they lived on the `mlaad`/`mailabs`/`spoofceleb` jobs -- so `--job all`, the
-#: sweep anyone would actually run, silently graded nothing.
-#:
-#: Declaring the policy here does NOT make verification happen. Scoring never
-#: reads a reference file; comparison is a separate step the user asks for.
-#: See spoof_superb.verification.policies for what each name grades on.
-VERIFY_POLICY = {
-    "Multilingual": "mlaad",
-    "MAILABS": "mlaad",
-    "spoofceleb": "spoofceleb",
-}
-
-def verify_policy(dataset):
-    """The grading policy for this dataset, or None if it has no published twin."""
-    return VERIFY_POLICY.get(dataset)
-
-
-
-
 #: Every dataset that can be scored, benchmark column or not.
 SCOREABLE = list(DATASETS)
 

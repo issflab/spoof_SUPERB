@@ -8,7 +8,7 @@ path comes from score_path, a task is fully described by three things:
     frontend  the s3prl upstream, or 'none'
 
 so there is one enumerator rather than one per job. A job is a selection over
-that space plus the runtime policy: GPUs, retries, verification.
+that space plus the runtime policy: GPUs and retries.
 
 That is what makes `--job all` possible. It is not a special case; it is the
 selection with nothing excluded.
@@ -26,7 +26,6 @@ from spoof_superb.scoring.datasets import (
     DEFAULT_DATASETS,
     PROTOCOL_SPECS,
     SCOREABLE,
-    verify_policy,
 )
 from spoof_superb.scoring.models import paper_models
 
@@ -87,9 +86,6 @@ class Task:
     frontend: str = "none"
     needs_gpu: bool = True
     expect_lines: Optional[int] = None
-    # Which policy would grade this task if the user asks for a comparison.
-    # Carried per task because it is a property of the dataset, not the sweep.
-    verify: Optional[str] = None
 
 
 def default_run_name():
@@ -249,8 +245,7 @@ def enumerate_tasks(job, systems=None, datasets=None, models=None,
                                   dataset=dataset, system=system,
                                   frontend=frontend,
                                   needs_gpu=(system != "lfcc_gmm"),
-                                  expect_lines=expected_rows(dataset),
-                                  verify=verify_policy(dataset)))
+                                  expect_lines=expected_rows(dataset)))
     return tasks
 
 

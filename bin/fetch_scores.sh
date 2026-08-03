@@ -39,7 +39,10 @@ manifest = json.load(open(manifest_path))
 archive_url = archive_url or manifest.get("archive_url") or ""
 
 def entries():
-    for ds, models in sorted(manifest.get("datasets", {}).items()):
+    # "files" is the per-file block: what to download and how to check it.
+    # The manifest's other block, "cells", is the per-COLUMN summary that
+    # verification reads, and has no paths to fetch.
+    for ds, models in sorted(manifest.get("files", {}).items()):
         if want_ds and ds != want_ds:
             continue
         for model, e in sorted(models.items()):

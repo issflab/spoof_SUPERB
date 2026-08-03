@@ -37,13 +37,22 @@ Parsing contracts (both load-bearing -- do not "simplify" away)
 2. The legacy per-dataset files are 4-column "utt_id - label score".  utt_ids
    there (e.g. Famous Figures absolute paths) are also parsed from the right.
 
-Verification contract
----------------------
+Internal consistency check (not a comparison against anything)
+-------------------------------------------------------------
 EER is computed from class-conditional error rates and is therefore invariant
 to the bonafide:spoof ratio.  Each model's MLAAD EER is computed on BOTH the
 full 1,040,006-row pool and the 912,000-row `balanced/` pool; they must agree
 within 0.2 percentage points.  A larger gap indicates a parsing, labelling or
 polarity bug and is reported as a FAIL rather than silently resolved.
+
+This is a self-check on ONE run: it needs no second tree and no published
+value, so it stays here.  Checking these numbers against a reference does not:
+that is `python -m spoof_superb.verification analysis`, which compares this
+script's CSV against the published one and grades on whether the paper's
+claims survive.  This script used to carry a gate that compared its own output
+against a dict of published values -- an analysis marking its own homework
+against numbers it was simultaneously trying to reproduce, with no way to tell
+"the code changed" from "the scores changed".
 
 Outputs
 -------
@@ -51,8 +60,7 @@ Outputs
                              in table order, the paper's columns, `*` on the
                              best in a column and on the Mean top five
     main_results.json        every computed row, with row counts, NaN
-                             fractions and assertion results -- what the
-                             regression gate reads
+                             fractions and assertion results
 
 Usage
 -----
@@ -75,9 +83,9 @@ from spoof_superb.config import cfg
 from spoof_superb.core.scorefile import read_scored
 from spoof_superb.core.scorepath import mlaad_pool_paths, score_path
 
-# Path resolution is layout-aware: this script must be able to read the legacy
-# tree (to prove, via the zero-tolerance gate, that a port moved no number) and
-# the current tree (to produce the values that go in the paper).
+# Path resolution is layout-aware, so any tree can be reported on. The layout
+# is a property of the tree being read, not a comparison: nothing here reads a
+# second tree.
 #
 # The two layouts are not merely spelled differently. Two columns differ in
 # COMPOSITION, and pretending otherwise would silently compare different things:
@@ -255,11 +263,6 @@ MODELS = [
 #: They are systems, not upstreams, so they resolve through a different path --
 #: raw/non_ssl/{dataset}/{system}.txt -- and `system` is threaded through the
 #: path helpers for them alone.
-#:
-#: They are NOT in PUBLISHED. That dict records the draft the regression
-#: baseline was captured from, and these rows were not in it; adding values from
-#: the current tex would put two drafts in one dict and make the reproduction
-#: gate compare against a mixture.
 NON_SSL_MODELS = [
     ("LFCC-GMM", "lfcc_gmm"),
     ("AASIST",   "aasist_raw"),
@@ -280,36 +283,6 @@ LINEAGE = [
 # In tab:top_ssl_lineage, "wav2vec 2.0" is the Base variant (paper text: 32.88 == wav2vec 2.0 Base).
 LINEAGE_ROW_TO_MAIN = {"wav2vec 2.0": "wav2vec 2.0 Base"}
 
-# Published main-results values (commit fa16daa), used purely as a regression gate:
-# the eight columns this task does not touch, plus ASVLD, must reproduce to
-# +/-0.01.  If they do not, the parsing or the score sources have drifted and
-# no recomputed MLAAD/Mean/Pooled number can be trusted.
-PUBLISHED = {
-    "FBANK":             [42.828, 43.155, 44.789, 49.838, 48.393, 47.113, 48.427, 44.579, 53.627, 50.432],
-    "APC":               [10.075, 16.335, 22.276, 33.311, 36.889, 42.662, 58.402, 17.599, 37.267, 40.985],
-    "VQ-APC":            [12.155, 18.872, 20.217, 30.581, 34.860, 52.173, 58.544, 17.880, 39.747, 41.699],
-    "NPC":               [15.243, 17.619, 25.239, 37.868, 40.986, 49.843, 51.979, 19.766, 42.830, 43.554],
-    "Mockingjay":        [15.430, 19.798, 25.312, 40.217, 35.848, 49.800, 40.975, 37.872, 98.085, 40.503],
-    "Mockingjay-960h":   [13.801, 25.525, 22.584, 37.866, 52.387, 52.130, 49.953, 39.042, 98.085, 46.362],
-    "TERA":              [ 9.112, 26.572, 17.254, 35.656, 39.894, 54.251, 49.282, 34.107, 98.085, 38.999],
-    "DeCoAR 2.0":        [ 7.628, 12.352, 18.990, 29.571, 35.029, 49.800, 54.452, 13.281, 38.204, 38.442],
-    "wav2vec":           [ 8.812, 15.500, 14.761, 30.691, 42.239, 53.895, 51.048, 23.318, 54.451, 40.479],
-    "wav2vec 2.0 Base":  [ 4.661, 11.452, 10.046, 18.698, 40.945, 56.981, 51.921, 23.886, 39.797, 32.601],
-    "wav2vec 2.0 Large": [ 7.695, 18.887, 11.617, 19.956, 40.461, 55.764, 44.401, 24.711, 33.045, 34.149],
-    "HuBERT Base":       [ 4.867, 12.562, 13.387, 23.990, 27.276, 53.747, 53.749, 13.848, 36.841, 29.671],
-    "HuBERT Large":      [ 2.788, 10.049, 11.996, 21.252, 21.039, 52.991, 48.440, 12.593, 24.704, 25.721],
-    "MR-HuBERT":         [ 2.478,  9.017, 11.635, 23.056, 23.799, 49.696, 52.720,  7.041, 20.790, 23.373],
-    "XLS-R":             [ 1.985, 14.096,  4.314, 14.394, 20.073, 45.392, 29.598, 10.782,  9.203, 19.269],
-    "UniSpeech-SAT":     [ 1.961,  8.818,  7.443, 14.996, 16.791, 49.800, 46.601,  8.965, 13.095, 18.073],
-    "Data2Vec":          [ 7.695, 12.877, 16.511, 26.773, 29.249, 50.808, 53.092, 12.808, 20.351, 32.054],
-    "WAVLABLM":          [ 3.631, 15.380,  9.847, 21.115, 23.402, 52.530, 52.660, 13.323, 24.992, 29.649],
-    "WavLM Large":       [ 2.273, 11.636, 11.527, 17.549, 24.331, 49.696, 35.367, 10.951, 19.259, 24.922],
-    "SSAST":             [11.693, 24.935, 22.909, 31.186, 47.113, 40.184, 36.885, 27.139, 13.100, 36.585],
-    "MAE-AST-FRAME":     [ 7.685, 19.554, 17.001, 27.295, 43.645, 47.974, 35.214, 22.009,  9.120, 34.994],
-}
-# Columns expected to change; everything else is a regression gate.
-CHANGED_COLS = {"MLAAD"}
-REPRO_TOL = 0.01
 
 MLAAD_FULL_ROWS = 1_040_006
 MLAAD_BALANCED_ROWS = 912_000
@@ -653,32 +626,7 @@ def main():
                 if d not in non_ssl and r.get(key) is not None]
         bold[f"{key}_top5"] = [d for d, _ in sorted(cand, key=lambda t: t[1])[:5]]
 
-    # ---- regression gate: untouched columns must reproduce the paper ----
-    repro = []
-    for disp, r in results.items():
-        if disp not in PUBLISHED:
-            continue   # no recorded published values for this row to check
-        for i, (col, _) in enumerate(DATASETS):
-            if col in CHANGED_COLS:
-                continue
-            cell = r["datasets"].get(col)
-            if cell is None or cell.get("eer") is None:
-                continue  # withheld [TODO-verify] cell, nothing to check
-            d = abs(cell["eer"] - PUBLISHED[disp][i])
-            if d > REPRO_TOL:
-                repro.append(f"{disp}/{col}: published {PUBLISHED[disp][i]:.3f} "
-                             f"vs recomputed {cell['eer']:.3f} (d={d:.3f})")
-    print("\n=== REPRODUCTION GATE (untouched columns) ===")
-    if repro:
-        for x in repro:
-            print("  FAIL " + x)
-        print("  -> recomputed MLAAD/Mean/Pooled are NOT trustworthy")
-    else:
-        print("  PASS: every untouched published cell reproduced within "
-              f"{REPRO_TOL} pp")
-
-    payload = {"results": results, "bold": bold, "problems": problems,
-               "reproduction_failures": repro}
+    payload = {"results": results, "bold": bold, "problems": problems}
     (out_dir / "main_results.json").write_text(json.dumps(payload, indent=2))
     csv_path = write_table_csv(results, bold, out_dir / "main_results_table.csv")
 

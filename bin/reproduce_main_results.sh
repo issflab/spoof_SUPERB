@@ -11,17 +11,26 @@ source "$(dirname "${BASH_SOURCE[0]}")/_common.sh"
 
 # ---------------------------------------------------------------- SETTINGS --
 
-# "check"   recompute, then diff against tests/baseline_main_results_table.json (~2m40s)
+# "check"   code-regression gate: recompute and diff against
+#           tests/baseline_main_results_table.json at zero tolerance (~2m40s).
+#           This pins the CODE to the legacy tree the baseline was captured on.
+#           To check a rebuilt tree against the published reference instead,
+#           use bin/verify.sh -- that is the reproducibility check.
 # "compute" recompute only, and write the tables to OUT_DIR
 MODE="check"
 
-OUT_DIR="$REPO/outputs/main_results"
+# Where the tables go in "compute" mode. Empty = whatever `outputs_root` in
+# configs/paths.yaml says, which is the setting every other analysis honours.
+# Hardcoding a path here made that setting silently inapplicable to this script.
+OUT_DIR=""
 
 # ------------------------------------------------------------ END SETTINGS --
 
 if [ "$MODE" = "compute" ]; then
-    echo "+ recompute the results tables -> $OUT_DIR"
-    exec "$PY" -m spoof_superb.analysis.recompute_main_results --out_dir "$OUT_DIR" "$@"
+    ARGS=()
+    [ -n "$OUT_DIR" ] && ARGS+=(--out_dir "$OUT_DIR")
+    echo "+ recompute the results tables${OUT_DIR:+ -> $OUT_DIR}"
+    exec "$PY" -m spoof_superb.analysis.recompute_main_results "${ARGS[@]}" "$@"
 fi
 
 echo "+ recompute the results tables and diff against tests/baseline_main_results_table.json"

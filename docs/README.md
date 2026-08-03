@@ -11,7 +11,7 @@ Read these in order if you are new. Each one stands alone if you are not.
 | 5 | [Scoring](05-scoring.md) | you have a checkpoint and want score files |
 | 6 | [Orchestration](06-orchestration.md) | you want to score many models unattended |
 | 7 | [Training](07-training.md) | you want to train a new SSL or baseline model |
-| 8 | [Verification](08-verification.md) | you want to check new score files against the published ones |
+| 8 | [Verification](08-verification.md) | you rebuilt the tree or re-ran the analyses and want to check them against the published reference |
 | 9 | [Analysis: tables and figures](09-analysis.md) | you want to regenerate a table or figure |
 | 10 | [Tests](10-testing.md) | you changed the code |
 | 11 | [Troubleshooting](11-troubleshooting.md) | something broke |
@@ -30,16 +30,22 @@ It needs no GPU, no checkpoints and no audio -- only the published score files.
 ## How the pieces fit together
 
 ```
-   train                score                orchestrate            verify
-  ────────           ───────────            ─────────────         ──────────
-  audio +            checkpoint +           many scorings         new scores
-  protocol    ──▶    trial list      ──▶    across GPUs     ──▶   vs published
-     │                    │                                            │
-     ▼                    ▼                                            ▼
-  checkpoint          score file                                    PASS/FAIL
-                          │
-                          ▼
-                      analysis  ──▶  EER/FAR tables  ──▶  figures, paper tables
+   train                score                orchestrate
+  ────────           ───────────            ─────────────
+  audio +            checkpoint +           many scorings
+  protocol    ──▶    trial list      ──▶    across GPUs
+     │                    │                       │
+     ▼                    ▼                       ▼
+  checkpoint          score file  ────────▶  the score tree
+                                                  │
+                                                  ▼
+                                              analysis  ──▶  tables ──▶ figures
+
+  Nothing above compares itself against anything. Verification is one
+  separate command over the finished artefacts, at two independent levels:
+
+      verify ──▶  level 1  the score tree   vs  reference/manifest.json
+             └─▶  level 2  the tables       vs  reference/analysis/
 ```
 
 Reproducing the paper starts at the bottom of that diagram, not the top: the

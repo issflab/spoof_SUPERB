@@ -57,7 +57,8 @@ score_layout: v3
 # sub-directory under this: main_results/, degradation/, tts/.
 # Leave unset (or empty) to use the repo's own outputs/ directory.
 # --out_dir on any analysis overrides it.
-# outputs_root: /data/ssl_anti_spoofing/spoof_superb_outputs
+
+outputs_root: ./spoof_superb_outputs
 
 # The SSL model whose published score file defines a dataset's trial list.
 reference_ssl: xls_r_300m

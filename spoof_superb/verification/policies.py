@@ -1,4 +1,13 @@
-"""Grade policies: what counts as a pass, per dataset.
+"""SUPERSEDED -- per-dataset grade policies for the legacy migration check.
+
+Replaced by `verification.verdicts`, whose ladder is dataset-independent: it
+grades on the EER over identical trials, which is the quantity a reproduction
+claim is about, and reports the correlation statistics beside it rather than
+thresholding them per corpus. Kept because `tests/test_verification.py` pins
+the reasoning below, which is worth not losing.
+
+----------------------------------------------------------------------------
+Grade policies: what counts as a pass, per dataset.
 
 These are NOT interchangeable, and collapsing them into one flag-driven check
 would erase the reasoning behind each threshold. The differences below are

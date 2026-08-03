@@ -141,10 +141,14 @@ def test_every_published_eer_is_unchanged(fresh_payload, baseline):
     )
 
 
-def test_reproduction_gate_still_passes(fresh_payload):
-    """The script's own check that untouched published cells still reproduce."""
-    failures = fresh_payload.get("reproduction_failures") or []
-    assert not failures, f"reproducer's internal gate failed:\n  " + "\n  ".join(failures)
+# `test_reproduction_gate_still_passes` used to assert on the reproducer's own
+# "REPRODUCTION GATE" -- a dict of published values it compared its own output
+# against. That gate has been removed: an analysis must not grade itself against
+# the numbers it is trying to reproduce, because a disagreement there cannot
+# distinguish "the code changed" from "the scores changed". Comparing this
+# script's output against a reference is now level 2 of
+# `python -m spoof_superb.verification`, where the reference is a published
+# artefact rather than a literal in the source.
 
 
 def test_known_problem_set_does_not_grow(fresh_payload, baseline):

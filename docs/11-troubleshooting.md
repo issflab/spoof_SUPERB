@@ -74,10 +74,10 @@ Every entry point supports `--help`:
 ```bash
 python -m spoof_superb.scoring.driver --help
 python -m spoof_superb.orchestration.driver --help
-python -m spoof_superb.verification.driver --help
+python -m spoof_superb.verification --help
 python -m spoof_superb.config
 ```
 
 The module docstrings carry the reasoning behind the non-obvious behaviour --
-`spoof_superb/scoring/driver.py` and `spoof_superb/verification/policies.py` in
+`spoof_superb/scoring/driver.py` and `spoof_superb/verification/verdicts.py` in
 particular are worth reading before changing anything there.

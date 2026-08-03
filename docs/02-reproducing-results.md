@@ -53,12 +53,17 @@ and diffs it against the committed baseline `tests/baseline_main_results_table.j
 Expected output ends with:
 
 ```
-4 passed
+3 passed
 ```
 
-The four checks are: the model set is unchanged, every EER / row-count / NaN
-fraction is unchanged, the reproducer's own internal gate over the untouched
-published cells still passes, and no new problems appeared.
+The three checks are: the model set is unchanged, every EER / row-count / NaN
+fraction is unchanged, and no new problems appeared.
+
+This is a **code** regression gate -- it pins the reproducer to the legacy tree
+it was captured on, so a refactor cannot move a number. It is not the
+reproducibility check a user of the benchmark runs; that is
+[verification](08-verification.md), which compares a freshly built tree and its
+tables against the published reference.
 
 To write the tables out instead of checking them, set `MODE="compute"` in
 `bin/reproduce_main_results.sh`, or:

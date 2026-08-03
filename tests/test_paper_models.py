@@ -8,6 +8,7 @@ Two changes are guarded here, and both have a failure mode that is silent:
     provenance rests on
 """
 
+import inspect
 import json
 import os
 import re
@@ -292,20 +293,21 @@ def test_j2_job_no_longer_carries_verify_or_skip():
     assert "skip" not in names
 
 
-def test_j3_the_grading_policy_travels_with_the_dataset():
-    """The hole this closed: --job all used to grade nothing.
+def test_j3_no_task_carries_a_grading_policy():
+    """Scoring grades nothing, so a Task has nothing to grade with.
 
-    Because the policy lived on --job mlaad, the sweep anyone would actually
-    run had verify=None for MLAAD and SpoofCeleb.
+    A per-dataset policy on the Task was the hook a sweep-time comparison hung
+    off. Removing the hook is what makes "scoring never reads a score file it
+    did not just write" a structural property rather than a default that a flag
+    can switch off.
     """
-    from spoof_superb.scoring.datasets import verify_policy
-    tasks = {t.name: t for t in JOBS["all"].enumerate_tasks(
-        datasets=["Multilingual", "spoofceleb", "wild"])}
-    for name, t in tasks.items():
-        assert t.verify == verify_policy(t.dataset), name
-    assert any(t.verify == "mlaad" for t in tasks.values())
-    assert any(t.verify == "spoofceleb" for t in tasks.values())
-    assert any(t.verify is None for t in tasks.values())
+    import dataclasses
+    import spoof_superb.scoring.datasets as D
+    from spoof_superb.orchestration.jobs import Task
+
+    assert "verify" not in {f.name for f in dataclasses.fields(Task)}
+    assert not hasattr(D, "verify_policy")
+    assert not hasattr(D, "VERIFY_POLICY")
 
 
 def test_j4_unreported_models_are_excluded_by_the_roster_alone():
@@ -350,24 +352,39 @@ def test_j6_scoring_resolves_no_reference_file():
         assert not any("--reference" in a or "--ref" == a for a in t.argv)
 
 
-def test_j7_reference_lookup_requires_an_explicit_root(tmp_path):
-    """No root named means no comparison -- never a silent default."""
-    from spoof_superb.orchestration.driver import reference_for
-    t = JOBS["all"].enumerate_tasks(datasets=["Multilingual"])[0]
-    assert reference_for(t, None, "legacy") is None
-    assert reference_for(t, str(tmp_path), "legacy") is None      # empty tree
+def test_j7_the_orchestrator_cannot_be_pointed_at_a_second_tree():
+    """There is no --verify-against, and no code path that would honour one.
+
+    Not merely off by default: absent. A comparison inside the sweep grades a
+    tree against whatever is on disk at the time and makes the sweep's exit
+    code depend on a second tree, so the flag and its machinery are gone rather
+    than defaulted to empty.
+    """
+    import spoof_superb.orchestration.driver as drv
+
+    assert not hasattr(drv, "reference_for")
+    assert not hasattr(drv, "_verify")
+
+    # The module docstring names the flag in order to explain its absence, so
+    # the check is on the code below it, not on the prose.
+    src = inspect.getsource(drv).replace(drv.__doc__ or "", "")
+    for banned in ("--verify-against", "--verify-layout", "verification.driver"):
+        assert banned not in src, f"{banned} is back in the orchestrator"
 
 
-def test_j8_reference_resolves_against_a_real_old_tree():
-    """The migration check must actually find the published columns."""
-    from spoof_superb.orchestration.driver import reference_for
-    old = "/data/ssl_anti_spoofing/asd_superb_score_files"
-    if not os.path.isdir(old):
-        pytest.skip("the old score tree is not mounted")
-    found = [t.name for t in JOBS["all"].enumerate_tasks(
-        datasets=["Multilingual", "spoofceleb"])
-        if reference_for(t, old, "legacy")]
-    assert found, "no published column resolved; the migration check is broken"
+def test_j8_verification_is_reachable_as_its_own_step():
+    """Removing the hook must not remove the capability.
+
+    The check is that both levels exist and are runnable independently -- the
+    replacement for the sweep-time comparison, not merely its deletion.
+    """
+    from spoof_superb.verification import analysis, scores
+    from spoof_superb.verification.verdicts import ANALYSIS_LADDER, SCORE_LADDER
+
+    assert callable(scores.verify_scores)
+    assert callable(analysis.verify_analysis)
+    # The two levels answer different questions and must not share a ladder.
+    assert SCORE_LADDER != ANALYSIS_LADDER
 
 
 def test_j9_only_the_960hr_variant_is_scored_on_mlaad():
