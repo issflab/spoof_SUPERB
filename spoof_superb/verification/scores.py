@@ -72,7 +72,11 @@ def utt_digest(utts):
 
 
 def cell_summary(paths):
-    """Everything the manifest records about one cell, computed from disk."""
+    """Everything the manifest records about one cell, computed from disk.
+
+    Reads and parses every row, so it is the expensive path. Callers that only
+    need to establish byte-identity should hash first -- see `verify_scores`.
+    """
     utts, labels, scores = read_scored(paths)
     utts, _prefix = strip_absolute_prefix(utts)
     finite = ~np.isnan(scores)
@@ -233,9 +237,22 @@ def verify_scores(candidate_root, candidate_layout, models, datasets=None,
                             and row.get("eer_b_common") is not None):
                         row["d_eer"] = abs(row["eer_a_common"] - row["eer_b_common"])
                 else:
-                    cand = (cell_summary(cand_paths)
-                            if all(p.exists() for p in cand_paths) else None)
                     ref = (manifest.get("cells", {}).get(key, {}).get(slug))
+                    cand = None
+                    if all(p.exists() for p in cand_paths):
+                        # Hash before parsing. A byte-identical file needs no
+                        # counts, no EER and no trial digest -- and on a tree
+                        # that was fetched rather than recomputed, that is
+                        # every cell. Parsing first made the cheapest possible
+                        # answer cost a full read of ~15 GB.
+                        digests = [sha256(p) for p in cand_paths]
+                        if ref and ref.get("sha256") == digests:
+                            cand = {"sha256": digests, "n_rows": ref["n_rows"],
+                                    "n_nonfinite": ref["n_nonfinite"],
+                                    "eer_percent": ref["eer_percent"],
+                                    "utt_digest": ref["utt_digest"]}
+                        else:
+                            cand = cell_summary(cand_paths)
                     verdict, reason = grade_manifest_cell(ref, cand)
                     row.update({
                         "n_a": (ref or {}).get("n_rows"),

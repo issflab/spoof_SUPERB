@@ -827,3 +827,38 @@ legacy tree the baseline was captured on so a refactor cannot move a number --
 not the reproducibility check a benchmark user runs. Only
 `test_reproduction_gate_still_passes` was dropped, because the field it read no
 longer exists.
+
+### P14 addendum -- level 1 validated against the legacy tree
+
+The self-check (v3 vs its own manifest) is 190/190 `IDENTICAL` and 6/6
+`IDENTICAL`, exit 0 -- correct, but it only proves the plumbing.
+
+The real test is tree mode against the legacy tree, which reproduces P12's
+findings through the new ladder:
+
+```
+SpoofCeleb   16 EQUIVALENT   3 SENSITIVE
+ASV19 LA     19 SCORES_DIFFER
+```
+
+| cell | trials | labels | spearman | max abs d | dEER pp | verdict |
+|---|---|---|---|---|---|---|
+| SpoofCeleb/`tera` | identical | agree | 1.000000 | 0.0428 | **4.149** | `SENSITIVE` |
+| SpoofCeleb/`mockingjay_960hr` | identical | agree | 1.000000 | 0.0311 | 0.117 | `SENSITIVE` |
+| SpoofCeleb/`wavlablm_ek_40k` | identical | agree | 0.999999 | 0.0469 | 0.052 | `SENSITIVE` |
+| ASV19 LA/`wav2vec` | identical | agree | 0.81015 | -- | **3.170** | `SCORES_DIFFER` |
+
+**The magnitude ordering is inverted relative to the verdict.** `tera` moves the
+EER by 4.149 pp and PASSES; `wav2vec` moves it by 3.170 pp and FAILS. That is
+the entire argument against grading on dEER alone, measured on real data rather
+than argued: the two cells are distinguishable only by rank agreement, and rank
+agreement is what a detection claim is about.
+
+All 19 ASV19 LA cells have identical trial sets and zero label disagreement, so
+the divergence is neither coverage nor protocol -- the same conclusion P12
+reached, now produced automatically by a command anyone can run.
+
+**Efficiency note.** Manifest mode originally parsed every candidate file before
+comparing its sha256, which made the cheapest possible answer -- "byte-identical"
+-- cost a full read of ~15 GB. It now hashes first and only parses when the hash
+differs. On a fetched or re-verified tree that is every cell.
