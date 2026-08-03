@@ -422,3 +422,134 @@ difference:
 
 Without the second, the FF intersection is all-spoof and every FF cell reports
 "not comparable" -- true, but it hides that the spoof half matched perfectly.
+
+---
+
+## P11  Analysis views for the v3 tree  [PROPOSAL -- needs decision before anything is created]
+
+Nothing has been created. `/data/ssl_anti_spoofing/spoof_superb_score_files`
+still holds `raw/` and `_runs/` only.
+
+### What the legacy tree did, and what it cost
+
+Eight view trees, 23.1 GB, against 7.5 GB of raw score files -- roughly three
+copies of the data, in trees that can drift from their source and from each
+other:
+
+    scores_by_acoustic_degradation  3.3G     scores_by_TTS_MLAAD      2.9G
+    scores_by_category_augmented    2.6G     scores_by_MLAAD_language 2.9G
+    scores_by_TTS                   2.6G     linear_head_normalized_scores  3.5G
+    scores_by_TTS_norm              1.8G     normalized_scores_by_ssl_model 3.5G
+
+The first two are the same view built twice, and `docs/09` already has to warn
+which one to use ("the latter carries the old fp16-NaN noise scores and no
+recompression"). That is the drift, already realised.
+
+### The finding that decides the design
+
+**Every legacy view is a GROUP-BY over a raw file, and the grouping key is
+already in the utt_id.**
+
+Acoustic degradation is ASVLD. The 29 condition suffixes in
+`raw/linear_head/asvspoof_ld/{model}.txt` are 71,237 utterances each, totalling
+exactly the 2,065,873 rows in the file:
+
+    babble|cafe|street|volvo|white _ {0,10,20}   15   Additive_Noise
+    RT_{0_3,0_6,0_9}                              3   Reverberation
+    resample_{8000,11025,22050,44100}             4   Resampling
+    recompression_{16k..320k}                     6   Codec_Compression
+    lpf_7000                                      1   Channel_Distortions
+
+The raw file is strictly RICHER than the view built from it. Legacy
+`Additive_Noise/APC.txt` carries bare ids (`LA_E_1736545`), so within that file
+you cannot tell babble from white, or 0 dB from 20 dB. The v3 raw file can
+answer per-noise and per-SNR; the view that replaced it cannot.
+
+MLAAD TTS is the same story, and there is already proof: at Phase 2c
+`create_mlaad_tts_eer_heatmaps` was ported to read `raw/` + the directory map
+and produced all four figures without `scores_by_TTS_MLAAD` existing at all.
+
+So a view is a QUERY, not a second copy. This is the same argument
+`scorepath.py` already makes for ASVLD conditions -- "splitting by directory
+would add a level that carries no information" -- applied one layer out.
+
+### Proposal
+
+**Views are declared in code, materialised only on request.**
+
+    {scores_root}/
+      raw/                                 the only source of truth
+      views/{view}/{group}/[{subgroup}/]{frontend}.txt
+      views/{view}/_bonafide/{frontend}.txt
+      views/{view}/_manifest.json
+
+with a `VIEW_SPECS` registry naming, per view: its source dataset(s), the
+function deriving the group key from the utt_id, and whether a shared bonafide
+pool is attached. One command builds any of them.
+
+**D1  `views/` is a sibling of `raw/`, never inside it.** `raw/*/*/model.txt`
+stays exact.
+
+**D2  The frontend is always the LAST path component.** So `views/*/*/xls_r_300m.txt`
+still finds one model everywhere, exactly as in raw. Legacy broke this: the
+degradation tree names files `APC.txt`, `Audio_Albert.txt`, `Byol-Audio.txt`
+under four conditions and `linear_head_resamp_apc.txt` under the fifth. That
+single inconsistency is why `compute_eer_matrix` carries three separate stem
+dictionaries -- 60 lines of hand-maintained mapping that exist only to undo it.
+
+**D3  Depth is 1 or 2 levels, chosen for readability, frontend last.**
+
+    views/acoustic_degradation/Additive_Noise/babble_10/apc.txt
+    views/mlaad_tts/AR/Bark/apc.txt
+    views/mlaad_language/de/apc.txt
+
+The coarse family is kept as a browsable level because it is what a reader
+looks for, and the fine condition is kept as the leaf because it is recoverable
+and the coarse one is not. Legacy had to choose one and chose the lossy one.
+
+**D4  The group key is derived by code, never hand-built.** That is what makes
+a view checkable against raw, rebuildable, and impossible to half-update.
+
+**D5  `_bonafide/`, with the underscore.** Legacy used `bonafide/`, which is
+indistinguishable from a TTS system named "bonafide" and sorts into the middle
+of the systems.
+
+**D6  Derived tables leave the score tree.** `eer_matrix.csv` currently sits
+INSIDE `scores_by_acoustic_degradation/`. Results go to `outputs/`; the score
+tree holds scores.
+
+**D7  Every view carries `_manifest.json`** -- source dataset, layout, row count
+per group, the raw files read with size and mtime, spec version, build time. So
+"is this view stale" is answerable, which is the failure mode materialised
+views always eventually hit and the one the two degradation trees already hit.
+
+**D8  Normalised scores are a different kind of view and get raw's shape.**
+z-score and sigmoid outputs are not a grouping -- same rows, different values --
+so they mirror raw exactly:
+
+    views/normalized/{method}/{method}/{dataset}/{frontend}.txt
+
+which keeps them diffable against the raw file they came from, row for row.
+
+**D9  Materialising stays optional.** Analysis that can compute from raw should,
+as the MLAAD figures now do. Build a view to browse it, to feed a tool that
+needs directories, or to publish a subset -- not as a precondition for a number.
+
+### What this costs and what it needs
+
+Roughly one new module (`tools/build_view.py` plus the `VIEW_SPECS` registry),
+and a follow-up port of `compute_eer_matrix` and `compute_eer_tts` onto the
+view paths -- at which point `compute_eer_matrix`'s three stem dictionaries
+delete themselves, because D2 makes them unnecessary.
+
+**Questions that need answering before any of it starts:**
+
+1. **Materialise, or compute from raw?** D9 says both, defaulting to computing.
+   If you would rather the views simply exist on disk as before, say so -- it is
+   a different design, not a tuning knob.
+2. **Fine or coarse degradation leaf?** D3 proposes both levels. The fine level
+   is new capability (per-SNR, per-bitrate) the paper does not currently report.
+3. **Do the normalised trees carry over at all?** They feed `compute_eer_tts`
+   and `plot_score_distributions`. Nothing in the main results depends on them.
+4. **Is `views/` the right word?** It is yours, from the request. `derived/`
+   is the alternative.
