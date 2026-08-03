@@ -480,7 +480,11 @@ def main():
         # The gate's superset: the rows the regression baseline tracks. It does
         # not include the non-SSL systems, which were never in that baseline.
         roster = [(d, s, "linear_head") for d, s in MODELS]
-    print(f"roster     {args.roster} ({len(roster)} rows)", flush=True)
+    print(f"roster     {args.roster} ({len(roster)} rows)")
+    print()
+    print(f"{'model':<20}" + "".join(c[:8].rjust(9) for c, _ in DATASETS)
+          + "Mean".rjust(9))
+    print("-" * (20 + 9 * (len(DATASETS) + 1)), flush=True)
 
     for disp, slug, system in roster:
         row = {"slug": slug, "system": system, "datasets": {},
@@ -496,6 +500,8 @@ def main():
         if not present:
             problems.append(f"{disp}: not scored on this tree -- no columns")
             results[disp] = row
+            print(f"{disp:<20}{'not scored on this tree':>{9 * (len(DATASETS) + 1)}}",
+                  flush=True)
             continue
         for col, prefix in DATASETS:
             if prefix is None:
@@ -615,10 +621,20 @@ def main():
         for a in row["asserts"]:
             problems.append(f"{disp}: {a}")
         results[disp] = row
-        fmt = lambda v: "TODO" if v is None else f"{v:.3f}"
-        print(f"{disp:20s} MLAAD full={e_full:7.3f} bal={fmt(e_bal):>7s} "
-              f"mean={fmt(row['mean']):>7s} pooled={fmt(row['pooled']):>7s}",
-              flush=True)
+        # Every column, not just MLAAD. This line used to print MLAAD's full
+        # and balanced EERs and nothing else -- a leftover from when the script
+        # existed only to replace the corrupted MLAAD column. The other nine
+        # were computed and written to the JSON and CSV, but never shown, so a
+        # run looked like it had scored one dataset.
+        #
+        # The full-vs-balanced pair is not lost: a gap beyond tolerance is
+        # already recorded as an assert and printed under PROBLEMS.
+        fmt = lambda v: "TODO".rjust(9) if v is None else f"{v:9.3f}"
+        print(f"{disp:<20}"
+              + "".join(fmt(row["datasets"][c]["eer"]
+                            if row["datasets"].get(c) else None)
+                        for c, _ in DATASETS)
+              + fmt(row["mean"]), flush=True)
 
     # ---- bolding: best per dataset column, top-5 in Mean/Pooled ---------
     # "Bold marks the best SSL MODEL in each dataset column and the top five
