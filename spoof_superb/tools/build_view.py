@@ -1,11 +1,15 @@
 """Materialise an analysis view under {scores_root}/views/.
 
-A view is a grouping of raw score rows, declared in `analysis.views`. Analysis
-does not need it on disk -- `load_view` returns the same grouping in memory, and
-the MLAAD figures already work that way. Build one to browse it, to feed a tool
-that wants directories, or to publish a subset.
+The analysis entry points build their own view and then report over it, so a
+number and the grouping it was computed over cannot disagree. This module is
+that build step, usable either as a library:
 
-    python -m spoof_superb.tools.build_view --view mlaad_tts \\
+    for frontend, groups, bonafide in build(spec, models, ...):
+        ...                       # rows already written; use them and move on
+
+or on its own, to produce a view for browsing without running an analysis:
+
+    python -m spoof_superb.tools.build_view --view tts_systems \\
         --scores_root /data/ssl_anti_spoofing/spoof_superb_score_files \\
         --layout v3
 
@@ -15,12 +19,17 @@ Writes, per P11:
     views/{view}/_bonafide/{frontend}.txt              shared reference pool
     views/{view}/_manifest.json                        what produced this
 
+`build` is a GENERATOR, and that is not incidental. The acoustic degradation
+view is about 4.5 million rows per model across its six conditions; holding
+nineteen models at once would cost tens of gigabytes for no reason, since every
+consumer reduces one model to a handful of EERs before moving to the next.
+
 The manifest exists because a materialised view can go stale against the raw
-files it came from, and the legacy tree demonstrates the consequence: it holds
+files behind it, and the legacy tree shows the cost: it holds
 `scores_by_category_augmented` and `scores_by_acoustic_degradation`, the same
-view built twice from different runs, and the documentation has to tell you
-which one to trust. Recording the source files, their sizes and mtimes, and the
-per-group row counts makes "is this current" a question with an answer.
+view built twice from different runs, with the documentation left to say which
+one to trust. Recording the sources, their sizes and mtimes, and the per-group
+row counts makes "is this current" answerable.
 
 Writes only under `views/`. Never touches `raw/`.
 """
@@ -32,18 +41,24 @@ import sys
 import time
 from pathlib import Path
 
-from spoof_superb.analysis.views import VIEW_SPECS, load_view, view_dir
+from spoof_superb.analysis.views import (VIEW_SPECS, CompositeView,
+                                          load_view, view_dir)
 from spoof_superb.config import cfg
 from spoof_superb.core.scorepath import (available_frontends, mlaad_pool_paths,
                                          score_path)
 
-#: The canonical 4-column line. Views hold score files, so they hold the same
-#: format raw does -- a view that invented its own would need its own reader.
+#: Views hold score files, so they hold the same canonical 4-column format raw
+#: does. A view that invented its own would need its own reader.
 LINE = "{utt} - {key} {score}\n"
 
 
 def source_paths(spec, frontend, scores_root, layout):
     """Every raw file this view reads for one model."""
+    if isinstance(spec, CompositeView):
+        datasets = {p.dataset for parts in spec.groups.values() for p in parts}
+        return [Path(score_path("linear_head", d, frontend,
+                                scores_root=scores_root, layout=layout))
+                for d in sorted(datasets)]
     if spec.bonafide_dataset:
         return [Path(p) for p in mlaad_pool_paths(frontend, scores_root=scores_root,
                                                   layout=layout)]
@@ -53,10 +68,10 @@ def source_paths(spec, frontend, scores_root, layout):
 
 
 def write_group(rows, path):
-    """Write one group's rows atomically, as the canonical format."""
+    """Write one group's rows atomically, in the canonical format."""
     utts, labels, scores = rows
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".part")
+    tmp = path.with_name(path.name + ".part")
     with open(tmp, "w") as fh:
         for u, k, s in zip(utts.tolist(), labels.tolist(), scores.tolist()):
             fh.write(LINE.format(utt=u, key=k, score=s))
@@ -64,67 +79,53 @@ def write_group(rows, path):
     return len(utts)
 
 
-def main(argv=None):
-    ap = argparse.ArgumentParser(
-        prog="python -m spoof_superb.tools.build_view",
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--view", required=True, choices=sorted(VIEW_SPECS),
-                    help="which view to materialise")
-    ap.add_argument("--scores_root", default=None,
-                    help="tree to read from (default: the configured one)")
-    ap.add_argument("--layout", default=None, choices=("legacy", "v2", "v3"))
-    ap.add_argument("--out_root", default=None,
-                    help="where to write views/ (default: --scores_root, i.e. "
-                         "beside raw/). Point elsewhere to build without "
-                         "touching the score tree.")
-    ap.add_argument("--models", nargs="*", default=None,
-                    help="score-file slugs (default: every model present)")
-    ap.add_argument("--dry-run", action="store_true",
-                    help="report the groups and row counts, write nothing")
-    args = ap.parse_args(argv)
+def build(spec, models, scores_root=None, layout=None, out_root=None,
+          dry_run=False, verbose=True):
+    """Materialise `spec` for each model, yielding (frontend, groups, bonafide).
 
-    spec = VIEW_SPECS[args.view]
-    scores_root = args.scores_root or cfg.scores_root
-    layout = args.layout or getattr(cfg, "score_layout", "legacy")
-    out_root = args.out_root or scores_root
-    out = Path(view_dir(spec.name, out_root))
+    Rows are written before each yield, so a consumer that stops early leaves a
+    partial but internally consistent view rather than a half-written file.
 
-    models = args.models or available_frontends(
-        "linear_head", spec.dataset, scores_root=scores_root, layout=layout,
-        ext=spec.ext)
-    if not models:
-        sys.exit(f"FATAL: no {spec.dataset} score files under {scores_root} "
-                 f"({layout})")
-
-    print(f"view       {spec.name}")
-    print(f"source     {spec.dataset}"
-          + (f" + {spec.bonafide_dataset}" if spec.bonafide_dataset else ""))
-    print(f"reading    {scores_root}  (layout={layout})")
-    print(f"writing    {out}" + ("  [DRY RUN -- nothing written]"
-                                 if args.dry_run else ""))
-    print(f"models     {len(models)}\n", flush=True)
+    Models with no score file are skipped and named, not guessed at. The set of
+    group keys must agree across models -- they scored the same trials, so a
+    difference means one file is not the set the others are, which is worth
+    failing on rather than writing a ragged view.
+    """
+    scores_root = scores_root or cfg.scores_root
+    layout = layout or getattr(cfg, "score_layout", "legacy")
+    out = Path(view_dir(spec.name, out_root or scores_root))
 
     manifest = {
         "view": spec.name,
         "doc": spec.doc,
-        "source_dataset": spec.dataset,
-        "bonafide_dataset": spec.bonafide_dataset,
+        "kind": "composite" if isinstance(spec, CompositeView) else "partition",
         "scores_root": str(scores_root),
         "layout": layout,
         "built_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
-        "models": list(models),
         "sources": {},
         "group_rows": {},
         "bonafide_rows": {},
+        "skipped": [],
     }
+    if isinstance(spec, CompositeView):
+        manifest["reference_group"] = spec.reference
+        manifest["composition"] = {
+            g: [{"dataset": p.dataset, "conditions": p.conditions,
+                 "exclude": p.exclude, "family": p.family} for p in parts]
+            for g, parts in spec.groups.items()
+        }
 
-    groups_seen = None
+    keys_seen = None
     for frontend in models:
         srcs = source_paths(spec, frontend, scores_root, layout)
         missing = [p for p in srcs if not p.exists()]
         if missing:
-            print(f"  {frontend:<40} SKIP (missing {missing[0].name})")
+            manifest["skipped"].append(f"{frontend} ({missing[0].name})")
+            if verbose:
+                print(f"  {frontend:<40} SKIP (missing {missing[0].name})",
+                      flush=True)
             continue
+
         manifest["sources"][frontend] = [
             {"path": str(p), "bytes": p.stat().st_size,
              "mtime": time.strftime("%Y-%m-%dT%H:%M:%S",
@@ -133,40 +134,92 @@ def main(argv=None):
         ]
 
         groups, bonafide = load_view(spec, frontend, scores_root, layout)
-        total = 0
-        for key, rows in sorted(groups.items()):
-            path = out.joinpath(*key, f"{frontend}.txt")
-            total += (len(rows[0]) if args.dry_run else write_group(rows, path))
-        if bonafide is not None:
-            n_b = (len(bonafide[0]) if args.dry_run
-                   else write_group(bonafide, out / "_bonafide" / f"{frontend}.txt"))
-            manifest["bonafide_rows"][frontend] = n_b
-        manifest["group_rows"][frontend] = total
 
-        # Every model must group identically -- they score the same trials. A
-        # difference means one model's file is not the set the others scored,
-        # which is worth failing on rather than writing a ragged view.
         keys = set(groups)
-        if groups_seen is None:
-            groups_seen = keys
-        elif keys != groups_seen:
-            sys.exit(f"FATAL: {frontend} has groups {sorted(keys ^ groups_seen)} "
+        if keys_seen is None:
+            keys_seen = keys
+        elif keys != keys_seen:
+            sys.exit(f"FATAL: {frontend} has groups {sorted(keys ^ keys_seen)} "
                      f"that other models do not. The view would be ragged.")
 
-        print(f"  {frontend:<40} {len(groups):>4} groups  {total:>9} rows"
-              + (f"  + {manifest['bonafide_rows'][frontend]} bonafide"
-                 if bonafide is not None else ""), flush=True)
+        total = 0
+        for key, rows in sorted(groups.items()):
+            if dry_run:
+                total += len(rows[0])
+            else:
+                total += write_group(rows, out.joinpath(*key, f"{frontend}.txt"))
+        manifest["group_rows"][frontend] = total
+        if bonafide is not None:
+            manifest["bonafide_rows"][frontend] = (
+                len(bonafide[0]) if dry_run
+                else write_group(bonafide, out / "_bonafide" / f"{frontend}.txt"))
+
+        if verbose:
+            extra = (f"  + {manifest['bonafide_rows'][frontend]:,} bonafide"
+                     if bonafide is not None else "")
+            print(f"  {frontend:<40} {len(groups):>4} groups  {total:>10,} rows"
+                  + extra, flush=True)
+
+        yield frontend, groups, bonafide
+
+    if not dry_run:
+        out.mkdir(parents=True, exist_ok=True)
+        (out / "_manifest.json").write_text(json.dumps(manifest, indent=2,
+                                                       default=str))
+        if verbose:
+            print(f"\n  view -> {out}")
+            print(f"  manifest -> {out / '_manifest.json'}", flush=True)
+    build.last_manifest = manifest
+
+
+def default_models(spec, scores_root, layout):
+    """Every model this tree scored for the view's source dataset."""
+    if isinstance(spec, CompositeView):
+        dataset = next(iter(next(iter(spec.groups.values())))).dataset
+        ext = ".txt"
+    else:
+        dataset, ext = spec.dataset, spec.ext
+    return available_frontends("linear_head", dataset, scores_root=scores_root,
+                               layout=layout, ext=ext)
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser(
+        prog="python -m spoof_superb.tools.build_view",
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--view", required=True, choices=sorted(VIEW_SPECS))
+    ap.add_argument("--scores_root", default=None)
+    ap.add_argument("--layout", default=None, choices=("legacy", "v2", "v3"))
+    ap.add_argument("--out_root", default=None,
+                    help="where views/ is written (default: --scores_root). "
+                         "Point elsewhere to build without touching the tree.")
+    ap.add_argument("--models", nargs="*", default=None)
+    ap.add_argument("--dry-run", action="store_true",
+                    help="report groups and row counts, write nothing")
+    args = ap.parse_args(argv)
+
+    spec = VIEW_SPECS[args.view]
+    scores_root = args.scores_root or cfg.scores_root
+    layout = args.layout or getattr(cfg, "score_layout", "legacy")
+    models = args.models or default_models(spec, scores_root, layout)
+    if not models:
+        sys.exit(f"FATAL: no score files for {spec.name} under {scores_root} "
+                 f"({layout})")
+
+    print(f"view      {spec.name}")
+    print(f"reading   {scores_root}  (layout={layout})")
+    print(f"writing   {view_dir(spec.name, args.out_root or scores_root)}"
+          + ("  [DRY RUN -- nothing written]" if args.dry_run else ""))
+    print(f"models    {len(models)}\n", flush=True)
+
+    n = 0
+    for _frontend, _groups, _bonafide in build(
+            spec, models, scores_root, layout,
+            args.out_root or scores_root, args.dry_run):
+        n += 1
 
     if args.dry_run:
-        print(f"\nDRY RUN -- {len(groups_seen or ())} groups per model, "
-              f"nothing written.")
-        return 0
-
-    out.mkdir(parents=True, exist_ok=True)
-    (out / "_manifest.json").write_text(json.dumps(manifest, indent=2))
-    print(f"\nBuilt {out}")
-    print(f"  {len(groups_seen or ())} groups x {len(manifest['group_rows'])} models")
-    print(f"  manifest: {out / '_manifest.json'}")
+        print(f"\nDRY RUN -- {n} models, nothing written.")
     return 0
 
 

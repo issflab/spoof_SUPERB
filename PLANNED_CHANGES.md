@@ -489,65 +489,50 @@ So a view is a QUERY, not a second copy. This is the same argument
 `scorepath.py` already makes for ASVLD conditions -- "splitting by directory
 would add a level that carries no information" -- applied one layer out.
 
-### CORRECTION: acoustic degradation is NOT ASVLD
+### CORRECTION, twice: what the legacy degradation tree actually is
 
-An earlier version of this proposal claimed the legacy degradation tree was a
-lossy view of `raw/linear_head/asvspoof_ld/`. **That is wrong**, and it was
-load-bearing, so it is corrected here rather than quietly edited.
+This entry got the degradation view wrong twice, and both are recorded because
+the second correction reverses the first's implication.
 
-The v3 ASVLD decomposition is right: 29 condition suffixes, 71,237 utterances
-each, totalling exactly the file's 2,065,873 rows.
+**First claim (wrong):** the legacy degradation tree is a lossy view of raw
+ASVLD. It is not -- its files carry `LA_E`, `DF_E` and `E_00` ids, so it spans
+three corpora, and v3 holds `DF_E` and `E_00` clean only.
 
-    babble|cafe|street|volvo|white _ {0,10,20}   15
-    RT_{0_3,0_6,0_9}                              3
-    resample_{8000,11025,22050,44100}             4
-    recompression_{16k..320k}                     6
-    lpf_7000                                      1
+**Second claim (also wrong):** that the mixture was accretion, and a defect.
+It is neither. It is the composition the paper specifies in Section 4.4.2 and
+`tab:acoustic_degradation`, and the arithmetic confirms it exactly:
 
-What is wrong is the claim that the legacy view is the same population. It is a
-MIXTURE OF THREE CORPORA, and mostly untagged:
+    condition        Table 5 composition                                observed
+    Reverberation    ASVLD RT 210,191 + LA:C1 25,938 + DF:C1 17,131
+                     + ASV5:C00 171,602                 =    424,862     424,862
+    Bandwidth        ASVLD resample 284,948 + the same three
+                                                        =    499,619     499,619
+    Additive Noise   ASVLD noise 712,370 + the same three
+                                                        =    927,041     927,041
+    Channel          LA:C2-C7 155,628 + ASV19 71,237 + DF:C1 17,131
+                     + ASV5:C11 46,610                  =    290,606     290,606
+    Codec            ASVLD recompr 427,422 + LA:C1 + DF:C2-C9 137,048
+                     + ASV5:C01-C10 466,100             =  1,056,508   1,051,746
 
-    file                  LA_E      DF_E      E_00      condition-tagged?
-    Additive_Noise      738,308    17,131   171,602     no
-    Channel_Distortions 226,865    17,131    46,610     no
-    Codec_Compression   453,360   135,824   462,562     partly (6 x 71,237)
-    Reverberation             --        --        --    yes (3 x ~70,000)
-    Resampling                --        --        --    yes (4 x 71,237)
+Four exact, and Codec short by 4,762 (0.45%) -- decode failures, the same kind
+of gap as the reverberation shortfall below.
 
-`DF_E_*` is ASVspoof2021 DF and `E_00*` is ASVspoof5. The v3 tree has scores
-for those corpora **clean only** -- 0 of their utt_ids carry any condition
-suffix. The degraded audio for them was never scored into v3.
+Pooling clean corpora into every degraded condition is the point of the design,
+not a flaw in it: each condition changes only the corpus under degradation, so
+its EER is comparable to the Baseline. Measuring a degradation on its degraded
+corpus alone would confound the degradation with that corpus's difficulty.
 
-So the legacy Section 5.2 population **cannot be rebuilt from the v3 raw tree**.
-Doing so needs the degraded ASV19/DF/ASV5 audio re-scored, which is a scoring
-job, not an analysis one, and is not started here.
+The one real finding from the audit stands: the legacy tree's reverberation
+conditions are unequally populated -- RT_0_9 71,237, RT_0_6 70,533, RT_0_3
+68,421, so 3,520 utterances are missing with no record of why. v3 has the full
+71,237 for all three.
 
-Two further things the audit turned up, both properties of the legacy tree:
-
-* Its reverberation conditions are not equally populated -- RT_0_9 has 71,237
-  rows but RT_0_6 has 70,533 and RT_0_3 has 68,421. 3,520 utterances are
-  missing, silently, with no record of why.
-* `Codec_Compression` mixes 624,324 untagged rows in with the six tagged
-  recompression conditions, so an EER computed over that file is over a
-  population that cannot be described.
-
-### What this changes in the proposal
-
-D1-D7 and D9 are unaffected -- they are about shape, and the shape is right.
-
-The view list changes. Two views are fully derivable and are built now; the
-third is renamed to what it actually is:
-
-    mlaad_tts          from mlaad_v10 + mailabs      derivable, verified
-    mlaad_language     from mlaad_v10 + mailabs      derivable, verified
-    asvld_conditions   from asvspoof_ld              derivable, but NOT the
-                       (29 conditions, 5 families)   legacy 5.2 population
-
-`asvld_conditions`, not `acoustic_degradation`, for the reason `scorepath.py`
-already gives for writing `mlaad_v10` rather than `mlaad`: two different
-populations must not share a name. A reader who sees `acoustic_degradation` in
-the v3 tree would reasonably assume it reproduces the published Section 5.2,
-and it does not -- it is a cleaner, per-condition measurement over one corpus.
+**What does not carry over.** The paper's DF:C1 is 17,131 utterances, and it is
+not a protocol partition -- it is the `nocodec` subset of the DF trial list the
+main benchmark column happened to score (152,955 of 611,829). Verified by
+lookup: the two sets are identical. v3 scores the full DF set, so its DF:C1 is
+all 67,981 `nocodec` trials. Every v3 condition count therefore exceeds the
+paper's, for the coverage reason P12 already records, not a compositional one.
 
 ### Proposal
 
@@ -607,25 +592,62 @@ so they mirror raw exactly:
 
 which keeps them diffable against the raw file they came from, row for row.
 
-**D9  Materialising stays optional.** Analysis that can compute from raw should,
-as the MLAAD figures now do. Build a view to browse it, to feed a tool that
-needs directories, or to publish a subset -- not as a precondition for a number.
+**D9  DROPPED.** Views were proposed as optional, computed from raw by default.
+Rejected: an analysis and the grouping it reports over must not be able to
+disagree, and "the view on disk is stale" is a failure mode with no upside.
+Each analysis entry point BUILDS its view and then reports over it, in one
+command. `tools/build_view` remains for building one without running an
+analysis, and `--dry-run` for seeing what it would write.
 
-### What this costs and what it needs
+### As shipped
 
-Roughly one new module (`tools/build_view.py` plus the `VIEW_SPECS` registry),
-and a follow-up port of `compute_eer_matrix` and `compute_eer_tts` onto the
-view paths -- at which point `compute_eer_matrix`'s three stem dictionaries
-delete themselves, because D2 makes them unnecessary.
+Two views, one per analysis beyond the main table:
 
-**Questions that need answering before any of it starts:**
+    acoustic_degradation   6 conditions   Section 4.4.2, tab:acoustic_degradation
+    tts_systems           91 systems      Sections 4.4.3 and 3.2.3
 
-1. **Materialise, or compute from raw?** D9 says both, defaulting to computing.
-   If you would rather the views simply exist on disk as before, say so -- it is
-   a different design, not a tuning knob.
-2. **Fine or coarse degradation leaf?** D3 proposes both levels. The fine level
-   is new capability (per-SNR, per-bitrate) the paper does not currently report.
-3. **Do the normalised trees carry over at all?** They feed `compute_eer_tts`
-   and `plot_score_distributions`. Nothing in the main results depends on them.
-4. **Is `views/` the right word?** It is yours, from the request. `derived/`
-   is the alternative.
+An earlier draft listed `asvld_conditions` and `mlaad_language` instead. Both
+are gone: the first was a stand-in built while the degradation composition was
+misread as ASVLD-only, and nothing reports over per-language MLAAD.
+
+The degradation view needed a shape the first design could not express. Its
+groups are POOLS of partitions of four corpora, named in advance because the
+paper names them, where `tts_systems` PARTITIONS one dataset into groups
+discovered from the data. Both yield {group: rows}, so the materialiser and
+everything downstream is still written once.
+
+Modules:
+
+    analysis/conditions.py   which condition an utterance is in, per corpus
+    analysis/views.py        the two specs, and load_view
+    tools/build_view.py      the materialiser, a generator over models
+    analysis/acoustic_degradation.py   entry point: build, then EER + dEER
+    analysis/tts_systems.py            entry point: build, then 4 groupings
+
+Condition codes come from each corpus's own protocol and were verified to cover
+the v3 tree exactly, with nothing unmatched:
+
+    asvspoof2021_la    181,566 rows    7 conditions x 25,938   C1  = none
+    asvspoof2021_df    611,829 rows    9 conditions x 67,981   C1  = nocodec
+    asvspoof5          680,774 rows   12 conditions            C00 = '-'
+    asvspoof_ld      2,065,873 rows   29 conditions x 71,237   in the utt_id
+
+The composed conditions, per model, on v3:
+
+    Baseline               336,758        Additive_Noise      1,334,076
+    Codec_Compression    1,459,770        Reverberation         479,232
+    Bandwidth              550,469        Channel_Distortions   341,456
+
+Each matches the Table 5 composition arithmetic exactly.
+
+**The view changed no number.** `tts_systems` reproduces the older raw-reading
+`create_mlaad_tts_eer_heatmaps` to max|d| = 0.000000 across all 11 architecture
+groups, for both models checked.
+
+### Still open
+
+`compute_eer_matrix` and `compute_eer_tts` are not ported. They read the legacy
+view trees, and the two entry points above replace what they were for -- so the
+question is whether to delete them rather than port them. `compute_eer_matrix`'s
+three hand-maintained stem dictionaries exist only to undo the legacy naming
+inconsistency that D2 forbids, so a port would delete them anyway.

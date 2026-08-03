@@ -30,40 +30,86 @@ a path the layout can compute. Those are marked below.
 
 | reads | scripts |
 |---|---|
-| raw score files | `recompute_main_results`, `verify_mlaad_column`, `organize_mlaad_scores`, `build_mlaad_dir_map`, `create_mlaad_tts_eer_heatmaps`, `compare_trees` |
-| raw, then writes a view | `apply_zscore_and_pool`, `apply_sigmoid_and_pool`, `plot_score_distributions` |
-| a view only | `compute_eer_matrix`, `compute_eer_tts`, `compute_far_matrix`, `create_*_heatmaps` |
+| raw, and builds its own view | `acoustic_degradation`, `tts_systems`, `build_view` |
+| raw score files | `recompute_main_results`, `verify_mlaad_column`, `organize_mlaad_scores`, `build_mlaad_dir_map`, `compare_trees` |
+| raw, then writes a legacy tree | `apply_zscore_and_pool`, `apply_sigmoid_and_pool`, `plot_score_distributions` |
+| a LEGACY view tree | `compute_eer_matrix`, `compute_eer_tts`, `compute_far_matrix`, `create_*_heatmaps` |
 | neither (checkpoints, corpus metadata) | `layer_weight_analysis`, `create_combined_mlaad_meta_all` |
 
-The v3 tree currently holds `raw/` only, so the view-consuming scripts have
-nothing to read there yet. They still run against the legacy tree.
+The last group predates the entry points above and reads view trees that exist
+only in the legacy tree. They are kept because they produced published figures,
+not because anything should be run through them now.
 
-## Analysis views
+## The three analyses
 
-A view groups raw score rows by something recoverable from the utt_id -- the
-TTS system that made an utterance, its language, the acoustic condition applied
-to it. Views are declared once in `analysis/views.py`:
-
-| view | source | groups |
-|---|---|---|
-| `mlaad_tts` | `mlaad_v10` + `mailabs` | 91 TTS systems under AR / NAR / closed_undisclosed |
-| `mlaad_language` | `mlaad_v10` + `mailabs` | 54 languages |
-| `asvld_conditions` | `asvspoof_ld` | 29 conditions under 5 families |
-
-Analysis does not need them on disk -- `load_view` returns the same grouping in
-memory, and the MLAAD figures work that way already. Build one to browse it, to
-feed a tool that wants directories, or to publish a subset:
+Each is one command. Each builds the grouping it reports over, so a number and
+the view behind it cannot disagree.
 
 ```bash
-python -m spoof_superb.tools.build_view --view mlaad_tts \
-    --scores_root /data/ssl_anti_spoofing/spoof_superb_score_files --layout v3
+# the paper's main table
+python -m spoof_superb.analysis.recompute_main_results --out_dir outputs/main_results
 
-# check what it would write, first
-python -m spoof_superb.tools.build_view --view asvld_conditions --dry-run
+# Section 4.4.2 -- acoustic degradation
+python -m spoof_superb.analysis.acoustic_degradation --out_dir outputs/degradation
 
-# build somewhere else, leaving the score tree untouched
-python -m spoof_superb.tools.build_view --view mlaad_tts --out_root /tmp/views
+# Sections 4.4.3 / 3.2.3 -- TTS systems
+python -m spoof_superb.analysis.tts_systems --out_dir outputs/tts
 ```
+
+The latter two write their view under `{scores_root}/views/` as they go. Use
+`--out_root` to put it somewhere else, and `--scores_root` / `--layout` to read
+a different tree.
+
+### Acoustic degradation
+
+Six conditions -- one clean reference and five degraded -- each POOLED from
+partitions of four corpora, exactly as `tab:acoustic_degradation` specifies:
+
+| condition | composition |
+|---|---|
+| Baseline | ASV19 LA eval + ASV21 LA:C1 + ASV21 DF:C1 + ASV5:C00 |
+| Codec & Compression | ASVLD (recompr.) + DF:C2--C9 + ASV5:C01--C10 + **LA:C1** |
+| Bandwidth | ASVLD (resampled) + **LA:C1** + **DF:C1** + **ASV5:C00** |
+| Additive Noise | ASVLD (noise) + **LA:C1** + **DF:C1** + **ASV5:C00** |
+| Reverberation | ASVLD (reverb) + **LA:C1** + **DF:C1** + **ASV5:C00** |
+| Channel Distortions | LA:C2--C7 + ASV5:C11 + **DF:C1** + **ASV19 LA eval** |
+
+Bold entries are retained unchanged from the Baseline. That retention is the
+point: each condition changes only the corpus under degradation, so its EER is
+comparable to the reference. Measuring a degradation on its degraded corpus
+alone would confound the degradation with that corpus's own difficulty.
+
+Reports absolute EER per condition and the relative change against the
+Baseline, `dEER = (EER_deg - EER_clean) / EER_clean`.
+
+Condition codes come from each corpus's own protocol, resolved in
+`analysis/conditions.py`. Only the clean partition is load-bearing -- C1 is
+`none` for ASV21 LA, `nocodec` for ASV21 DF, and C00 is `-` for ASVspoof 5 --
+because every other condition enters as "all the rest" and so cannot drift if a
+corpus gains one. ASVLD is the exception: its condition is in the utt_id.
+
+### TTS systems
+
+MLAAD v10 only, 91 systems after merging Dual-AR into FishTTS and excluding
+three non-TTS entries (griffin_lim, RVC, Voxtral), leaving 431,000 spoof
+utterances. Four groupings, each a heatmap and a CSV: by system, by the 11
+architecture groups, by generation mode, by vocoder family.
+
+Only the system is in the view. Architecture, mode and vocoder family are
+functions of the system, so they are grouped up at analysis time -- a tree that
+hard-coded them would need rebuilding whenever the taxonomy changed, and would
+let tree and table disagree meanwhile.
+
+Every group at every level is scored against the same pooled M-AILABS bonafide
+reference (584,006 utterances). That is why this analysis is restricted to
+MLAAD: every system synthesises from the same bonafide source, so a per-system
+EER measures the synthesis system rather than its source corpus.
+
+Coarse levels pool the systems' spoof scores and recompute; they do not average
+per-system EERs, which would weight a 1,000-utterance system the same as a
+34,000-utterance one.
+
+### The view tree
 
 ```
 views/{view}/{group}/[{subgroup}/]{frontend}.txt
@@ -72,16 +118,19 @@ views/{view}/_manifest.json                sources, row counts, build time
 ```
 
 The frontend is always the last component, so `views/*/*/xls_r_300m.txt` finds
-one model everywhere -- the same property `raw/` has. A view is a lossless
-partition of its source: concatenating every group reproduces the raw file
-exactly.
+one model everywhere -- the same property `raw/` has. To build a view without
+running an analysis, or to see what one would write:
 
-**There is no `acoustic_degradation` view.** The legacy
-`scores_by_acoustic_degradation` mixes ASVspoof2019 LA, ASVspoof2021 DF and
-ASVspoof5 utterances, and this tree holds those three corpora clean only --
-none of their utt_ids carry a condition suffix, so the degraded audio was never
-scored into it. `asvld_conditions` is a different, self-consistent measurement
-over one corpus and is named so the two cannot be confused. See P11.
+```bash
+python -m spoof_superb.tools.build_view --view tts_systems
+python -m spoof_superb.tools.build_view --view acoustic_degradation --dry-run
+```
+
+**Superseded.** `compute_eer_matrix`, `compute_eer_tts` and
+`create_mlaad_tts_eer_heatmaps` read the legacy view trees or raw directly and
+predate these entry points. `tts_systems` reproduces
+`create_mlaad_tts_eer_heatmaps` exactly (max|d| = 0.000000 across all 11
+architecture groups).
 
 ## Comparing two score trees
 
@@ -112,56 +161,37 @@ python -m spoof_superb.analysis.recompute_main_results --out_dir outputs/main_re
 See [reproducing results](02-reproducing-results.md) -- this is the authority
 on what the two results tables report.
 
-## Acoustic degradation (Section 5.2)
+## The legacy chains
+
+These predate the entry points above and read the legacy view trees. Kept
+because they produced published figures; superseded for new work.
 
 ```bash
+# acoustic degradation, from the legacy scores_by_acoustic_degradation tree
 python -m spoof_superb.analysis.compute_eer_matrix \
     --baseline_dir  $SCORES/Baseline_by_Hashim \
     --augmented_dir $SCORES/scores_by_acoustic_degradation \
     --output_csv    outputs/eer_matrix.csv
+python -m spoof_superb.analysis.create_heatmap --csv outputs/eer_matrix.csv --out_dir outputs/figures
 
-python -m spoof_superb.analysis.create_heatmap \
-    --csv outputs/eer_matrix.csv --out_dir outputs/figures
-```
-
-Produces absolute and baseline-relative EER heatmaps.
-
-Use `scores_by_acoustic_degradation/`, not `scores_by_category_augmented/`: the
-latter carries the old fp16-NaN noise scores and no recompression.
-
-## TTS diversity
-
-The pipeline, in order:
-
-```bash
-# 1. build the directory -> canonical TTS system map (MLAAD v10 only)
+# TTS, in order: dir map, fan out, normalise, metrics, figures
 python -m spoof_superb.analysis.build_mlaad_dir_map
-
-# 2. fan score files out into per-TTS-system trees
 python -m spoof_superb.analysis.organize_mlaad_scores
-python -m spoof_superb.analysis.organize_tts_scores --help    # non-MLAAD sets
-
-# 3. normalise (needed by the EER-vs-pooled-bonafide path)
-python -m spoof_superb.analysis.apply_zscore_and_pool \
-    --linear_head_dir ... --tts_dir ... --out_base ...
-
-# 4. metrics
+python -m spoof_superb.analysis.apply_zscore_and_pool --linear_head_dir ... --tts_dir ... --out_base ...
 python -m spoof_superb.analysis.compute_eer_tts    --norm_dir ... --tts_dir ... --out_dir outputs/tts_eer
 python -m spoof_superb.analysis.compute_far_matrix --tts_dir ... --combined_dir ... --out_dir outputs/tts_far
-python -m spoof_superb.analysis.create_mlaad_tts_eer_heatmaps --out-dir outputs/mlaad_tts
-
-# 5. figures
 python -m spoof_superb.analysis.create_tts_eer_heatmaps --eer_dir outputs/tts_eer --out_dir outputs/figures
-python -m spoof_superb.analysis.create_tts_heatmaps     --far_dir outputs/tts_far --out_dir outputs/figures
 python -m spoof_superb.analysis.create_mlaad_group_ranked_figures
 python -m spoof_superb.analysis.create_mlaad_tts_system_ranked_figure
 ```
 
-`create_mlaad_tts_eer_heatmaps` is the one figure script that also *computes*
-EERs, rather than reading a CSV.
+Use `scores_by_acoustic_degradation/`, not `scores_by_category_augmented/`: the
+latter carries the old fp16-NaN noise scores and no recompression. That two
+trees hold the same view built twice, with this line left to say which to
+trust, is the drift the new views exist to prevent.
 
-Note on the aggregates: "Overall Mean" in the TTS matrices is a mean of
-per-system means, not a pooled recomputation over utterances.
+Note on the aggregates: "Overall Mean" in the legacy TTS matrices is a mean of
+per-system means, not a pooled recomputation. `tts_systems` pools instead.
 
 ## Ad-hoc EER
 

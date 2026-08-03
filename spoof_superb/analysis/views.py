@@ -1,147 +1,210 @@
-"""Analysis views: ways of looking at the raw score files, declared once.
+"""Analysis views: the groupings the paper's analyses are computed over.
 
-A view groups the rows of a raw score file by something recoverable from the
-utt_id -- the TTS system that produced an utterance, its language, the acoustic
-condition applied to it. The legacy tree materialised eight such groupings as
-separate directory trees totalling 23.1 GB against 7.5 GB of raw, and two of
-those eight were the same view built twice, with the documentation already
-warning which copy to trust.
+Two views, matching the two analyses beyond the main table:
 
-The alternative is not to write less to disk. It is to make the GROUPING the
-artefact rather than the copy: a view is defined by its source and a key
-function, so it can be recomputed, checked against raw, and materialised when a
-human wants to browse it -- but no analysis has to wait for that to happen.
+    acoustic_degradation   Section 4.4.2, tab:acoustic_degradation
+    tts_systems            Sections 4.4.3 and 3.2.3
 
-Shape (approved as P11 D1-D7, D9)
----------------------------------
+They are built by their analysis entry points rather than left to a separate
+step, so an analysis and the grouping it reports over cannot disagree.
+
+Two shapes, because the two analyses group differently
+------------------------------------------------------
+A **partition** view splits ONE dataset by something in its utt_ids. Every row
+lands in exactly one group and the groups are discovered from the data:
+
+    tts_systems      raw/linear_head/mlaad_v10  ->  91 systems under AR / NAR /
+                     closed_undisclosed, plus a pooled M-AILABS bonafide set
+
+A **composite** view POOLS partitions of SEVERAL datasets into each group, and
+the groups are named in advance because the paper names them. This is what the
+degradation study needs and what a partition cannot express:
+
+    acoustic_degradation   Baseline = ASV19 LA eval + ASV21 LA:C1
+                                    + ASV21 DF:C1 + ASV5:C00
+
+Both produce the same thing -- {group: (utts, labels, scores)} -- so everything
+downstream, materialising included, is written once.
+
+Layout (P11 D1-D7)
+------------------
     {scores_root}/views/{view}/{group}/[{subgroup}/]{frontend}.txt
     {scores_root}/views/{view}/_bonafide/{frontend}.txt
     {scores_root}/views/{view}/_manifest.json
 
-`views/` is a sibling of `raw/`, so `raw/*/*/model.txt` stays exact. The
-frontend is always the LAST component, so `views/*/*/xls_r_300m.txt` finds one
-model everywhere -- the property the legacy degradation tree lost by naming its
-files `APC.txt` under four conditions and `linear_head_resamp_apc.txt` under
-the fifth, which is the entire reason `compute_eer_matrix` carries three
-hand-maintained stem dictionaries.
-
-`_bonafide` takes an underscore because the legacy `bonafide/` was
-indistinguishable from a TTS system of that name and sorted into the middle of
-the real ones.
-
-What is NOT here
-----------------
-No `acoustic_degradation` view reproducing the legacy Section 5.2 population.
-That tree mixes ASVspoof2019 LA, ASVspoof2021 DF and ASVspoof5 utterances, and
-the v3 tree holds those three corpora CLEAN only -- none of their utt_ids carry
-a condition suffix, so the degraded audio was never scored into it. Rebuilding
-that population is a scoring job. `asvld_conditions` is a different and
-self-consistent measurement over one corpus, and is named so it cannot be
-mistaken for the published one.
-
-No normalised-score views: they are not used (P11 D8, dropped).
+`views/` is a sibling of `raw/`, and the frontend is always the LAST component
+so `views/*/*/xls_r_300m.txt` finds one model everywhere. Reserved names take an
+underscore so no real group can collide with them.
 """
 
 import os
-import re
 from dataclasses import dataclass
 from typing import Callable, Optional
 
 import numpy as np
 
 from spoof_superb.analysis import metadata_csv
+from spoof_superb.analysis.conditions import (CLEAN, asvld_family,
+                                              condition_of)
 from spoof_superb.core.scorefile import read_scored
 from spoof_superb.core.scorepath import mlaad_pool_paths, score_path
 
-__all__ = ["VIEW_SPECS", "ViewSpec", "load_view", "view_dir"]
+__all__ = ["VIEW_SPECS", "PartitionView", "CompositeView", "Part",
+           "load_view", "view_dir"]
+
+
+# --- spec types -------------------------------------------------------------
+
+@dataclass(frozen=True)
+class Part:
+    """One dataset's contribution to a composite group.
+
+    Exactly one of `conditions` / `exclude` may be set. `exclude` exists because
+    the paper defines most degraded partitions as "everything but the clean
+    one" -- ASV21 DF C2-C9 is the eight codecs that are not `nocodec` -- and
+    listing them positively would silently drop a condition if the corpus ever
+    gained one.
+    """
+    dataset: str
+    conditions: Optional[tuple] = None
+    exclude: Optional[tuple] = None
+    #: ASVLD is selected by degradation FAMILY rather than by condition, since
+    #: the paper says "ASVLD (noise)", not fifteen condition names.
+    family: Optional[str] = None
+
+    def __post_init__(self):
+        set_count = sum(x is not None for x in
+                        (self.conditions, self.exclude, self.family))
+        if set_count > 1:
+            raise ValueError(f"{self.dataset}: give at most one of conditions, "
+                             f"exclude, family")
+
+    def selects(self, condition):
+        if self.family is not None:
+            return condition is not None and asvld_family(condition) == self.family
+        if self.conditions is not None:
+            return condition in self.conditions
+        if self.exclude is not None:
+            return condition not in self.exclude
+        return True
 
 
 @dataclass(frozen=True)
-class ViewSpec:
-    """How one view is derived from raw score files.
+class CompositeView:
+    """Groups named in advance, each pooling partitions of several datasets."""
+    name: str
+    groups: dict
+    doc: str
+    reference: Optional[str] = None      # group the others are compared against
 
-    `key` maps a utt_id to the path components it belongs under, or to None to
-    drop the row. Returning a tuple is what allows a view to be one or two
-    levels deep (P11 D3) without the depth being special-cased anywhere.
-    """
+
+@dataclass(frozen=True)
+class PartitionView:
+    """One dataset split by a key derived from its utt_ids."""
     name: str
     dataset: str
     key: Callable[[str], Optional[tuple]]
     doc: str
-    #: Dataset supplying a shared bonafide reference, when the source corpus is
-    #: spoof-only. MLAAD's bonafide counterpart is M-AILABS, pooled once per
-    #: view rather than per group -- a single shared reference is the whole
-    #: point of restricting the analysis to MLAAD.
     bonafide_dataset: Optional[str] = None
-    #: Read the tab-separated twin. Required when utt_ids contain spaces.
     ext: str = ".txt"
 
 
-# --- key functions ----------------------------------------------------------
+# --- the acoustic degradation composition -----------------------------------
+#
+# Straight from tab:acoustic_degradation. Bold entries in that table -- the ones
+# "retained unchanged from the baseline" -- are the same Part objects here, so
+# the retained partitions cannot drift between conditions.
 
-#: ASVLD condition suffix -> the family it belongs to. The families are the ones
-#: the paper groups by; the condition is the leaf, because the condition is
-#: recoverable and the family is a function of it, never the other way round.
-_ASVLD_FAMILY = [
-    (re.compile(r"^(babble|cafe|street|volvo|white)_\d+$"), "Additive_Noise"),
-    (re.compile(r"^RT_\d+_\d+$"),                           "Reverberation"),
-    (re.compile(r"^resample_\d+$"),                         "Resampling"),
-    (re.compile(r"^recompression_\d+k$"),                   "Codec_Compression"),
-    (re.compile(r"^lpf_\d+$"),                              "Channel_Distortions"),
-]
+_LA_C1 = Part("asvspoof2021_LA", conditions=(CLEAN["asvspoof2021_LA"],))
+_DF_C1 = Part("asvspoof2021_DF", conditions=(CLEAN["asvspoof2021_DF"],))
+_A5_C00 = Part("asvspoof5", conditions=(CLEAN["asvspoof5"],))
+_ASV19 = Part("eval_2019")
 
-_ASVLD_ID = re.compile(r"^LA_E_\d+_(?P<cond>.+)$")
+ACOUSTIC_DEGRADATION = CompositeView(
+    name="acoustic_degradation",
+    reference="Baseline",
+    doc="Section 4.4.2 / tab:acoustic_degradation. Six conditions, one clean "
+        "reference and five degraded, each composed from partitions of four "
+        "corpora. Every degraded condition keeps the corpora it does not "
+        "degrade, so its EER moves only for the degradation under study.",
+    groups={
+        # Reference: clean partitions of all four corpora.
+        "Baseline": (_ASV19, _LA_C1, _DF_C1, _A5_C00),
+
+        # ASVLD clean -> recompressed; DF C1 -> C2-C9; ASV5 C00 -> C01-C10.
+        # ASV21 LA:C1 is retained as the clean complement.
+        "Codec_Compression": (
+            Part("asvspoofLD", family="Codec_Compression"),
+            Part("asvspoof2021_DF", exclude=(CLEAN["asvspoof2021_DF"],)),
+            Part("asvspoof5", exclude=(CLEAN["asvspoof5"], "C11")),
+            _LA_C1,
+        ),
+
+        # ASVLD clean -> resampled. The other three retained.
+        "Bandwidth": (
+            Part("asvspoofLD", family="Bandwidth"),
+            _LA_C1, _DF_C1, _A5_C00,
+        ),
+
+        # ASVLD clean -> noise-augmented. The other three retained.
+        "Additive_Noise": (
+            Part("asvspoofLD", family="Additive_Noise"),
+            _LA_C1, _DF_C1, _A5_C00,
+        ),
+
+        # ASVLD clean -> reverberated. The other three retained.
+        "Reverberation": (
+            Part("asvspoofLD", family="Reverberation"),
+            _LA_C1, _DF_C1, _A5_C00,
+        ),
+
+        # LA C1 -> C2-C7; ASV5 C00 -> C11. ASV19 and DF:C1 retained.
+        # Note this condition does NOT use ASVLD's own lpf_* set.
+        "Channel_Distortions": (
+            Part("asvspoof2021_LA", exclude=(CLEAN["asvspoof2021_LA"],)),
+            Part("asvspoof5", conditions=("C11",)),
+            _DF_C1, _ASV19,
+        ),
+    },
+)
 
 
-def _asvld_key(utt):
-    """`LA_E_2834763_babble_0` -> ('Additive_Noise', 'babble_0')."""
-    m = _ASVLD_ID.match(utt)
-    if m is None:
-        return None
-    cond = m.group("cond")
-    for pattern, family in _ASVLD_FAMILY:
-        if pattern.match(cond):
-            return (family, cond)
-    raise KeyError(
-        f"utt_id {utt!r} has condition {cond!r}, which matches no ASVLD family. "
-        f"Add it to views._ASVLD_FAMILY -- silently dropping a condition would "
-        f"shrink a benchmark column without saying so.")
-
+# --- the TTS system partition -----------------------------------------------
 
 def _mlaad_parts(utt):
     """MLAAD ids are `MLAAD/fake/{language}/{raw_dir}/{file}.wav`."""
     parts = utt.split("/")
     if len(parts) != 5:
         raise ValueError(f"MLAAD utt_id has {len(parts)} segments, expected 5: {utt!r}")
-    return parts[2], parts[3]          # language, raw_dir
-
-
-def _mlaad_language_key(utt):
-    language, _raw_dir = _mlaad_parts(utt)
-    return (language,)
+    return parts[2], parts[3]
 
 
 class _MlaadTtsKey:
-    """raw directory -> (AR|NAR|closed_undisclosed, canonical system).
+    """raw directory -> (generation mode, canonical system).
 
-    A class rather than a closure so the two CSVs it needs are read once, at
-    first use, instead of on import -- importing this module must not require a
-    score tree or a corpus to be mounted.
+    Section 4.4.3: Dual-AR is merged into FishTTS and three non-TTS entries are
+    excluded (griffin_lim, a phase-reconstruction vocoder; RVC, a voice
+    conversion system; Voxtral, an audio-understanding model), removing 25,000
+    utterances and leaving 431,000 across 91 systems. Both facts live in
+    `mlaad_v10_dir_to_system.csv`; this reads them rather than restating them.
+
+    A class rather than a closure so the CSVs are read at first use, not on
+    import -- importing this module must not require a corpus to be mounted.
     """
 
-    BUCKET = {"AR": "AR", "NAR": "NAR", "unknown": "closed_undisclosed"}
+    MODE = {"AR": "AR", "NAR": "NAR", "unknown": "closed_undisclosed"}
 
     def __init__(self):
         self._system = None
-        self._bucket = None
+        self._mode = None
 
     def _load(self):
         import pandas as pd
         dir_map = pd.read_csv(metadata_csv("mlaad_v10_dir_to_system.csv"))
         self._system = dict(zip(dir_map["raw_dir"], dir_map["canonical_system"]))
         arch = pd.read_csv(metadata_csv("mlaad_v10_tts_architecture_groups.csv"))
-        self._bucket = {r.tts_system: self.BUCKET[r.ar_nar]
-                        for r in arch.itertuples(index=False)}
+        self._mode = {r.tts_system: self.MODE[r.ar_nar]
+                      for r in arch.itertuples(index=False)}
 
     def __call__(self, utt):
         if self._system is None:
@@ -154,73 +217,75 @@ class _MlaadTtsKey:
                 f"MLAAD directory {raw_dir!r} is in no dir map entry. Rebuild "
                 f"the map with build_mlaad_dir_map rather than dropping it.") from None
         if system == "EXCLUDED":
-            return None            # voice conversion, vocoders: not TTS systems
-        return (self._bucket[system], system)
+            return None
+        return (self._mode[system], system)
 
 
-# --- the registry -----------------------------------------------------------
+TTS_SYSTEMS = PartitionView(
+    name="tts_systems",
+    dataset="Multilingual",
+    bonafide_dataset="MAILABS",
+    key=_MlaadTtsKey(),
+    ext=".tsv",
+    doc="Sections 4.4.3 and 3.2.3. MLAAD v10 spoof scores per TTS system, "
+        "under the system's generation mode. Every system is scored against "
+        "the same pooled M-AILABS bonafide reference (584,006 utterances), "
+        "which is the reason this analysis is restricted to MLAAD: it measures "
+        "the detectability of the synthesis system rather than the difficulty "
+        "of its source corpus. Architecture group and vocoder family are "
+        "functions of the system, so they are grouped up at analysis time "
+        "rather than fixed into the tree.",
+)
+
 
 VIEW_SPECS = {
-    "mlaad_tts": ViewSpec(
-        name="mlaad_tts",
-        dataset="Multilingual",
-        bonafide_dataset="MAILABS",
-        key=_MlaadTtsKey(),
-        ext=".tsv",
-        doc="MLAAD v10 spoof scores by TTS system, bucketed by generation mode. "
-            "Every group is scored against the same pooled M-AILABS bonafide "
-            "set, which is what makes systems comparable to each other rather "
-            "than to their own source difficulty.",
-    ),
-    "mlaad_language": ViewSpec(
-        name="mlaad_language",
-        dataset="Multilingual",
-        bonafide_dataset="MAILABS",
-        key=_mlaad_language_key,
-        ext=".tsv",
-        doc="MLAAD v10 spoof scores by language, against the same pooled "
-            "M-AILABS bonafide set.",
-    ),
-    "asvld_conditions": ViewSpec(
-        name="asvld_conditions",
-        dataset="asvspoofLD",
-        key=_asvld_key,
-        doc="ASVspoof-LD by acoustic condition, grouped into the five families "
-            "the paper reports. NOT the legacy scores_by_acoustic_degradation "
-            "population, which mixes three corpora and is mostly untagged; see "
-            "P11. Each condition carries its own bonafide and spoof rows, so "
-            "there is no shared reference pool.",
-    ),
+    "acoustic_degradation": ACOUSTIC_DEGRADATION,
+    "tts_systems": TTS_SYSTEMS,
 }
 
 
-def view_dir(view, scores_root, ):
+def view_dir(view, scores_root):
     """Root directory of one materialised view."""
     return os.path.join(scores_root, "views", view)
 
 
-def load_view(spec, frontend, scores_root=None, layout=None):
-    """Group one model's raw scores as the view defines.
+# --- loading ----------------------------------------------------------------
 
-    Returns (groups, bonafide):
+def _read_dataset(dataset, frontend, scores_root, layout, ext=".txt"):
+    path = score_path("linear_head", dataset, frontend,
+                      scores_root=scores_root, layout=layout, ext=ext)
+    return read_scored(path)
 
-        groups   {(level, ...): (utts, labels, scores)}
-        bonafide (utts, labels, scores), or None when the source corpus carries
-                 its own bonafide rows
 
-    This is the whole of the view. Materialising writes it out; analysis can
-    equally consume it here, which is P11 D9 -- a view is a query, and no number
-    should wait on a directory being built.
-    """
+def _load_composite(spec, frontend, scores_root, layout):
+    groups = {}
+    for group, parts in spec.groups.items():
+        utts, labels, scores = [], [], []
+        for part in parts:
+            u, l, s = _read_dataset(part.dataset, frontend, scores_root, layout)
+            cond = condition_of(part.dataset)
+            if cond is None:
+                keep = np.ones(u.size, dtype=bool)
+            else:
+                keep = np.fromiter(
+                    (part.selects(cond(x)) for x in u.tolist()),
+                    dtype=bool, count=u.size)
+            utts.append(u[keep])
+            labels.append(l[keep])
+            scores.append(s[keep])
+        groups[(group,)] = (np.concatenate(utts), np.concatenate(labels),
+                            np.concatenate(scores))
+    return groups, None
+
+
+def _load_partition(spec, frontend, scores_root, layout):
     if spec.bonafide_dataset:
         pool = mlaad_pool_paths(frontend, scores_root=scores_root, layout=layout)
-        spoof_path, bona_path = pool[0], pool[1]
-        utts, labels, scores = read_scored(spoof_path)
-        bonafide = read_scored(bona_path)
+        utts, labels, scores = read_scored(pool[0])
+        bonafide = read_scored(pool[1])
     else:
-        path = score_path("linear_head", spec.dataset, frontend,
-                          scores_root=scores_root, layout=layout, ext=spec.ext)
-        utts, labels, scores = read_scored(path)
+        utts, labels, scores = _read_dataset(spec.dataset, frontend, scores_root,
+                                             layout, spec.ext)
         bonafide = None
 
     buckets = {}
@@ -235,3 +300,19 @@ def load_view(spec, frontend, scores_root=None, layout=None):
         idx = np.asarray(idx, dtype=np.int64)
         groups[key] = (utts[idx], labels[idx], scores[idx])
     return groups, bonafide
+
+
+def load_view(spec, frontend, scores_root=None, layout=None):
+    """Group one model's raw scores as the view defines.
+
+    Returns (groups, bonafide):
+
+        groups   {(level, ...): (utts, labels, scores)}
+        bonafide (utts, labels, scores), or None when the groups carry their own
+
+    Composite groups are pools and may legitimately share no rows with each
+    other; partition groups are disjoint and together reproduce their source.
+    """
+    if isinstance(spec, CompositeView):
+        return _load_composite(spec, frontend, scores_root, layout)
+    return _load_partition(spec, frontend, scores_root, layout)
