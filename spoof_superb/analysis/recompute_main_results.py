@@ -45,10 +45,18 @@ full 1,040,006-row pool and the 912,000-row `balanced/` pool; they must agree
 within 0.2 percentage points.  A larger gap indicates a parsing, labelling or
 polarity bug and is reported as a FAIL rather than silently resolved.
 
+Outputs
+-------
+    main_results_table.csv   the paper's table, ready to read: the 19 SSL rows
+                             in table order, the paper's columns, `*` on the
+                             best in a column and on the Mean top five
+    main_results.json        every computed row, with row counts, NaN
+                             fractions and assertion results -- what the
+                             regression gate reads
+
 Usage
 -----
-    python -m spoof_superb.analysis.recompute_main_results \
-        --out_dir scripts/verification_out
+    python -m spoof_superb.analysis.recompute_main_results
 """
 
 import argparse
@@ -191,11 +199,24 @@ DATASETS = [
 # computation, confirming the corruption reached the paper.  Per author decision
 # these cells are reported as [TODO-verify] rather than recomputed on the
 # surviving finite subset, and Mean/Pooled are withheld for the same rows.
+#: This list is now a RECORD of what the legacy tree had, not the rule. A cell
+#: is withheld because its own scores are NaN-corrupted, measured per run --
+#: see NAN_WITHHOLD_FRAC. Keeping the hardcoded list as the rule meant the v3
+#: tree, where these same cells are 0.00% NaN because the re-scoring fixed them,
+#: still had perfectly good numbers withheld.
 NAN_CORRUPT = {
     "Mockingjay":      ["ASVLD", "SpoofCeleb"],
     "Mockingjay-960h": ["ASVLD", "SpoofCeleb"],
     "TERA":            ["ASVLD", "SpoofCeleb"],
 }
+
+#: A column is withheld as [TODO-verify] when this fraction of its scores is
+#: NaN. Not a tuning knob: on the legacy tree the two populations are five
+#: orders of magnitude apart -- the six corrupted cells are 22.78%-23.50% NaN,
+#: and the only other cell with any NaN at all (NPC/SpoofCeleb) is 0.0011%,
+#: which is a handful of rows and does not move an EER. Any threshold between
+#: them selects the same six cells.
+NAN_WITHHOLD_FRAC = 0.01
 
 # Main results row order -> score-file model slug.
 MODELS = [
@@ -342,6 +363,55 @@ def nan_frac(scores):
 # Main
 # ---------------------------------------------------------------------------
 
+
+def write_table_csv(results, bold, path):
+    """The main results table as CSV, in the shape tab:results_main prints it.
+
+    Columns are the paper's, in the paper's order, and rows are the paper's 19
+    SSL models in table order -- so a cell here can be read straight against the
+    published table without transcribing anything.
+
+    Only the SSL block. The table's top two rows, LFCC-GMM and AASIST, are
+    reference SYSTEMS rather than upstreams; this script enumerates upstreams,
+    and the two are scored through `--systems`. They are absent rather than
+    blank so nobody reads an empty cell as a missing result.
+
+    `MODELS` here is deliberately WIDER than the paper's roster -- it carries
+    FBANK and the non-960h Mockingjay because the regression baseline tracks
+    them, and the gate guards more columns than the paper prints. Those rows
+    stay in main_results.json and out of this file.
+
+    A withheld cell is written as TODO, not blank: the distinction between "we
+    did not compute this" and "this is zero" has to survive the CSV.
+    """
+    import csv as _csv
+    from spoof_superb.scoring.models import paper_table_rows
+
+    cols = [c for c, _ in DATASETS]
+    fields = ["SSL Model"] + cols + ["Mean"]
+
+    def cell(value, is_best):
+        if value is None:
+            return "TODO"
+        return f"{value:.3f}*" if is_best else f"{value:.3f}"
+
+    with open(path, "w", newline="") as fh:
+        w = _csv.writer(fh)
+        w.writerow(fields)
+        for name in paper_table_rows():
+            row = results.get(name)
+            if row is None:
+                continue
+            out = [name]
+            for col in cols:
+                c = row["datasets"].get(col)
+                out.append(cell(c["eer"] if c else None,
+                                bold["columns"].get(col) == name))
+            out.append(cell(row.get("mean"), name in bold["mean_top5"]))
+            w.writerow(out)
+    return path
+
+
 def default_out_dir(name):
     """Where an analysis writes, unless --out_dir says otherwise.
 
@@ -359,6 +429,12 @@ def main():
                     help="score tree to read (default: the configured scores_root)")
     ap.add_argument("--layout", default=None, choices=("legacy", "v2", "v3"),
                     help="layout of that tree (default: the configured score_layout)")
+    ap.add_argument("--roster", default="paper", choices=("paper", "baseline"),
+                    help="which models to compute. 'paper' is the 19 rows the "
+                         "results table prints. 'baseline' adds FBANK and the "
+                         "non-960h Mockingjay, which the regression baseline "
+                         "tracks but the paper does not print -- the gate needs "
+                         "them, a report does not.")
     args = ap.parse_args()
     scores_root = args.scores_root or cfg.scores_root
     layout = args.layout or getattr(cfg, "score_layout", "legacy")
@@ -369,12 +445,28 @@ def main():
     results = {}   # display name -> dict
     problems = []
 
-    for disp, slug in MODELS:
+    if args.roster == "paper":
+        from spoof_superb.scoring.models import paper_table_rows
+        wanted = set(paper_table_rows())
+        roster = [(d, s) for d, s in MODELS if d in wanted]
+    else:
+        roster = list(MODELS)
+    print(f"roster     {args.roster} ({len(roster)} models)", flush=True)
+
+    for disp, slug in roster:
         row = {"slug": slug, "datasets": {}, "asserts": [], "sources": {}}
         pooled_labels, pooled_scores = [], []
 
         # ---- legacy datasets -------------------------------------------
-        withheld = NAN_CORRUPT.get(disp, [])
+        # A model this tree never scored is reported once. Ten MISSING lines
+        # per absent model buried the real problems in the v3 run's output.
+        present = [c for c, prefix in DATASETS if prefix is not None
+                   and all(p.exists() for p in
+                           column_paths(layout, scores_root, prefix, slug))]
+        if not present:
+            problems.append(f"{disp}: not scored on this tree -- no columns")
+            results[disp] = row
+            continue
         for col, prefix in DATASETS:
             if prefix is None:
                 continue
@@ -393,7 +485,7 @@ def main():
             nf = nan_frac(sc)
             if nf > 0:
                 row["asserts"].append(f"{col}: NaN fraction {100*nf:.3f}%")
-            if col in withheld:
+            if nf > NAN_WITHHOLD_FRAC:
                 # NaN-corrupted beyond repair without a re-run: report, do not
                 # substitute a finite-subset value, and drop from Mean/Pooled.
                 row["datasets"][col] = {
@@ -535,13 +627,16 @@ def main():
     payload = {"results": results, "bold": bold, "problems": problems,
                "reproduction_failures": repro}
     (out_dir / "main_results.json").write_text(json.dumps(payload, indent=2))
+    csv_path = write_table_csv(results, bold, out_dir / "main_results_table.csv")
 
     print("\n=== PROBLEMS / ASSERT FAILURES ===")
     for p in problems:
         print("  " + p)
     if not problems:
         print("  none")
-    print(f"\nWrote {out_dir / 'main_results.json'}")
+    print(f"\nWrote {out_dir / 'main_results.json'}   (every computed row)")
+    print(f"Wrote {csv_path}   (the paper's table: 19 SSL rows, "
+          f"* marks the best in a column / the Mean top five)")
 
 
 if __name__ == "__main__":

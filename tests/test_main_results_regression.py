@@ -69,7 +69,12 @@ def fresh_payload():
         proc = subprocess.run(
             [sys.executable, "-m", "spoof_superb.analysis.recompute_main_results",
              "--out_dir", td,
-             "--scores_root", LEGACY_TREE, "--layout", "legacy"],
+             "--scores_root", LEGACY_TREE, "--layout", "legacy",
+             # The baseline tracks FBANK and the non-960h Mockingjay, which the
+             # paper does not print. The gate guards a superset of the paper on
+             # purpose, so it asks for that superset explicitly rather than
+             # relying on the reporting default.
+             "--roster", "baseline"],
             capture_output=True, text=True, cwd=str(REPO_ROOT), env=env,
         )
         assert proc.returncode == 0, (
