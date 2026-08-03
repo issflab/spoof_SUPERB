@@ -39,7 +39,9 @@ import os
 
 from spoof_superb import REPO_ROOT
 
-__all__ = ["paper_models", "paper_table_rows", "is_paper_model",
+__all__ = ["paper_models", "paper_table_rows", "paper_table_order",
+           "display_by_slug", "family_separator_rows", "PAPER_TABLE_FAMILIES",
+           "is_paper_model",
            "non_paper_models", "MAIN_RESULTS_BASELINE", "PAPER_TABLE_ROWS"]
 
 MAIN_RESULTS_BASELINE = os.path.join(str(REPO_ROOT), "tests", "baseline_main_results_table.json")
@@ -70,8 +72,59 @@ PAPER_TABLE_ROWS = (
 )
 
 
+#: Pretraining family of each row, in table order. The paper groups its results
+#: by these and every figure rules between them, so the boundaries are stated
+#: once here rather than as row indices in each plotting script -- an index is
+#: only correct for one roster, and silently mis-rules any other.
+#:
+#: The counts are the paper's own: "the eleven discriminative models average
+#: 25.68%, the two spectrogram-based models 28.77%, and the six earlier
+#: generative models 33.83%".
+PAPER_TABLE_FAMILIES = {
+    "APC": "generative", "VQ-APC": "generative", "NPC": "generative",
+    "Mockingjay-960h": "generative", "TERA": "generative",
+    "DeCoAR 2.0": "generative",
+    "wav2vec": "discriminative", "wav2vec 2.0 Base": "discriminative",
+    "wav2vec 2.0 Large": "discriminative", "HuBERT Base": "discriminative",
+    "HuBERT Large": "discriminative", "MR-HuBERT": "discriminative",
+    "XLS-R": "discriminative", "UniSpeech-SAT": "discriminative",
+    "Data2Vec": "discriminative", "WAVLABLM": "discriminative",
+    "WavLM Large": "discriminative",
+    "SSAST": "spectrogram", "MAE-AST-FRAME": "spectrogram",
+}
+
+
 def paper_table_rows():
     return PAPER_TABLE_ROWS
+
+
+@functools.lru_cache(maxsize=None)
+def display_by_slug(path=None):
+    """Model slug -> the display name the paper's table prints."""
+    return {slug: name for name, slug in _slug_by_display(path).items()}
+
+
+def paper_table_order(slugs, path=None):
+    """`slugs` reordered as the paper's table prints them, unknown ones last.
+
+    Figures must not invent their own model order: the paper's tables and every
+    figure read top-to-bottom in the same sequence, and a reader comparing them
+    is entitled to assume row 3 is the same model in both.
+    """
+    by_slug = display_by_slug(path)
+    rank = {name: i for i, name in enumerate(PAPER_TABLE_ROWS)}
+    return sorted(slugs, key=lambda s: rank.get(by_slug.get(s, s), len(rank)))
+
+
+def family_separator_rows(display_names):
+    """Row indices where the pretraining family changes, for the rows given.
+
+    Derived from the rows actually plotted, so a figure over a subset of the
+    roster rules in the right places instead of at hardcoded indices.
+    """
+    return [i for i in range(1, len(display_names))
+            if PAPER_TABLE_FAMILIES.get(display_names[i])
+            != PAPER_TABLE_FAMILIES.get(display_names[i - 1])]
 
 
 @functools.lru_cache(maxsize=None)

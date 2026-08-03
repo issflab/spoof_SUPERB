@@ -41,6 +41,7 @@ import sys
 import time
 from pathlib import Path
 
+from spoof_superb.analysis.conditions import ASV21_DF_CODES, ASV21_LA_CODES
 from spoof_superb.analysis.views import (VIEW_SPECS, CompositeView,
                                           load_view, view_dir)
 from spoof_superb.config import cfg
@@ -77,6 +78,96 @@ def write_group(rows, path):
             fh.write(LINE.format(utt=u, key=k, score=s))
     os.replace(tmp, path)
     return len(utts)
+
+
+def _describe_part(part):
+    """One dataset's contribution to a group, in words."""
+    if part.family is not None:
+        return f"{part.dataset} -- the {part.family} conditions"
+    if part.conditions is not None:
+        codes = ", ".join(_code(part.dataset, c) for c in part.conditions)
+        return f"{part.dataset} -- {codes} only"
+    if part.exclude is not None:
+        codes = ", ".join(_code(part.dataset, c) for c in part.exclude)
+        return f"{part.dataset} -- every condition EXCEPT {codes}"
+    return f"{part.dataset} -- the whole set"
+
+
+def _code(dataset, token):
+    """Show a protocol token alongside the corpus's own condition code."""
+    table = {"asvspoof2021_LA": ASV21_LA_CODES,
+             "asvspoof2021_DF": ASV21_DF_CODES}.get(dataset)
+    if table and token in table:
+        return f"{table[token]} ({token!r})"
+    if dataset == "asvspoof5" and token == "-":
+        return "C00 ('-')"
+    return repr(token)
+
+
+def write_readme(spec, manifest, out):
+    """A human-readable companion to _manifest.json.
+
+    The JSON is for tools; it is a wall of paths and counts and nobody reading
+    it can answer "what is in the Codec condition?" without decoding the
+    selector fields. This says it in sentences.
+    """
+    lines = [f"# {spec.name}", "", spec.doc.strip(), "",
+             f"Built {manifest['built_at']} from `{manifest['scores_root']}` "
+             f"(layout `{manifest['layout']}`).", ""]
+
+    n_models = len(manifest["group_rows"])
+    plural = "model" if n_models == 1 else "models"
+    if manifest["skipped"]:
+        lines += [f"{n_models} {plural}. Not scored on this tree, so absent "
+                  f"from the view: {', '.join(manifest['skipped'])}.", ""]
+    else:
+        lines += [f"{n_models} {plural}.", ""]
+
+    if isinstance(spec, CompositeView):
+        rows = next(iter(manifest["group_rows"].values()), None)
+        lines += ["## Conditions", "",
+                  "Each condition POOLS partitions of several corpora. The ones "
+                  "it does not degrade are kept unchanged from the reference, so "
+                  "its EER moves only for the degradation under study.", ""]
+        if spec.reference:
+            lines += [f"Reference condition: **{spec.reference}**.", ""]
+        for group, parts in spec.groups.items():
+            mark = "  (reference)" if group == spec.reference else ""
+            lines.append(f"### {group}{mark}")
+            lines.append("")
+            for part in parts:
+                lines.append(f"* {_describe_part(part)}")
+            lines.append("")
+        if rows:
+            lines += [f"Every condition is written per model, "
+                      f"{rows:,} rows per model across all conditions.", ""]
+    else:
+        counts = manifest["group_rows"]
+        first = next(iter(counts.values()), 0)
+        lines += ["## Groups", "",
+                  f"One directory per group, `{{group}}/{{subgroup}}/{{model}}.txt`. "
+                  f"{first:,} rows per model across all groups.", ""]
+        if manifest["bonafide_rows"]:
+            b = next(iter(manifest["bonafide_rows"].values()))
+            lines += [f"`_bonafide/` holds the shared reference pool "
+                      f"({b:,} rows per model). Every group is scored against "
+                      f"it, never against a subset of its own.", ""]
+
+    lines += ["## Files", "",
+              "```",
+              f"{spec.name}/{{group}}/[{{subgroup}}/]{{model}}.txt   the grouped rows",
+              f"{spec.name}/_manifest.json                     machine-readable record",
+              f"{spec.name}/README.md                          this file",
+              "```", "",
+              "Rows are the canonical 4-column score format, `utt_id - key score`, "
+              "the same as `raw/`.", "",
+              "Rebuild with:", "",
+              "```bash",
+              f"python -m spoof_superb.tools.build_view --view {spec.name} \\",
+              f"    --scores_root {manifest['scores_root']} "
+              f"--layout {manifest['layout']}",
+              "```", ""]
+    (out / "README.md").write_text("\n".join(lines))
 
 
 def build(spec, models, scores_root=None, layout=None, out_root=None,
@@ -166,9 +257,11 @@ def build(spec, models, scores_root=None, layout=None, out_root=None,
         out.mkdir(parents=True, exist_ok=True)
         (out / "_manifest.json").write_text(json.dumps(manifest, indent=2,
                                                        default=str))
+        write_readme(spec, manifest, out)
         if verbose:
             print(f"\n  view -> {out}")
-            print(f"  manifest -> {out / '_manifest.json'}", flush=True)
+            print(f"  what is in it -> {out / 'README.md'}")
+            print(f"  machine record -> {out / '_manifest.json'}", flush=True)
     build.last_manifest = manifest
 
 

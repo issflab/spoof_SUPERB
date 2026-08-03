@@ -28,17 +28,19 @@ import matplotlib.pyplot as plt
 # ---------------------------------------------------------------------------
 # Model display order and category boundaries
 # ---------------------------------------------------------------------------
-ORDERED_MODELS = [
-    "FBANK",
-    "APC", "NPC", "Mockingjay-960h", "TERA", "DeCoAR 2.0",
-    "wav2vec", "wav2vec 2.0 Base", "wav2vec 2.0 Large",
-    "HuBERT Base", "HuBERT Large", "MR-HuBERT", "XLS-R",
-    "UniSpeech-SAT", "Data2Vec", "WAVLABLM", "WavLM Large",
-    "SSAST", "MAE-AST-FRAME",
-]
+# Both come from the paper's roster rather than being restated here. The list
+# that used to live in this file had drifted: it opened with FBANK, which the
+# table does not print, and omitted VQ-APC, which it does. Its separator rows
+# [1, 7, 17] were indices into that wrong list, so with the real roster they
+# ruled through the middle of the generative block.
+from spoof_superb.scoring.models import (family_separator_rows,  # noqa: E402
+                                         paper_table_rows)
 
-# Horizontal separator positions (drawn after these row indices, 0-based)
-SEPARATOR_ROWS = [1, 7, 17]
+ORDERED_MODELS = list(paper_table_rows())
+
+#: Rules between generative / discriminative / spectrogram, computed from
+#: whatever rows are actually plotted.
+SEPARATOR_ROWS = family_separator_rows(ORDERED_MODELS)
 
 DEGRADATION_COLS = ["Codec", "Noise", "Resampling", "Reverb", "Channel"]
 
@@ -113,7 +115,7 @@ def plot_absolute(df: pd.DataFrame, out_path: str) -> None:
 
     ax0.tick_params(axis="y", labelsize=10, rotation=0)
 
-    draw_separators([ax0, ax1, ax2], SEPARATOR_ROWS)
+    draw_separators([ax0, ax1, ax2], family_separator_rows(list(df.index)))
 
     plt.suptitle("EER Across Acoustic Degradations", fontsize=14, y=0.98)
     plt.tight_layout(rect=[0.06, 0, 1, 0.97])
@@ -168,7 +170,7 @@ def plot_relative(df: pd.DataFrame, out_path: str) -> None:
 
     ax1.tick_params(axis="y", labelsize=10, rotation=0)
 
-    draw_separators([ax1, ax2], SEPARATOR_ROWS)
+    draw_separators([ax1, ax2], family_separator_rows(list(rel.index)))
 
     plt.suptitle("Relative EER Change Across Acoustic Degradations", fontsize=14)
     plt.tight_layout()

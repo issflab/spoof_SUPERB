@@ -31,6 +31,7 @@ Bonafide is the target class -- a higher score means more genuine -- matching
 """
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -43,32 +44,18 @@ from spoof_superb.analysis.create_mlaad_tts_eer_heatmaps import (
 from spoof_superb.analysis.views import VIEW_SPECS
 from spoof_superb.config import cfg
 from spoof_superb.core.metrics import compute_eer
-from spoof_superb.scoring.models import paper_models
+from spoof_superb.analysis.create_mlaad_group_ranked_figures import (
+    main as ranked_group_figures)
+from spoof_superb.analysis.create_mlaad_tts_system_ranked_figure import (
+    main as ranked_system_figure)
+from spoof_superb.scoring.models import (display_by_slug, paper_models,
+                                         paper_table_order, paper_table_rows)
 from spoof_superb.tools.build_view import build
 
 #: Generation modes, in the order the figures present them.
 MODE_ORDER = ["AR", "NAR", "closed_undisclosed"]
 MODE_LABEL = {"AR": "AR", "NAR": "NAR",
               "closed_undisclosed": "Closed / Undisclosed"}
-
-#: Display order for the model rows, and the pretraining family each belongs to
-#: so the heatmaps can rule between families. Derived from the paper roster, so
-#: a model the tree does not have simply does not appear.
-FAMILY = {
-    "apc": "generative", "vq_apc": "generative", "npc": "generative",
-    "mockingjay_960hr": "generative", "tera": "generative",
-    "decoar2": "generative",
-    "wav2vec": "discriminative", "wav2vec2_base_960": "discriminative",
-    "wav2vec2_large_ll60k": "discriminative", "hubert_base": "discriminative",
-    "hubert_large_ll60k": "discriminative",
-    "multires_hubert_multilingual_large600k": "discriminative",
-    "xls_r_300m": "discriminative", "unispeech_sat_large": "discriminative",
-    "data2vec_large_ll60k": "discriminative", "wavlablm_ek_40k": "discriminative",
-    "wavlm_large": "discriminative",
-    "ssast_frame_base": "spectrogram", "mae_ast_frame": "spectrogram",
-}
-
-ROW_ORDER = list(FAMILY)
 
 FIGURES = [
     ("system",       "eer_by_tts_system",      "EER (%) by TTS system",
@@ -134,11 +121,22 @@ def _eer(bonafide, spoof, group, model):
     return eer
 
 
+
+def default_out_dir(name):
+    """Where an analysis writes, unless --out_dir says otherwise.
+
+    `outputs_root` in configs/paths.yaml when set, the repo's outputs/ when not.
+    """
+    root = getattr(cfg, "outputs_root", "") or str(REPO_ROOT / "outputs")
+    return os.path.join(root, name)
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(
         prog="python -m spoof_superb.analysis.tts_systems",
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--out_dir", default=str(REPO_ROOT / "outputs" / "tts"))
+    ap.add_argument("--out_dir", default=None,
+                    help="default: outputs_root/tts, or the repo's outputs/tts")
     ap.add_argument("--scores_root", default=None)
     ap.add_argument("--layout", default=None, choices=("legacy", "v2", "v3"))
     ap.add_argument("--out_root", default=None,
@@ -153,9 +151,10 @@ def main(argv=None):
     layout = args.layout or getattr(cfg, "score_layout", "legacy")
     spec = VIEW_SPECS["tts_systems"]
     roster = set(args.models or paper_models())
-    models = [m for m in ROW_ORDER if m in roster] + sorted(roster - set(ROW_ORDER))
+    models = paper_table_order(roster)
+    display = display_by_slug()
 
-    out_dir = Path(args.out_dir)
+    out_dir = Path(args.out_dir or default_out_dir("tts"))
     out_dir.mkdir(parents=True, exist_ok=True)
     tax, arch = taxonomy()
 
@@ -170,8 +169,9 @@ def main(argv=None):
             out_root=args.out_root or scores_root):
         bona_scores = bonafide[2]
         eers = eers_for_model(groups, bona_scores, tax, model)
+        name = display.get(model, model)
         for level in results:
-            results[level][model] = eers[level]
+            results[level][name] = eers[level]
         if not support:
             for (_m, system), (u, _l, _s) in groups.items():
                 support[system] = support.get(system, 0) + len(u)
@@ -194,7 +194,7 @@ def main(argv=None):
     for level, stem, title, style in FIGURES:
         df = pd.DataFrame(results[level]).T
         df.index.name = "Model"
-        df = df.reindex([m for m in models if m in df.index])
+        df = df.reindex([n for n in paper_table_rows() if n in df.index])
         plotted = list(df.columns)
         df = df[[c for c in defined[level] if c in plotted]
                 + [c for c in plotted if c not in defined[level]]]
@@ -213,6 +213,18 @@ def main(argv=None):
 
     pd.DataFrame(summary).to_csv(out_dir / "figure_summary.csv", index=False)
     print("\n" + pd.DataFrame(summary).to_string(index=False))
+
+    if not args.no_figures:
+        # The paper's TTS figures: six representative models, columns and
+        # systems ranked by their Mean, the 91 systems split across two panels.
+        # These read the CSVs just written, which is why those carry display
+        # names in table order rather than slugs.
+        print()
+        print("=" * 78)
+        print("STEP 4 -- the paper's ranked figures")
+        print("=" * 78, flush=True)
+        ranked_group_figures(["--out_dir", str(out_dir)])
+        ranked_system_figure(["--out_dir", str(out_dir)])
 
     skipped = build.last_manifest["skipped"]
     if skipped:

@@ -60,6 +60,25 @@ The latter two write their view under `{scores_root}/views/` as they go. Use
 `--out_root` to put it somewhere else, and `--scores_root` / `--layout` to read
 a different tree.
 
+**Where the figures go.** `--out_dir` on any analysis, or set `outputs_root` in
+`configs/paths.yaml` to move all three at once -- each writes a sub-directory
+under it (`main_results/`, `degradation/`, `tts/`). Unset means the repo's own
+`outputs/`, which is what they did before the setting existed.
+
+```yaml
+# configs/paths.yaml
+outputs_root: /data/ssl_anti_spoofing/spoof_superb_outputs
+```
+
+**The figures are the published ones.** Both analyses hand off to the modules
+that drew the paper's figures rather than plotting their own: degradation to
+`create_heatmap`, TTS to `create_mlaad_group_ranked_figures` and
+`create_mlaad_tts_system_ranked_figure`. So the degradation heatmaps carry the
+Baseline and Mean columns in grey outside the colour scale, the rows follow
+Table 6's order with rules between generative / discriminative / spectrogram,
+and the TTS figures show the six representative models with columns and systems
+ranked by their Mean, the 91 systems split across two panels.
+
 ### Acoustic degradation
 
 Six conditions -- one clean reference and five degraded -- each POOLED from
@@ -126,11 +145,16 @@ python -m spoof_superb.tools.build_view --view tts_systems
 python -m spoof_superb.tools.build_view --view acoustic_degradation --dry-run
 ```
 
-**Superseded.** `compute_eer_matrix`, `compute_eer_tts` and
-`create_mlaad_tts_eer_heatmaps` read the legacy view trees or raw directly and
-predate these entry points. `tts_systems` reproduces
-`create_mlaad_tts_eer_heatmaps` exactly (max|d| = 0.000000 across all 11
-architecture groups).
+Each view also carries a `README.md` saying, in sentences, what every group
+contains -- which corpus partitions compose each degradation condition, and
+which condition codes those are in the corpus's own numbering. `_manifest.json`
+is the machine-readable record beside it.
+
+**Superseded.** `compute_eer_matrix` and `compute_eer_tts` read the legacy view
+trees and predate these entry points. `create_mlaad_tts_eer_heatmaps` still
+computes the four base TTS matrices from raw; `tts_systems` reproduces it
+exactly (max|d| = 0.000000 across all 11 architecture groups) and additionally
+produces the ranked figures.
 
 ## Comparing two score trees
 

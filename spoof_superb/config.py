@@ -83,10 +83,22 @@ class Config:
     baseline_models_root: str = '/data/ssl_anti_spoofing/asd_superb_models/baselines'
     save_dir: str = '/data/ssl_anti_spoofing/asd_superb/'
 
+    # Where analyses write their CSVs and figures. Empty means the repo's own
+    # outputs/ directory, which is what every analysis defaulted to before this
+    # existed -- so leaving it unset changes nothing. Set it in
+    # configs/paths.yaml to keep generated figures out of the working tree, or
+    # to write them somewhere shared.
+    #
+    # Each analysis still takes --out_dir, which wins over this.
+    outputs_root: str = ''
+
     # Score-file directory layout. 'legacy' reproduces the pre-reorg paths;
-    # 'v2' is raw/{system}/{dataset}/{frontend}.txt. Default is legacy so an
-    # existing tree keeps working; set v2 in configs/paths.yaml for a new one.
-    score_layout: Literal['legacy', 'v2'] = 'legacy'
+    # 'v2' is raw/{system}/{dataset}/{frontend}.txt; 'v3' is the same for
+    # linear_head but puts the non-SSL systems in raw/non_ssl/{dataset}/
+    # {system}.txt. Default is legacy so an existing tree keeps working; set
+    # v3 in configs/paths.yaml for a new one. v2 is retained for reading,
+    # because run_status.json files record absolute v2 paths.
+    score_layout: Literal['legacy', 'v2', 'v3'] = 'legacy'
 
     linear_head_prefix: str = 'model_weighted_CCE_50_64_linear_head_ASV19_'
     reference_ssl: str = 'xls_r_300m'

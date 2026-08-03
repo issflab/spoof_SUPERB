@@ -31,10 +31,12 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 
+from spoof_superb.analysis import metadata_csv
 from spoof_superb.config import cfg
 
 SCORE_ROOT = Path(cfg.scores_root)
-ARCH_CSV = SCORE_ROOT / "mlaad_v10_tts_architecture_groups.csv"
+#: Corpus metadata, resolved from the repo (see analysis.metadata_csv).
+ARCH_NAME = "mlaad_v10_tts_architecture_groups.csv"
 OUT_DIR = Path(__file__).resolve().parent.parent / "outputs" / "figures_mlaad_tts"
 
 # Same six representative models as the ranked per-system figure, weakest->best.
@@ -52,7 +54,7 @@ EXCLUDED = {"Dual-AR", "RVC", "Voxtral"}  # excluded/merged from the 91-system s
 
 def group_sizes(col: str) -> dict[str, int]:
     """System count per group (col in {architecture_group, vocoder_family})."""
-    arch = pd.read_csv(ARCH_CSV)
+    arch = pd.read_csv(metadata_csv(ARCH_NAME))
     arch = arch[~arch["tts_system"].isin(EXCLUDED)]
     return arch[col].value_counts().to_dict()
 
@@ -102,7 +104,16 @@ def plot(df: pd.DataFrame, out_png: Path, figwidth: float, xtick_rot: float,
     print(f"Saved: {out_png}")
 
 
-def main() -> None:
+def main(argv=None) -> None:
+    import argparse
+    global OUT_DIR
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--out_dir", default=str(OUT_DIR),
+                    help="directory holding the EER CSVs, and where the ranked "
+                         "figures are written")
+    args = ap.parse_args(argv)
+    OUT_DIR = Path(args.out_dir)
+
     arch = ranked_frame("eer_by_architecture.csv", group_sizes("architecture_group"))
     voc = ranked_frame("eer_by_vocoder_family.csv", group_sizes("vocoder_family"))
 
@@ -121,4 +132,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

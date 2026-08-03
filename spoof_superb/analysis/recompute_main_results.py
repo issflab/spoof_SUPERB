@@ -53,6 +53,7 @@ Usage
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -340,9 +341,20 @@ def nan_frac(scores):
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+
+def default_out_dir(name):
+    """Where an analysis writes, unless --out_dir says otherwise.
+
+    `outputs_root` in configs/paths.yaml when set, the repo's outputs/ when not.
+    """
+    root = getattr(cfg, "outputs_root", "") or str(REPO_ROOT / "outputs")
+    return os.path.join(root, name)
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--out_dir", default=str(REPO_ROOT / "scripts" / "verification_out"))
+    ap.add_argument("--out_dir", default=None,
+                    help="default: outputs_root/main_results, or the repo's outputs/")
     ap.add_argument("--scores_root", default=None,
                     help="score tree to read (default: the configured scores_root)")
     ap.add_argument("--layout", default=None, choices=("legacy", "v2", "v3"),
@@ -351,7 +363,7 @@ def main():
     scores_root = args.scores_root or cfg.scores_root
     layout = args.layout or getattr(cfg, "score_layout", "legacy")
     print(f"reading {scores_root}  (layout={layout})", flush=True)
-    out_dir = Path(args.out_dir)
+    out_dir = Path(args.out_dir or default_out_dir("main_results"))
     out_dir.mkdir(parents=True, exist_ok=True)
 
     results = {}   # display name -> dict

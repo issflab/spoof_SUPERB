@@ -42,10 +42,12 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 
+from spoof_superb.analysis import metadata_csv
 from spoof_superb.config import cfg
 
 SCORE_ROOT = Path(cfg.scores_root)
-ARCH_CSV = SCORE_ROOT / "mlaad_v10_tts_architecture_groups.csv"
+#: Corpus metadata, resolved from the repo (see analysis.metadata_csv).
+ARCH_NAME = "mlaad_v10_tts_architecture_groups.csv"
 OUT_DIR = Path(__file__).resolve().parent.parent / "outputs" / "figures_mlaad_tts"
 EER_CSV = OUT_DIR / "eer_by_tts_system.csv"
 
@@ -109,7 +111,7 @@ def load_matrix() -> pd.DataFrame:
 
 
 def mode_lookup() -> dict[str, str]:
-    arch = pd.read_csv(ARCH_CSV)
+    arch = pd.read_csv(metadata_csv(ARCH_NAME))
     return {
         s: MODE_LABEL.get(m, m)
         for s, m in zip(arch["tts_system"], arch["ar_nar"])
@@ -173,7 +175,17 @@ def draw_panel(
     ax_heat.axvline(len(REPRESENTATIVE), color="black", linewidth=1.4)
 
 
-def main() -> None:
+def main(argv=None) -> None:
+    import argparse
+    global OUT_DIR, EER_CSV
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--out_dir", default=str(OUT_DIR),
+                    help="directory holding the EER CSVs, and where the ranked "
+                         "figures are written")
+    args = ap.parse_args(argv)
+    OUT_DIR = Path(args.out_dir)
+    EER_CSV = OUT_DIR / "eer_by_tts_system.csv"
+
     mat = load_matrix()
     modes = mode_lookup()
     n = len(mat)
@@ -225,4 +237,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

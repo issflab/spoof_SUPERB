@@ -27,6 +27,7 @@ degradation with the corpus's own difficulty.
 
 import argparse
 import csv
+import os
 import sys
 from pathlib import Path
 
@@ -37,22 +38,27 @@ from spoof_superb.analysis.views import VIEW_SPECS
 from spoof_superb.config import cfg
 from spoof_superb.core.metrics import compute_eer
 
-from spoof_superb.scoring.models import paper_models
+from spoof_superb.analysis.create_heatmap import (load_matrix, plot_absolute,
+                                                  plot_relative)
+from spoof_superb.scoring.models import (display_by_slug, paper_models,
+                                         paper_table_rows)
 from spoof_superb.tools.build_view import build
 
 #: Column order in the report: the reference first, then the degraded
 #: conditions in the order tab:acoustic_degradation lists them.
-CONDITIONS = ["Baseline", "Codec_Compression", "Bandwidth", "Additive_Noise",
+CONDITIONS = ["Baseline", "Codec_Compression", "Additive_Noise", "Bandwidth",
               "Reverberation", "Channel_Distortions"]
 
-#: Display names, kept out of the directory names so the tree stays greppable.
+#: View group -> the column name the paper's figures use. These are the names
+#: `create_heatmap` expects, because that is the module that drew the published
+#: degradation figures and this analysis feeds it rather than re-plotting.
 DISPLAY = {
     "Baseline": "Baseline",
-    "Codec_Compression": "Codec & Compression",
-    "Bandwidth": "Bandwidth",
-    "Additive_Noise": "Additive Noise",
-    "Reverberation": "Reverberation",
-    "Channel_Distortions": "Channel Distortions",
+    "Codec_Compression": "Codec",
+    "Additive_Noise": "Noise",
+    "Bandwidth": "Resampling",
+    "Reverberation": "Reverb",
+    "Channel_Distortions": "Channel",
 }
 
 REFERENCE = "Baseline"
@@ -81,11 +87,21 @@ def delta_eer(degraded, clean):
     return (degraded - clean) / clean
 
 
+
+def default_out_dir(name):
+    """Where an analysis writes, unless --out_dir says otherwise.
+
+    `outputs_root` in configs/paths.yaml when set, the repo's outputs/ when not.
+    """
+    root = getattr(cfg, "outputs_root", "") or str(REPO_ROOT / "outputs")
+    return os.path.join(root, name)
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(
         prog="python -m spoof_superb.analysis.acoustic_degradation",
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--out_dir", default=str(REPO_ROOT / "outputs" / "degradation"),
+    ap.add_argument("--out_dir", default=None,
                     help="where the CSVs and figures go")
     ap.add_argument("--scores_root", default=None,
                     help="score tree to read (default: the configured one)")
@@ -103,7 +119,7 @@ def main(argv=None):
     spec = VIEW_SPECS["acoustic_degradation"]
     models = args.models or sorted(paper_models())
 
-    out_dir = Path(args.out_dir)
+    out_dir = Path(args.out_dir or default_out_dir("degradation"))
     out_dir.mkdir(parents=True, exist_ok=True)
 
     print("=" * 78)
@@ -121,12 +137,9 @@ def main(argv=None):
         for cond in CONDITIONS:
             key = (cond,)
             eers[cond] = (eer_pct(*groups[key][1:]) if key in groups else None)
-        ref = eers.get(REFERENCE)
-        row = {"Model": model}
+        row = {"Model": display_by_slug().get(model, model), "slug": model}
         for cond in CONDITIONS:
             row[DISPLAY[cond]] = eers[cond]
-            if cond != REFERENCE:
-                row[f"dEER {DISPLAY[cond]}"] = delta_eer(eers[cond], ref)
         rows.append(row)
         cells = "  ".join(
             f"{c[:9]}={eers[c]:6.2f}" if eers[c] is not None else f"{c[:9]}=   n/a"
@@ -138,11 +151,15 @@ def main(argv=None):
     if not rows:
         sys.exit("FATAL: no model produced a condition EER.")
 
-    eer_csv = out_dir / "eer_by_condition.csv"
-    fields = ["Model"] + [DISPLAY[c] for c in CONDITIONS] + [
-        f"dEER {DISPLAY[c]}" for c in CONDITIONS if c != REFERENCE]
+    # Ordered as the paper's table prints them, so the figures read in the same
+    # sequence as Table 6 and the family rules land in the right places.
+    order = {name: i for i, name in enumerate(paper_table_rows())}
+    rows.sort(key=lambda r: order.get(r["Model"], len(order)))
+
+    eer_csv = out_dir / "eer_matrix.csv"
+    fields = ["Model"] + [DISPLAY[c] for c in CONDITIONS]
     with open(eer_csv, "w", newline="") as fh:
-        w = csv.DictWriter(fh, fieldnames=fields)
+        w = csv.DictWriter(fh, fieldnames=fields, extrasaction="ignore")
         w.writeheader()
         for r in rows:
             w.writerow({k: (f"{v:.4f}" if isinstance(v, float) else v)
@@ -150,53 +167,21 @@ def main(argv=None):
     print(f"\nWrote {eer_csv}")
 
     if not args.no_figures:
-        _figures(rows, out_dir)
+        print()
+        print("=" * 78)
+        print("STEP 3 -- figures, via create_heatmap (the published ones)")
+        print("=" * 78, flush=True)
+        df = load_matrix(str(eer_csv))
+        plot_absolute(df, str(out_dir /
+                              "acoustic_eer_heatmap_absolute_eer_categorized.png"))
+        plot_relative(df, str(out_dir /
+                              "acoustic_eer_heatmap_relative_eer_categorized.png"))
 
     if skipped:
         print(f"\nNot scored on this tree, omitted ({len(skipped)}): "
               f"{', '.join(sorted(skipped))}")
-    print(f"\nSTEP 3 -- done. {len(rows)} models x {len(CONDITIONS)} conditions.")
+    print(f"\nDone. {len(rows)} models x {len(CONDITIONS)} conditions.")
     return 0
-
-
-def _figures(rows, out_dir):
-    """Absolute-EER and dEER heatmaps, models x conditions."""
-    import matplotlib
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-    import pandas as pd
-    import seaborn as sns
-
-    absolute = pd.DataFrame(
-        {r["Model"]: {DISPLAY[c]: r[DISPLAY[c]] for c in CONDITIONS}
-         for r in rows}).T[[DISPLAY[c] for c in CONDITIONS]]
-    relative = pd.DataFrame(
-        {r["Model"]: {DISPLAY[c]: r[f"dEER {DISPLAY[c]}"]
-                      for c in CONDITIONS if c != REFERENCE}
-         for r in rows}).T
-
-    # These names must not collide with the report CSV main() writes. They did:
-    # the absolute matrix was called `eer_by_condition` here too, so the figure
-    # step silently overwrote the full table -- same filename, but without the
-    # Model column or any of the dEER columns.
-    for df, name, title, fmt, cmap, center in (
-        (absolute, "figure_eer_by_condition", "EER (%) by acoustic condition",
-         ".2f", "Reds", None),
-        (relative, "figure_delta_eer_by_condition",
-         "Relative EER change vs Baseline", ".2f", "RdBu_r", 0.0),
-    ):
-        fig, ax = plt.subplots(figsize=(2 + 1.6 * df.shape[1], 1 + 0.34 * len(df)))
-        sns.heatmap(df.astype(float), annot=True, fmt=fmt, cmap=cmap,
-                    center=center, linewidths=0.5, ax=ax,
-                    cbar_kws={"shrink": 0.6})
-        ax.set_title(title, fontsize=12, pad=10)
-        ax.tick_params(axis="x", labelsize=9, rotation=30)
-        ax.tick_params(axis="y", labelsize=8, rotation=0)
-        plt.tight_layout()
-        plt.savefig(out_dir / f"{name}.png", dpi=300, bbox_inches="tight")
-        plt.close()
-        df.to_csv(out_dir / f"{name}.csv", float_format="%.4f")
-        print(f"Wrote {out_dir / (name + '.png')}")
 
 
 if __name__ == "__main__":
