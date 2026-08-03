@@ -24,7 +24,65 @@ import os
 
 import numpy as np
 
-__all__ = ["read_reference", "write_scores", "report_eer"]
+__all__ = ["read_reference", "read_scored", "write_scores", "report_eer"]
+
+
+def read_scored(paths):
+    """Read one or more score files -> (utt_ids, labels, scores) as arrays.
+
+    `read_reference` answers "what should have been scored"; this answers "what
+    was scored, and to what". Every analysis module needs the latter and each
+    had grown its own reader, with three incompatible ideas of the format:
+
+      * 4-column space-separated `utt_id - key score`   (canonical)
+      * 4-column tab-separated, no header               (the .tsv twin)
+      * 3-column tab-separated with a `utt_id label score` header
+        (the legacy MLAAD v10 tsv only)
+
+    All three appear on disk, so all three are read here rather than in four
+    places. Which one a file is, is decided per line by its separator and field
+    count -- not by its extension, because the legacy and v3 .tsv files share an
+    extension and differ in both.
+
+    Space-separated lines are peeled from the RIGHT for the reason given in the
+    module docstring. Tab-separated lines are split on tabs, which is the whole
+    point of the twin: tabs never occur inside an utt_id.
+
+    Passing several paths concatenates them in order, which is how a column the
+    benchmark defines as a pool of corpora (MLAAD + M-AILABS) is assembled.
+    """
+    if isinstance(paths, (str, os.PathLike)):
+        paths = [paths]
+
+    utts, labels, scores = [], [], []
+    for path in paths:
+        with open(path) as f:
+            for line in f:
+                line = line.rstrip("\n")
+                if not line:
+                    continue
+                if "\t" in line:
+                    parts = line.split("\t")
+                    if len(parts) == 4:            # utt_id, -, key, score
+                        utt, key, score = parts[0], parts[2], parts[3]
+                    elif len(parts) == 3:          # utt_id, label, score
+                        utt, key, score = parts
+                    else:
+                        continue
+                else:
+                    parts = line.rsplit(" ", 3)
+                    if len(parts) != 4:
+                        continue
+                    utt, key, score = parts[0], parts[2], parts[3]
+                if key == "label":                 # the legacy tsv header
+                    continue
+                utts.append(utt)
+                labels.append(key)
+                scores.append(float(score))
+
+    return (np.asarray(utts, dtype=object),
+            np.asarray(labels, dtype=object),
+            np.asarray(scores, dtype=np.float64))
 
 
 def read_reference(paths):

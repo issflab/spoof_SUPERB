@@ -4,7 +4,12 @@ test_scorepath.py
 Contracts for core.scorepath, the single decision about where a score file
 lives.
 
+  P0  v3 is the current layout: linear_head keeps raw/{system}/{dataset}/
+      {frontend}.txt, and the non-SSL systems become raw/non_ssl/{dataset}/
+      {system}.txt. Two non-SSL systems on one dataset therefore have two
+      distinct filenames, which `none.txt` could not give them.
   P1  v2 is raw/{system}/{dataset}/{frontend}.txt -- four levels, no more.
+      Retained for reading: run_status.json records absolute v2 paths.
   P2  Dataset directory names are canonical and version-bearing. `Multilingual`
       lands in `mlaad_v10`, because "which MLAAD is this?" is the question that
       put a wrong column in an earlier draft.
@@ -18,8 +23,8 @@ lives.
       keeps working during a migration.
   P6  An unknown dataset or layout raises, rather than silently inventing a
       path that would scatter score files somewhere nobody looks.
-  P7  The baselines record 'none' as their frontend -- they take no upstream,
-      and a path claiming one would be false.
+  P7  No layout invents an upstream for the non-SSL systems: v2 records 'none',
+      and v3 omits the component entirely.
 
 Run:  pytest tests/test_scorepath.py
 """
@@ -31,6 +36,7 @@ import pytest
 from spoof_superb.core.scorepath import (
     DATASET_DIRS,
     LAYOUTS,
+    NON_SSL_SYSTEMS,
     canonical_dataset,
     score_path,
 )
@@ -40,6 +46,10 @@ ROOT = "/tmp/scores"
 
 def v2(system, dataset, frontend):
     return score_path(system, dataset, frontend, scores_root=ROOT, layout="v2")
+
+
+def v3(system, dataset, frontend="none"):
+    return score_path(system, dataset, frontend, scores_root=ROOT, layout="v3")
 
 
 def test_p1_v2_shape():
@@ -105,19 +115,53 @@ def test_p6_unknown_dataset_and_layout_raise():
     with pytest.raises(KeyError):
         v2("linear_head", "not_a_dataset", "x")
     with pytest.raises(ValueError):
-        score_path("linear_head", "wild", "x", scores_root=ROOT, layout="v3")
+        score_path("linear_head", "wild", "x", scores_root=ROOT, layout="v9")
     # legacy has no convention for linear_head on the reference-driven columns
     with pytest.raises(KeyError):
         score_path("linear_head", "wild", "x", scores_root=ROOT, layout="legacy")
 
 
-def test_p7_baselines_declare_no_frontend():
-    p = v2("lfcc_gmm", "wild", "none")
-    assert p.endswith(os.path.join("lfcc_gmm", "in_the_wild", "none.txt"))
+def test_p7_no_layout_invents_an_upstream():
+    assert v2("lfcc_gmm", "wild", "none").endswith(
+        os.path.join("lfcc_gmm", "in_the_wild", "none.txt"))
+    # v3 has no frontend component at all: the argument cannot leak into the
+    # path, whatever it is set to.
+    for bogus in ("none", "xls_r_300m", "", "wavlm_large"):
+        p = v3("lfcc_gmm", "wild", bogus)
+        assert p == os.path.join(ROOT, "raw", "non_ssl", "in_the_wild",
+                                 "lfcc_gmm.txt"), bogus
+
+
+def test_p0_v3_shape_and_distinct_non_ssl_filenames():
+    assert v3("linear_head", "wild", "xls_r_300m") == v2(
+        "linear_head", "wild", "xls_r_300m"), "v3 must not move linear_head"
+    names = {s: os.path.basename(v3(s, "Famous_Figures")) for s in NON_SSL_SYSTEMS}
+    assert names == {"lfcc_gmm": "lfcc_gmm.txt", "aasist_raw": "aasist_raw.txt"}
+    # The defect v3 exists to fix: under v2 both are 'none.txt'.
+    assert len(set(names.values())) == len(NON_SSL_SYSTEMS)
+    assert len({os.path.basename(v2(s, "Famous_Figures", "none"))
+                for s in NON_SSL_SYSTEMS}) == 1
+
+
+def test_p0_v3_non_ssl_share_one_directory_per_dataset():
+    dirs = {os.path.dirname(v3(s, "Multilingual")) for s in NON_SSL_SYSTEMS}
+    assert len(dirs) == 1
+    assert dirs.pop() == os.path.join(ROOT, "raw", "non_ssl", "mlaad_v10")
+
+
+@pytest.mark.parametrize("dataset", sorted(DATASET_DIRS))
+def test_p3_v3_inputs_are_recoverable_without_parsing(dataset):
+    """Every real dataset, both systems: four components, nothing parsed."""
+    for system in NON_SSL_SYSTEMS:
+        rel = os.path.relpath(v3(system, dataset), ROOT).split(os.sep)
+        assert len(rel) == 4, rel
+        assert rel[:2] == ["raw", "non_ssl"]
+        assert rel[2] == canonical_dataset(dataset)
+        assert os.path.splitext(rel[3])[0] == system
 
 
 def test_layouts_are_the_documented_set():
-    assert set(LAYOUTS) == {"v2", "legacy"}
+    assert set(LAYOUTS) == {"v3", "v2", "legacy"}
 
 
 if __name__ == "__main__":
