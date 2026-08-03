@@ -175,10 +175,14 @@ def _figures(rows, out_dir):
                       for c in CONDITIONS if c != REFERENCE}
          for r in rows}).T
 
+    # These names must not collide with the report CSV main() writes. They did:
+    # the absolute matrix was called `eer_by_condition` here too, so the figure
+    # step silently overwrote the full table -- same filename, but without the
+    # Model column or any of the dEER columns.
     for df, name, title, fmt, cmap, center in (
-        (absolute, "eer_by_condition", "EER (%) by acoustic condition",
+        (absolute, "figure_eer_by_condition", "EER (%) by acoustic condition",
          ".2f", "Reds", None),
-        (relative, "delta_eer_by_condition",
+        (relative, "figure_delta_eer_by_condition",
          "Relative EER change vs Baseline", ".2f", "RdBu_r", 0.0),
     ):
         fig, ax = plt.subplots(figsize=(2 + 1.6 * df.shape[1], 1 + 0.34 * len(df)))
