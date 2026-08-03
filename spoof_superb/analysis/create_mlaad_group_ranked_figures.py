@@ -3,7 +3,9 @@ Ranked architecture-group and vocoder-family MLAAD heatmaps for the paper.
 
 Consistency with the per-system figure (create_mlaad_tts_system_ranked_figure.py):
 both figures use the SAME six representative SSL models and rank the grouping
-columns by the Mean row (mean EER over those six models), easiest to hardest.
+columns by the Mean row, easiest to hardest. The six models are a DISPLAY
+sample; the Mean is over every model scored, because it is a claim about the
+TTS group rather than about those six.
 
 Orientation is kept as SSL models on rows and groups on columns (the groups are
 few enough to be columns, unlike the 91 systems), with a Mean row at the bottom
@@ -62,18 +64,30 @@ def group_sizes(col: str) -> dict[str, int]:
 def ranked_frame(csv_name: str, sizes: dict[str, int]) -> pd.DataFrame:
     """6 representative models x groups, sorted by the Mean row, Mean appended.
 
-    Returns rows = [6 models, "Mean"], columns = groups ordered easiest->hardest,
-    column labels annotated with "(n)".
+    The Mean is over EVERY model in the CSV, not over the six displayed. The
+    six are a display sample -- one per performance tier, so the reader sees the
+    spread without 19 rows of heatmap -- but the Mean is a claim about how
+    detectable a TTS group is, and that should use all the evidence there is.
+
+    Taking it over the six biased it low by 7.3 pp on the architecture groups
+    and 7.7 pp on the vocoder families, because three of the six (XLS-R, WavLM
+    Large, HuBERT Large) are among the strongest models in the roster. It also
+    moved the ranking this figure exists to show: 7 of 11 architecture groups
+    and 21 of 27 vocoder families change rank between the two.
+
+    What that cost, and why it is worth paying: sorting by a Mean over rows the
+    reader cannot see means the ordering is no longer checkable against the
+    cells in front of them. The row is labelled with its model count so the
+    figure says where the number came from.
     """
     df = pd.read_csv(OUT_DIR / csv_name, index_col="Model")
     missing = [m for m in REPRESENTATIVE if m not in df.index]
     if missing:
         sys.exit(f"FATAL: {csv_name} missing models {missing}")
-    sub = df.loc[REPRESENTATIVE]
-    mean = sub.mean(axis=0)
+    mean = df.mean(axis=0)
     order = mean.sort_values().index
-    sub = sub[order]
-    sub.loc["Mean"] = mean[order]
+    sub = df.loc[REPRESENTATIVE, order]
+    sub.loc[f"Mean (all {len(df)})"] = mean[order]
     sub.columns = [f"{g} ({sizes.get(g, 0)})" for g in sub.columns]
     return sub
 
@@ -120,10 +134,10 @@ def main(argv=None) -> None:
     arch.to_csv(OUT_DIR / "eer_by_architecture_ranked.csv", float_format="%.4f")
     voc.to_csv(OUT_DIR / "eer_by_vocoder_family_ranked.csv", float_format="%.4f")
 
-    print("architecture, ranked by 6-model Mean:")
-    print(arch.loc["Mean"].round(1).to_string())
-    print("\nvocoder family, ranked by 6-model Mean:")
-    print(voc.loc["Mean"].round(1).to_string())
+    print("architecture, ranked by the all-model Mean:")
+    print(arch.iloc[-1].round(1).to_string())
+    print("\nvocoder family, ranked by the all-model Mean:")
+    print(voc.iloc[-1].round(1).to_string())
 
     plot(arch, OUT_DIR / "mlaad_tts_eer_by_architecture_ranked.png",
          figwidth=11, xtick_rot=35, annot_size=8)

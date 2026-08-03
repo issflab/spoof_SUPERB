@@ -12,8 +12,9 @@ For the paper we instead:
   - keep ALL 91 systems (TTS diversity is the contribution -- do not subset them),
   - show only the 6 representative SSL models used in the paper's other TTS
     figures (the SSL models are the instrument, not the object of study),
-  - add a `Mean` column = mean EER across those 6 shown models, and SORT systems
-    by it, so the ordering is visibly explained by the value the reader can see,
+  - add a `Mean` column over EVERY model scored (not just the 6 shown), and
+    SORT systems by it -- the Mean is a claim about the system, so it uses all
+    the evidence rather than the display sample,
   - split the ranked list into two side-by-side panels (a full-width figure*),
     reading left-to-right easiest -> hardest, sharing one colour scale,
   - carry a generation-mode strip (AR / NAR / Closed) beside each panel.
@@ -88,6 +89,15 @@ def load_matrix() -> pd.DataFrame:
 
     Rows = TTS systems, columns = the 6 representative models, plus a Mean
     column, sorted ascending by Mean (easiest first).
+
+    The Mean is over EVERY model in the CSV, not the six shown. The six are a
+    display sample -- 91 systems x 19 models is unreadable -- but the Mean
+    orders the figure and is the number a reader takes away about a system's
+    detectability, so it uses every model scored.
+
+    Over the six it was biased low by 8.5 pp, because three of them (XLS-R,
+    WavLM Large, HuBERT Large) are among the strongest in the roster, and it
+    ranked 84 of the 91 systems differently.
     """
     if not EER_CSV.is_file():
         sys.exit(
@@ -105,8 +115,8 @@ def load_matrix() -> pd.DataFrame:
         bad = mat.index[mat.isna().any(axis=1)].tolist()
         sys.exit(f"FATAL: NaN EER for systems {bad}")
 
-    mat["Mean"] = mat[REPRESENTATIVE].mean(axis=1)
-    mat = mat.sort_values("Mean", ascending=True)
+    mat[f"Mean (all {len(raw)})"] = raw.mean(axis=0)
+    mat = mat.sort_values(f"Mean (all {len(raw)})", ascending=True)
     return mat
 
 
@@ -191,9 +201,10 @@ def main(argv=None) -> None:
     n = len(mat)
     half = (n + 1) // 2
     left, right = mat.iloc[:half], mat.iloc[half:]
-    print(f"{n} systems, ranked by mean EER over {len(REPRESENTATIVE)} models: "
-          f"{mat['Mean'].iloc[0]:.1f} (easiest: {mat.index[0]}) .. "
-          f"{mat['Mean'].iloc[-1]:.1f} (hardest: {mat.index[-1]})")
+    mean_col = mat.columns[-1]
+    print(f"{n} systems, ranked by {mean_col}: "
+          f"{mat[mean_col].iloc[0]:.1f} (easiest: {mat.index[0]}) .. "
+          f"{mat[mean_col].iloc[-1]:.1f} (hardest: {mat.index[-1]})")
     print(f"split: left panel ranks 1-{half}, right panel {half + 1}-{n}")
 
     fig = plt.figure(figsize=(14.5, 11))
