@@ -54,11 +54,20 @@ VMAX = 50.0
 EXCLUDED = {"Dual-AR", "RVC", "Voxtral"}  # excluded/merged from the 91-system set
 
 
+#: The generation-mode column holds the taxonomy's own tokens; the EER CSVs
+#: carry the labels the figures print. Counting has to happen in the printed
+#: vocabulary or every mode column would be annotated "(0)".
+MODE_LABEL = {"AR": "AR", "NAR": "NAR", "unknown": "Closed / Undisclosed"}
+
+
 def group_sizes(col: str) -> dict[str, int]:
-    """System count per group (col in {architecture_group, vocoder_family})."""
+    """System count per group, keyed by the label the figures print."""
     arch = pd.read_csv(metadata_csv(ARCH_NAME))
     arch = arch[~arch["tts_system"].isin(EXCLUDED)]
-    return arch[col].value_counts().to_dict()
+    counts = arch[col].value_counts().to_dict()
+    if col == "ar_nar":
+        counts = {MODE_LABEL[k]: v for k, v in counts.items()}
+    return counts
 
 
 def ranked_frame(csv_name: str, sizes: dict[str, int]) -> pd.DataFrame:
@@ -128,21 +137,24 @@ def main(argv=None) -> None:
     args = ap.parse_args(argv)
     OUT_DIR = Path(args.out_dir)
 
-    arch = ranked_frame("eer_by_architecture.csv", group_sizes("architecture_group"))
-    voc = ranked_frame("eer_by_vocoder_family.csv", group_sizes("vocoder_family"))
-
-    arch.to_csv(OUT_DIR / "eer_by_architecture_ranked.csv", float_format="%.4f")
-    voc.to_csv(OUT_DIR / "eer_by_vocoder_family_ranked.csv", float_format="%.4f")
-
-    print("architecture, ranked by the all-model Mean:")
-    print(arch.iloc[-1].round(1).to_string())
-    print("\nvocoder family, ranked by the all-model Mean:")
-    print(voc.iloc[-1].round(1).to_string())
-
-    plot(arch, OUT_DIR / "mlaad_tts_eer_by_architecture_ranked.png",
-         figwidth=11, xtick_rot=35, annot_size=8)
-    plot(voc, OUT_DIR / "mlaad_tts_eer_by_vocoder_family_ranked.png",
-         figwidth=18, xtick_rot=55, annot_size=7)
+    # Every grouping the TTS analysis produces gets a ranked figure, and every
+    # ranked artefact is named {stem}_ranked.*, so a figure sorts beside the CSV
+    # it came from. The architecture and vocoder figures used to be written as
+    # mlaad_tts_eer_by_*_ranked.png -- the same content under a different prefix,
+    # which sorted them away from their own data and made the directory look as
+    # though only tts_system had been ranked.
+    groupings = [
+        ("eer_by_architecture",     "architecture_group", 11, 35, 8),
+        ("eer_by_vocoder_family",   "vocoder_family",     18, 55, 7),
+        ("eer_by_generation_mode",  "ar_nar",             10, 15, 9),
+    ]
+    for stem, size_col, figwidth, rot, annot in groupings:
+        frame = ranked_frame(f"{stem}.csv", group_sizes(size_col))
+        frame.to_csv(OUT_DIR / f"{stem}_ranked.csv", float_format="%.4f")
+        print(f"\n{stem}, ranked by the all-model Mean:")
+        print(frame.iloc[-1].round(1).to_string())
+        plot(frame, OUT_DIR / f"{stem}_ranked.png",
+             figwidth=figwidth, xtick_rot=rot, annot_size=annot)
 
 
 if __name__ == "__main__":
