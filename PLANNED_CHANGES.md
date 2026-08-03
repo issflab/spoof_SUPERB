@@ -677,3 +677,39 @@ view trees, and the two entry points above replace what they were for -- so the
 question is whether to delete them rather than port them. `compute_eer_matrix`'s
 three hand-maintained stem dictionaries exist only to undo the legacy naming
 inconsistency that D2 forbids, so a port would delete them anyway.
+
+---
+
+## P13  The AASIST row cannot be reproduced; LFCC-GMM reproduces exactly  [DONE 2026-08-03 -- record]
+
+`recompute_main_results` now computes the table's two non-SSL reference rows.
+Comparing them against the published values separates cleanly, and the reason
+is in the paper's own training protocol.
+
+**LFCC-GMM reproduces exactly.** On ASV19 LA the two trees are bit-identical:
+71,237 rows both sides, zero label disagreement, correlation 1.00000,
+max|d| 0.0000, 100% of scores equal, EER 3.700 in both. Six of its ten columns
+match the paper to three decimals; the four that move are exactly the four with
+documented coverage growth (ASV21 DF, DFEval24, FF, ASVLD).
+
+That is expected: "LFCC-GMM involves no gradient-based training: two
+512-component diagonal-covariance mixtures are fitted by expectation
+maximization". Refitting is deterministic given the same data.
+
+**AASIST does not reproduce.** Same 71,237 trials, same labels, but correlation
+0.91859, max|d| 10.42, and not one score equal. EER 1.659 published vs 3.223
+recomputed. Every one of its ten columns moves, ASV5 Eval by 12.7 pp.
+
+Also expected, and not a defect: "AASIST is trained end-to-end from random
+initialization ... and the checkpoint with the lowest development EER is
+retained". A re-run is a different model. The published AASIST column is a
+property of a checkpoint, and cannot be regenerated without that checkpoint.
+
+**Consequence.** Of the two reference rows, only LFCC-GMM is reproducible from
+score files. Reporting the AASIST row alongside recomputed SSL rows compares a
+retained checkpoint against a fresh one. Either the original AASIST checkpoint
+is scored into the new tree, or the row is republished from the re-run with the
+change stated.
+
+This is the same class as the ASV19 LA / ITW finding in P12 -- scores moving on
+identical trials -- but here the cause is known rather than unexplained.

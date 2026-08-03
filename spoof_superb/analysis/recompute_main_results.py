@@ -116,8 +116,16 @@ def dataset_key(layout, dataset):
     return DATASET_KEY_BY_LAYOUT.get(dataset, {}).get(layout, dataset)
 
 
-def column_paths(layout, scores_root, dataset, slug):
-    """Every score file that makes up one (dataset, model) cell, in pool order."""
+def column_paths(layout, scores_root, dataset, slug, system="linear_head"):
+    """Every score file that makes up one (dataset, model) cell, in pool order.
+
+    `system` is "linear_head" for every SSL row. The two non-SSL reference rows
+    pass their own system name, which is what puts them under raw/non_ssl/ with
+    the system as the filename -- see core.scorepath.
+    """
+    if system != "linear_head":
+        return [Path(score_path(system, dataset_key(layout, dataset), slug,
+                                scores_root=scores_root, layout=layout))]
     if layout == "legacy":
         # Derived from the scores_root PASSED IN, not from cfg.reference_dir.
         # cfg.reference_dir is relative to the CONFIGURED root, so reading it
@@ -133,7 +141,7 @@ def column_paths(layout, scores_root, dataset, slug):
                             scores_root=scores_root, layout=layout))]
 
 
-def mlaad_paths(layout, scores_root, slug):
+def mlaad_paths(layout, scores_root, slug, system="linear_head"):
     """(pool_paths, balanced_path) for the MLAAD column.
 
     `pool_paths` is a list because under v2/v3 the column is assembled from the
@@ -142,7 +150,7 @@ def mlaad_paths(layout, scores_root, slug):
     under v2/v3 it is None and the invariance check subsamples instead.
     """
     pool = [Path(p) for p in mlaad_pool_paths(slug, scores_root=scores_root,
-                                              layout=layout)]
+                                              layout=layout, system=system)]
     if layout == "legacy":
         bal = (Path(scores_root) / "linear_head_MLAAD_v10" / "balanced"
                / f"linear_head_MLAAD_v10_balanced_{slug}.txt")
@@ -242,6 +250,21 @@ MODELS = [
     ("SSAST",             "ssast_frame_base"),
     ("MAE-AST-FRAME",     "mae_ast_frame"),
 ]
+
+#: The table's top block: the two non-SSL reference systems, in printed order.
+#: They are systems, not upstreams, so they resolve through a different path --
+#: raw/non_ssl/{dataset}/{system}.txt -- and `system` is threaded through the
+#: path helpers for them alone.
+#:
+#: They are NOT in PUBLISHED. That dict records the draft the regression
+#: baseline was captured from, and these rows were not in it; adding values from
+#: the current tex would put two drafts in one dict and make the reproduction
+#: gate compare against a mixture.
+NON_SSL_MODELS = [
+    ("LFCC-GMM", "lfcc_gmm"),
+    ("AASIST",   "aasist_raw"),
+]
+
 
 # tab:top_ssl_lineage rows, in the order the paper prints them.
 LINEAGE = [
@@ -371,10 +394,11 @@ def write_table_csv(results, bold, path):
     SSL models in table order -- so a cell here can be read straight against the
     published table without transcribing anything.
 
-    Only the SSL block. The table's top two rows, LFCC-GMM and AASIST, are
-    reference SYSTEMS rather than upstreams; this script enumerates upstreams,
-    and the two are scored through `--systems`. They are absent rather than
-    blank so nobody reads an empty cell as a missing result.
+    The top block is the two non-SSL reference systems, exactly as the table
+    prints them, then the SSL rows. `*` follows the caption: it marks the best
+    SSL MODEL in a column, so the reference rows can carry a lower number
+    without a star -- that is the comparison the table is making, not a
+    formatting slip.
 
     `MODELS` here is deliberately WIDER than the paper's roster -- it carries
     FBANK and the non-960h Mockingjay because the regression baseline tracks
@@ -398,7 +422,8 @@ def write_table_csv(results, bold, path):
     with open(path, "w", newline="") as fh:
         w = _csv.writer(fh)
         w.writerow(fields)
-        for name in paper_table_rows():
+        order = [d for d, _ in NON_SSL_MODELS] + list(paper_table_rows())
+        for name in order:
             row = results.get(name)
             if row is None:
                 continue
@@ -448,13 +473,18 @@ def main():
     if args.roster == "paper":
         from spoof_superb.scoring.models import paper_table_rows
         wanted = set(paper_table_rows())
-        roster = [(d, s) for d, s in MODELS if d in wanted]
+        # The two non-SSL reference systems first, as the table prints them.
+        roster = ([(d, s, s) for d, s in NON_SSL_MODELS]
+                  + [(d, s, "linear_head") for d, s in MODELS if d in wanted])
     else:
-        roster = list(MODELS)
-    print(f"roster     {args.roster} ({len(roster)} models)", flush=True)
+        # The gate's superset: the rows the regression baseline tracks. It does
+        # not include the non-SSL systems, which were never in that baseline.
+        roster = [(d, s, "linear_head") for d, s in MODELS]
+    print(f"roster     {args.roster} ({len(roster)} rows)", flush=True)
 
-    for disp, slug in roster:
-        row = {"slug": slug, "datasets": {}, "asserts": [], "sources": {}}
+    for disp, slug, system in roster:
+        row = {"slug": slug, "system": system, "datasets": {},
+               "asserts": [], "sources": {}}
         pooled_labels, pooled_scores = [], []
 
         # ---- legacy datasets -------------------------------------------
@@ -462,7 +492,7 @@ def main():
         # per absent model buried the real problems in the v3 run's output.
         present = [c for c, prefix in DATASETS if prefix is not None
                    and all(p.exists() for p in
-                           column_paths(layout, scores_root, prefix, slug))]
+                           column_paths(layout, scores_root, prefix, slug, system))]
         if not present:
             problems.append(f"{disp}: not scored on this tree -- no columns")
             results[disp] = row
@@ -473,7 +503,7 @@ def main():
             key = dataset_key(layout, prefix)
             if key != prefix:
                 row["sources"][col] = key
-            paths = column_paths(layout, scores_root, prefix, slug)
+            paths = column_paths(layout, scores_root, prefix, slug, system)
             missing = [p for p in paths if not p.exists()]
             if missing:
                 row["datasets"][col] = None
@@ -503,7 +533,7 @@ def main():
             pooled_scores.append(sc[finite])
 
         # ---- MLAAD v10, full pool --------------------------------------
-        pool, bal = mlaad_paths(layout, scores_root, slug)
+        pool, bal = mlaad_paths(layout, scores_root, slug, system)
         missing = [p for p in pool if not p.exists()]
         if missing:
             row["datasets"]["MLAAD"] = None
@@ -591,20 +621,27 @@ def main():
               flush=True)
 
     # ---- bolding: best per dataset column, top-5 in Mean/Pooled ---------
+    # "Bold marks the best SSL MODEL in each dataset column and the top five
+    # under Mean EER" -- the caption. The two non-SSL reference rows are the
+    # thing being compared against, so they are excluded from the comparison.
+    non_ssl = {d for d, _ in NON_SSL_MODELS}
     bold = {"columns": {}, "mean_top5": [], "pooled_top5": []}
     for col, _ in DATASETS:
         cand = [(d, r["datasets"][col]["eer"]) for d, r in results.items()
-                if r["datasets"].get(col)
+                if d not in non_ssl and r["datasets"].get(col)
                 and r["datasets"][col]["eer"] is not None]
         if cand:
             bold["columns"][col] = min(cand, key=lambda t: t[1])[0]
     for key in ("mean", "pooled"):
-        cand = [(d, r[key]) for d, r in results.items() if r.get(key) is not None]
+        cand = [(d, r[key]) for d, r in results.items()
+                if d not in non_ssl and r.get(key) is not None]
         bold[f"{key}_top5"] = [d for d, _ in sorted(cand, key=lambda t: t[1])[:5]]
 
     # ---- regression gate: untouched columns must reproduce the paper ----
     repro = []
     for disp, r in results.items():
+        if disp not in PUBLISHED:
+            continue   # no recorded published values for this row to check
         for i, (col, _) in enumerate(DATASETS):
             if col in CHANGED_COLS:
                 continue
