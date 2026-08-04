@@ -81,8 +81,7 @@ The roster lives in `spoof_superb/scoring/models.py` as `PAPER_TABLE_ROWS`,
 stated once as the display names the table prints. It is **not** derived from
 `tests/baseline_main_results_table.json`: that file tracks 21 models, two of which
 (`FBANK`, `Mockingjay`) the paper does not print, and nothing in it distinguishes
-them. The regression gate deliberately guards more columns than the paper
-reports, so the baseline is not the roster.
+them, so the baseline is not the roster.
 
 Instead, `tests/test_paper_models.py::test_m1_roster_matches_the_paper_table_exactly`
 parses `access.tex` and asserts the two agree, whenever the paper repo is checked
@@ -306,7 +305,10 @@ the driver exits non-zero if any task is not `ok`.
 
 ## Unattended runs
 
-`bin/watch_and_run_spoofceleb.sh` and `bin/watch_and_run_aasist_mlaad.sh` wait
-for CUDA to become available, then launch a job, then re-check. They exist for
-running through a driver outage; the retry logic inside the orchestrator covers
-the ordinary case.
+`bin/watch_and_run_aasist_mlaad.sh` waits for CUDA to become available, then
+launches a job. It exists for running through a host-wide driver outage; the
+retry logic inside the orchestrator covers the ordinary case.
+
+Its sibling `watch_and_run_spoofceleb.sh` was removed with the rest of the
+sweep-time comparison -- its canary gate called the retired
+`verification.driver`, and scoring no longer grades itself against anything.

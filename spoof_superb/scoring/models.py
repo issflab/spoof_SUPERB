@@ -44,6 +44,18 @@ __all__ = ["paper_models", "paper_table_rows", "paper_table_order",
            "is_paper_model",
            "non_paper_models", "MAIN_RESULTS_BASELINE", "PAPER_TABLE_ROWS"]
 
+#: The display-name -> slug mapping for the paper's roster.
+#:
+#: This file began as the fixture for a regression test that has since been
+#: retired -- reproducibility is now checked by `spoof_superb.verification`
+#: against `reference/`, which is a refreshable published artefact rather than a
+#: capture pinned to the legacy tree. The file stays because `_slug_by_display`
+#: reads it: it is the only record of which score-file slug produced which
+#: printed row, and every roster decision in the repo depends on that mapping.
+#:
+#: It therefore lives under tests/ for historical reasons only, and its name
+#: describes a job it no longer has. Moving and renaming it is a change worth
+#: making; it is deferred because it is unrelated to what retired the test.
 MAIN_RESULTS_BASELINE = os.path.join(str(REPO_ROOT), "tests", "baseline_main_results_table.json")
 
 #: The SSL rows of the paper's main results table, in printed order. The two
@@ -129,7 +141,7 @@ def family_separator_rows(display_names):
 
 @functools.lru_cache(maxsize=None)
 def _slug_by_display(path=None):
-    """Table-row display name -> model slug, read from the regression baseline."""
+    """Table-row display name -> model slug. See MAIN_RESULTS_BASELINE."""
     path = path or MAIN_RESULTS_BASELINE
     try:
         with open(path) as f:

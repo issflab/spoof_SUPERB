@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Waits out the recurring host CUDA fault, then scores the one remaining
-# (aasist_raw, MLAAD v10) cell. Mirrors watch_and_run_spoofceleb.sh.
+# (aasist_raw, MLAAD v10) cell. One-off; it scores and compares nothing.
 PY=/home/alhashim/miniconda3/envs/spoof_SUPERB/bin/python
 cd /home/alhashim/ASD_SUPERB/spoof_SUPERB
 OUT=/data/ssl_anti_spoofing/asd_superb_score_files/baselines/aasist_raw/aasist_raw_Multilingual.txt

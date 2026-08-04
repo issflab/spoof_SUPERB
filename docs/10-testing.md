@@ -1,12 +1,17 @@
 # 10. Tests
 
 ```bash
-pytest tests/ -q                  # ~16 s, no GPU, no corpora
-RUN_MAIN_RESULTS=1 pytest tests/ -q     # + the numerical gate (~2m40s, reads ~15 GB)
+pytest tests/ -q                  # ~25 s, no GPU, no corpora
 ```
 
-Run the first after any code change. Run the second after anything touching
-scoring, metrics, or the score-file format.
+Run this after any code change. The tests use synthetic fixtures throughout and
+touch no score files.
+
+**Numbers are not checked here.** Whether the pipeline still produces the
+published EERs is a question about DATA, not code, and it is answered by
+`python -m spoof_superb.verification all` against `reference/` -- a refreshable
+published artefact rather than a capture pinned to a tree. See
+[verification](08-verification.md).
 
 ## What is covered
 
@@ -17,46 +22,34 @@ scoring, metrics, or the score-file format.
 | `test_grad_accum.py` | gradient accumulation is behaviour-preserving, plus a guard proving that claim is not vacuous |
 | `test_lfcc_frontend.py` | the vendored LFCC front-end reproduces the reference spafe implementation bit-for-bit on real audio |
 | `test_scoring_driver.py` | the parsers and writer behind the merged scoring driver: right-peeled fields, pooled column order, atomic writes, the `.tsv` twin, walk filtering, per-utterance labels, restrict semantics, fp32 default |
-| `test_verification.py` | (superseded module) the two legacy grade policies genuinely differ |
 | `test_verification_levels.py` | each verdict on both ladders means exactly one thing, and the boundaries are where the reasoning says |
-| `test_main_results_regression.py` | every published EER is unchanged (opt-in) |
+| `test_migrate_layout.py` | the layout migration moves every file exactly once and is resumable |
+| `test_compare_trees.py` | the ad-hoc tree comparison distinguishes WHY two cells differ |
+| `test_views.py` | analysis views partition losslessly and compose as the paper's tables specify |
 
 `test_lfcc_frontend.py` skips rather than fails when its external dependencies
 (a second interpreter with `spafe`, the reference checkout, ASVspoof2019 audio)
 are absent. Unevaluatable is not the same as broken.
 
-## The numerical gate
+## The retired numerical gate
 
-`tests/baseline_main_results_table.json` is the output of the main-results reproducer captured
-on a known-good tree. `test_main_results_regression.py` re-runs the reproducer and
-diffs every per-model, per-dataset EER, row count and NaN fraction against it at
-**zero tolerance**.
+`test_main_results_regression.py` used to re-run the main-results reproducer
+against the LEGACY tree and diff every EER against
+`tests/baseline_main_results_table.json` at zero tolerance. It has been removed.
 
-Zero is right because this recomputes over fixed score files rather than
-re-inferring, so it is deterministic -- confirmed by two consecutive runs
-producing byte-identical output. Any drift at all means something moved that
-should not have.
+It was answering the right question in the wrong place. The reference was a
+capture of one tree at one commit, unrefreshable without contradicting its own
+purpose, and it pinned the reproducer to a tree that is no longer authoritative.
+`python -m spoof_superb.verification` asks the same question -- did the numbers
+move -- against a reference that is a published artefact anyone can rebuild, and
+it grades on whether the paper's claims survive rather than on a tolerance.
 
-It is opt-in via `RUN_MAIN_RESULTS=1` because a run reads ~15 GB and takes ~2m40s.
-
-### If the gate fails
-
-Read the diff it prints; it names the model, dataset and field that moved. The
-usual causes are a path that now resolves somewhere else, or a parser that
-changed.
-
-### Regenerating the baseline
-
-Only when you have deliberately re-scored something and the new numbers are the
-intended ones:
-
-```bash
-python -m spoof_superb.analysis.recompute_main_results --out_dir /tmp/t5
-cp /tmp/t5/main_results.json tests/baseline_main_results_table.json
-```
-
-Say why in the commit message. Silently refreshing this file defeats its
-purpose.
+**`tests/baseline_main_results_table.json` stays**, and is not a test fixture.
+`scoring/models.py::_slug_by_display` reads it: it is the only record of which
+score-file slug produced which printed row, and every roster decision in the
+repo depends on that mapping. Its name and its location under `tests/` now
+describe a job it no longer has -- worth fixing, unrelated to what retired the
+test.
 
 ## Writing new tests
 

@@ -280,15 +280,6 @@ sklearn/Brent one (≤ 0.01 pp), and the full pool against the balanced pool
 `core/metrics.py::compute_det_curve` must not be reproducible by the very code
 verifying it. Do not "deduplicate" it.
 
-## Superseded
-
-`spoof_superb.verification.driver` and `verification.policies` graded one file
-against one legacy file using per-dataset thresholds tuned to the legacy
-environment's constant logit offset, and were invoked from inside the scoring
-sweep. Nothing calls them. `verdicts.py` replaces them with a ladder that is
-dataset-independent: it grades on the EER over identical trials, and reports the
-correlation statistics beside it rather than thresholding them per corpus.
-
 ## Which one do I want?
 
 | Situation | Use |

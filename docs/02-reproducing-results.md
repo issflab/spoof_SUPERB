@@ -47,26 +47,24 @@ bin/reproduce_main_results.sh
 ```
 
 This recomputes every per-model, per-dataset EER behind the paper's main table
-and diffs it against the committed baseline `tests/baseline_main_results_table.json` at
-**zero tolerance**. It takes about 2m40s and reads roughly 15 GB.
+and then verifies the result against `reference/analysis/`. It takes about
+2m40s and reads roughly 15 GB.
 
 Expected output ends with:
 
 ```
-3 passed
+=== VERDICTS ===
+  IDENTICAL              6
 ```
 
-The three checks are: the model set is unchanged, every EER / row-count / NaN
-fraction is unchanged, and no new problems appeared.
+The verification is graded on whether the paper's CLAIMS survive -- which model
+is best in each column, the top five under Mean, the ordering of the columns by
+mean EER -- with the per-cell deltas reported beside them as diagnostics. See
+[verification](08-verification.md).
 
-This is a **code** regression gate -- it pins the reproducer to the legacy tree
-it was captured on, so a refactor cannot move a number. It is not the
-reproducibility check a user of the benchmark runs; that is
-[verification](08-verification.md), which compares a freshly built tree and its
-tables against the published reference.
+Set `MODE="compute"` to recompute without checking.
 
-To write the tables out instead of checking them, set `MODE="compute"` in
-`bin/reproduce_main_results.sh`, or:
+To recompute directly:
 
 ```bash
 python -m spoof_superb.analysis.recompute_main_results --out_dir outputs/main_results

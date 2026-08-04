@@ -862,3 +862,49 @@ reached, now produced automatically by a command anyone can run.
 comparing its sha256, which made the cheapest possible answer -- "byte-identical"
 -- cost a full read of ~15 GB. It now hashes first and only parses when the hash
 differs. On a fetched or re-verified tree that is every cell.
+
+## P15  Retire the superseded verification unit and the legacy regression gate  [DONE 2026-08-03]
+
+**Deleted.** `verification/driver.py`, `verification/policies.py`,
+`verification/stats.py`, `tests/test_verification.py`,
+`bin/watch_and_run_spoofceleb.sh`, `tests/test_main_results_regression.py`.
+
+`stats.py` was not on the approved list but goes with the pair: nothing else
+imported it. It existed only to supply `Comparison` to `policies.py` and
+`compare()` to `driver.py`, so it was orphaned by their removal rather than by a
+separate decision. `test_verification.py` tested exactly those three modules.
+
+`watch_and_run_spoofceleb.sh` was a completed one-off whose canary gate called
+`verification.driver` against the legacy tree.
+
+**The regression gate.** `test_main_results_regression.py` re-ran the reproducer
+against the LEGACY tree and diffed every EER against
+`tests/baseline_main_results_table.json` at zero tolerance. It was answering the
+right question in the wrong place: the reference was a capture of one tree at
+one commit, unrefreshable without contradicting its own purpose, and it pinned
+the reproducer to a tree that is no longer authoritative. P14's level 2 asks the
+same question against a published artefact anyone can rebuild, and grades on
+whether the paper's claims survive rather than on a tolerance.
+
+**`tests/baseline_main_results_table.json` was NOT deleted, and must not be.**
+This is the finding that changed the plan: `scoring/models.py::_slug_by_display`
+reads it, so `paper_models()` -- and therefore every roster decision in
+orchestration and all three analyses -- depends on it. It is the only record of
+which score-file slug produced which printed row. Deleting it alongside its
+test would have broken the repo.
+
+That leaves a file under `tests/`, named for a job it no longer has, read by
+production code. Recorded in `models.py` beside the constant. Moving and
+renaming it is worth doing and is deliberately NOT bundled here: it is unrelated
+to what retired the test, and the standing instruction is not to touch that
+file's contents.
+
+**Rewired.** `bin/reproduce_main_results.sh` `MODE="check"` ran the deleted
+test. It now recomputes and then runs level-2 verification -- compute and check
+as two visible steps in one script, rather than a pytest invocation that looked
+like a unit test. Verified end to end: 6/6 `IDENTICAL`.
+
+**Also committed:** `tests/test_migrate_layout.py`, which had been untracked.
+
+Suite: 240 passed (was 246 passed / 3 skipped; the six removed were
+`test_verification.py`, and the three skips were the opt-in regression gate).
