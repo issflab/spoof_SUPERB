@@ -1008,3 +1008,44 @@ Recorded in `CLEANUP.md` under "Withdrawn from Tier 1" so the error is visible
 rather than silently dropped.
 
 Suite: 251 passed.
+
+## P18  The repository did not contain the package  [DONE 2026-08-04]
+
+Found while relocating the roster mapping. `git rm tests/baseline_main_results_table.json`
+failed with *pathspec did not match any files* -- the file every roster decision
+depends on had never been committed, because `.gitignore`'s `*.json` caught it.
+`paper_models()` therefore raised `FileNotFoundError` for everyone except the
+author, on whose disk the untracked file happened to sit.
+
+Widening the check found the larger problem. `.gitignore` line 2 was:
+
+    _*
+
+Git applies an unanchored pattern at EVERY depth, so this excluded:
+
+  * all 12 `spoof_superb/**/__init__.py`  -- the package does not import
+  * `spoof_superb/verification/__main__.py` -- the verification CLI
+  * `bin/_common.sh` -- the preamble every shell script sources
+
+and line 5's `models/` excluded `spoof_superb/models/__init__.py`. That
+directory's other files survived only because they had been force-added before
+the rule landed.
+
+**A fresh clone could not import `spoof_superb`, could not run a single `bin/`
+script, and had no model roster.** Confirmed by cloning: 0 of 12 `__init__.py`
+present, no `_common.sh`.
+
+Fixed by anchoring both rules to the repo root (`/_*`, `/models/`) -- where the
+scratch and checkpoint directories they were written for actually live -- plus
+explicit `!**/__init__.py`, `!**/__main__.py`, `!bin/_common.sh` and
+`!/spoof_superb/scoring/paper_roster.json` re-includes, so a future broad rule
+cannot remove the package again.
+
+Verified against a fresh clone: package imports, roster resolves to 19 slugs,
+250 passed / 1 skipped, `bin/orchestrate.sh --list` enumerates tasks.
+
+**Why every check missed it.** Tests, analyses and verification all ran against
+a working tree containing files the repository did not. Nothing in the suite
+distinguished "present on disk" from "present in the repo", and no test cloned.
+That gap is the actual defect; the two `.gitignore` lines are just where it
+showed up.

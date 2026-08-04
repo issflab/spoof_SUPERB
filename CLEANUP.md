@@ -39,17 +39,37 @@ Status key: `[ ]` open · `[x]` done · `[?]` needs a decision from Hashim
 
 ## Defects found while auditing -- fix or decide, do not just delete
 
-- [?] **`tests/baseline_main_results_table.json` is misfiled.** It is no longer a
-      test fixture -- `scoring/models.py::_slug_by_display` reads it, so
-      `paper_models()` and every roster decision depend on it. It is the only
-      record of which score-file slug produced which printed row. Its name and
-      its location under `tests/` describe a job it no longer has. Move to e.g.
-      `spoof_superb/scoring/paper_roster.json`, contents unchanged.
+- [x] **Roster mapping extracted.** The live 3% of
+      `tests/baseline_main_results_table.json` -- 21 display-name -> slug
+      entries, 672 bytes of a 21 KB file -- is now
+      `spoof_superb/scoring/paper_roster.json`. `models.py` reads it via
+      `PAPER_ROSTER`. The rest was legacy-tree EERs plus a `reproduction_failures`
+      key from the deleted gate.
 
-- [ ] **`seed_worker` is imported nowhere and wired nowhere.** `main.py`'s
-      DataLoaders run `num_workers=8` with no `worker_init_fn`, so the workers
-      are not deterministically seeded. Wiring it **changes training results**,
-      so it is a decision, not a tidy-up. (Recorded in its docstring.)
+      The old file is still on disk, UNTRACKED, and there is no git history for
+      it -- it was never committed. Deleting it is irreversible, so it was left
+      alone. Archive it somewhere outside the repo if the legacy numbers matter;
+      otherwise `rm tests/baseline_main_results_table.json`.
+
+- [x] **`seed_worker` deleted.** The ledger entry was WRONG: it claimed the
+      DataLoader workers were not deterministically seeded. PyTorch's own
+      `_worker_loop` has seeded `random`, `torch` and `numpy` per worker since
+      ~1.9, and this repo pins torch 2.7.1. Measured with a dataset drawing
+      `np.random` in `__getitem__` exactly as `datasets_ssl.py` does under
+      RawBoost (`--algo` defaults to 5): 16/16 distinct draws, and the same seed
+      reproduces them across runs. The helper was redundant, not unwired -- no
+      behaviour change, no decision needed.
+
+- [x] **`.gitignore` was excluding the package from the repository.** Found while
+      moving the roster: `git rm` on the baseline JSON failed with "pathspec did
+      not match", because `*.json` had kept it out of git entirely. Widening the
+      check found `_*` at line 2 -- unscoped, so matching at every depth --
+      excluding all 12 `spoof_superb/**/__init__.py`, `verification/__main__.py`
+      and `bin/_common.sh`, plus `models/` excluding
+      `spoof_superb/models/__init__.py`. **A fresh clone could not import the
+      package, run any `bin/` script, or resolve the roster.** Rules root-scoped
+      and re-includes added; verified by cloning: imports, 250 tests pass,
+      `bin/orchestrate.sh --list` runs.
 
 ---
 

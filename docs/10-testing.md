@@ -45,12 +45,10 @@ purpose, and it pinned the reproducer to a tree that is no longer authoritative.
 move -- against a reference that is a published artefact anyone can rebuild, and
 it grades on whether the paper's claims survive rather than on a tolerance.
 
-**`tests/baseline_main_results_table.json` stays**, and is not a test fixture.
-`scoring/models.py::_slug_by_display` reads it: it is the only record of which
-score-file slug produced which printed row, and every roster decision in the
-repo depends on that mapping. Its name and its location under `tests/` now
-describe a job it no longer has -- worth fixing, unrelated to what retired the
-test.
+The one live part of its fixture -- the display-name to slug mapping -- was
+extracted to `spoof_superb/scoring/paper_roster.json`, which is source data that
+production code reads, not a test fixture. The other 97% was per-model EERs
+measured on the legacy tree; they are stale and superseded by `reference/`.
 
 ## Writing new tests
 
