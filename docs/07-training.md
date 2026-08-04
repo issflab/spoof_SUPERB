@@ -24,7 +24,7 @@ python main.py --model_arch linear_head --ssl_model wavlm_large \
 
 | Flag | Meaning |
 |---|---|
-| `--model_arch` | `aasist`, `sls`, `linear_head`, `aasist_raw`, `lfcc_gmm` |
+| `--model_arch` | `aasist`, `linear_head`, `aasist_raw`, `lfcc_gmm` |
 | `--ssl_model` | s3prl upstream name; ignored by `aasist_raw` |
 | `--batch_size`, `--num_epochs`, `--lr`, `--weight_decay`, `--loss` | optimisation |
 | `--micro_batch` | gradient accumulation; `0` disables |

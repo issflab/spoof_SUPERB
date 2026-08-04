@@ -9,7 +9,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/_common.sh"
 
 # ---------------------------------------------------------------- SETTINGS --
 
-# aasist | sls | linear_head | aasist_raw | lfcc_gmm
+# aasist | linear_head | aasist_raw | lfcc_gmm
 # NOTE: lfcc_gmm does not train here -- use bin/train_lfcc_gmm.sh.
 MODEL_ARCH="linear_head"
 

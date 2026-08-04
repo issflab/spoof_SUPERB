@@ -26,19 +26,18 @@ Status key: `[ ]` open · `[x]` done · `[?]` needs a decision from Hashim
 - [x] `verification/driver.py`, `policies.py`, `stats.py`, `tests/test_verification.py`
 - [x] `bin/watch_and_run_spoofceleb.sh`
 - [x] `tests/test_main_results_regression.py` (P15)
+- [x] **Tier 1** -- `analysis/create_tts_heatmaps.py`, `data/prep/make_tsv_mlaad.py`,
+      `data/prep/report_mlaad.py`, and the four legacy-tree `bin/` one-offs
+      (`run_asvld_model.sh`, `run_noise_rerun.sh`, `run_recompression.sh`,
+      `watch_and_run_aasist_mlaad.sh`)
+- [x] **`sls` removed entirely** -- `models/sls.py` plus the `--model_arch`
+      choice, the `config.py` Literal, the unreachable dispatch branch in
+      `main.py`, and the mentions in `bin/train.sh`, `docs/07`, `README.md`.
+      The architecture had never been runnable: its import was commented out.
 
 ---
 
 ## Defects found while auditing -- fix or decide, do not just delete
-
-- [?] **`--model_arch sls` is broken.** `main.py:434` calls `sls_model(...)`, but
-      the import at `main.py:14` is commented out:
-      `# from sls_model import Model as sls_model`. Any `sls` run raises
-      `NameError`. `spoof_superb/models/sls.py` (293 loc) is therefore dead in
-      practice. Either restore the import (it should be
-      `from spoof_superb.models.sls import Model as sls_model`) or drop `sls`
-      from the `--model_arch` choices and delete the model. **Not a silent
-      delete: it changes what the benchmark offers.**
 
 - [?] **`tests/baseline_main_results_table.json` is misfiled.** It is no longer a
       test fixture -- `scoring/models.py::_slug_by_display` reads it, so
@@ -54,21 +53,34 @@ Status key: `[ ]` open · `[x]` done · `[?]` needs a decision from Hashim
 
 ---
 
-## Tier 1 -- safe to delete
+## Tier 1 -- done
 
-Nothing imports them, no doc names them as current, and no committed data
+Nothing imported them, no doc names them as current, and no committed data
 depends on them.
 
-- [ ] `spoof_superb/analysis/create_tts_heatmaps.py` (213 loc) -- not in any doc,
+- [x] `spoof_superb/analysis/create_tts_heatmaps.py` (213 loc) -- not in any doc,
       zero references, superseded by `create_mlaad_tts_eer_heatmaps`
-- [ ] `spoof_superb/data/prep/make_tsv_mlaad.py` (61 loc) -- no CLI, no doc, no refs
-- [ ] `spoof_superb/data/prep/report_mlaad.py` (123 loc) -- no CLI, no doc, no refs
-- [ ] `bin/run_asvld_model.sh`, `bin/run_noise_rerun.sh`,
+- [x] `spoof_superb/data/prep/make_tsv_mlaad.py` (61 loc) -- no CLI, no doc, no refs
+- [x] `spoof_superb/data/prep/report_mlaad.py` (123 loc) -- no CLI, no doc, no refs
+- [x] `bin/run_asvld_model.sh`, `bin/run_noise_rerun.sh`,
       `bin/run_recompression.sh`, `bin/watch_and_run_aasist_mlaad.sh` -- one-off
       operational scripts for completed work; every path reference points at the
       **legacy** score tree
-- [ ] `outputs/` and `spoof_superb_outputs/` working copies (gitignored, local only)
-- [ ] root PDF `A_Superb-Style_Benchmark_...pdf` -- ships the paper in the code repo
+
+### Withdrawn from Tier 1 -- two entries above were wrong
+
+Both were listed as clutter to remove. Checking `git ls-files` and
+`git check-ignore` shows neither is in the repository at all, so deleting them
+buys nothing at release and only destroys local work.
+
+- **`outputs/` (170 MB) and `spoof_superb_outputs/` (7.4 MB)** -- **0 tracked
+  files**; both are gitignored. `spoof_superb_outputs/` is the configured
+  `outputs_root` and holds the tables `reference/analysis/` was built from, plus
+  every figure and both verification reports. `outputs/` holds the published
+  figures. Deleting them would be pure local data loss. Prune stale
+  sub-directories by hand if disk matters; nothing needs doing for the release.
+- **root PDF** -- untracked, matched by `.gitignore:156 *.pdf`. It is a local
+  copy of the paper, not something the repo ships.
 
 ---
 
@@ -172,4 +184,5 @@ one-off command, never encoded. Worth adding as opt-in slow tests.
 - [?] `PLANNED_CHANGES.md`, `REORG_PLAN.md`, `humanpending.md` -- internal design
       record. Useful to us, noise to a reader. Keep, move to `docs/internal/`,
       or drop at release.
-- [ ] `outputs/figures_*`, `outputs/logs/` -- stale working output from earlier runs
+- [ ] `outputs/figures_*`, `outputs/logs/` -- stale working output from earlier
+      runs. Local only (gitignored); prune if disk matters, irrelevant to release.

@@ -964,3 +964,47 @@ CHANGE TRAINING RESULTS, so it is a decision to take on purpose, not a tidy-up
 to fold into a deletion. Recorded in the function's docstring.
 
 Suite: 251 passed (11 new in `tests/test_seeding.py`).
+
+## P17  Tier-1 cleanup, and the removal of the `sls` architecture  [DONE 2026-08-04]
+
+**Deleted.** `analysis/create_tts_heatmaps.py`, `data/prep/make_tsv_mlaad.py`,
+`data/prep/report_mlaad.py`, and the four one-off operational scripts
+`bin/run_asvld_model.sh`, `run_noise_rerun.sh`, `run_recompression.sh`,
+`watch_and_run_aasist_mlaad.sh`. Nothing imported any of them; the only
+remaining mentions were in the historical records. Every path in the four shell
+scripts pointed at the legacy score tree.
+
+**`sls` removed entirely.** `models/sls.py` (293 loc) plus the `--model_arch`
+choice, the `config.py` Literal, the dispatch branch in `main.py`, and the
+mentions in `bin/train.sh`, `docs/07` and `README.md`.
+
+The architecture had **never been runnable**. `main.py` called
+`sls_model(args, device)` while its import sat commented out three hundred lines
+above:
+
+    # from sls_model import Model as sls_model
+
+so `--model_arch sls` raised `NameError` on every invocation. `REORG_PLAN.md`
+had recorded it as "live-but-unexercised, not dead" and moved it rather than
+deleting it -- that judgement was made from the dispatch branch alone, without
+checking that the name it called was bound. It was dead, and the reorganisation
+carried it forward.
+
+Removing it narrows what the benchmark advertises, which is why it was raised as
+a decision rather than folded into a tidy-up.
+
+**Two Tier-1 entries were withdrawn as wrong, not executed.** Both had been
+listed as clutter; `git ls-files` and `git check-ignore` show neither is in the
+repository:
+
+* `outputs/` (170 MB) and `spoof_superb_outputs/` (7.4 MB) have **zero tracked
+  files** and are gitignored. `spoof_superb_outputs/` is the configured
+  `outputs_root` and holds the tables `reference/analysis/` was built from, plus
+  every figure and both verification reports. Deleting them would have been pure
+  local data loss with no effect on what ships.
+* The root PDF is untracked, matched by `.gitignore` `*.pdf`.
+
+Recorded in `CLEANUP.md` under "Withdrawn from Tier 1" so the error is visible
+rather than silently dropped.
+
+Suite: 251 passed.

@@ -218,7 +218,7 @@ bin/                   editable shell scripts, one per task
 spoof_superb/
 ├── config.py          settings schema and loader (code, not settings)
 ├── core/              metrics.py (EER, t-DCF), scorefile.py (the 4-col format)
-├── models/            aasist, aasist_raw, linear_head, sls, lfcc_gmm
+├── models/            aasist, aasist_raw, linear_head, lfcc_gmm
 ├── frontends/         lfcc, rawboost
 ├── data/              dataset classes, prep/ (MLAAD and M-AILABS preparation)
 ├── scoring/           ONE scoring entry point + dataset registry + back-ends

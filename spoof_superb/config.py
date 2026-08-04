@@ -58,7 +58,7 @@ class Config:
     # ---- model / run identity -------------------------------------------
     # 'aasist_raw' and 'lfcc_gmm' are the non-SSL reference baselines: they
     # take no s3prl upstream and ignore --ssl_model.
-    model_arch: Literal['aasist', 'sls', 'linear_head', 'aasist_raw', 'lfcc_gmm'] = 'aasist'
+    model_arch: Literal['aasist', 'linear_head', 'aasist_raw', 'lfcc_gmm'] = 'aasist'
 
     # Naming only: which datasets a model was TRAINED on, used to build the
     # checkpoint tag. e.g. 'ASV19', 'mlaad_spoofceleb_FF'.

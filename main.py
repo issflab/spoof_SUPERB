@@ -11,7 +11,6 @@ from torchcontrib.optim import SWA
 import yaml
 from spoof_superb.data.datasets_ssl import genSpoof_list, Dataset_ASVspoof2019_train, Dataset_ASVspoof2021_eval
 from spoof_superb.models.aasist import Model as aasist_model
-# from sls_model import Model as sls_model
 from spoof_superb.models.linear_head import UtteranceLevel as LinearHead
 from spoof_superb.models.aasist_raw import Model as aasist_raw_model
 from spoof_superb.config import cfg
@@ -246,7 +245,7 @@ if __name__ == '__main__':
 
     # Hyperparameters
     parser.add_argument('--model_arch', type=str, default=None,
-                        choices=['aasist', 'sls', 'linear_head', 'aasist_raw', 'lfcc_gmm'],
+                        choices=['aasist', 'linear_head', 'aasist_raw', 'lfcc_gmm'],
                         help='Backend architecture. Previously settable only via the '
                              'SSL_MODEL_ARCH environment variable.')
     parser.add_argument('--mode', type=str, default=None, choices=['train', 'eval'],
@@ -430,8 +429,6 @@ if __name__ == '__main__':
     # instantiate model based on config
     if cfg.model_arch == 'aasist':
         model = aasist_model(args, device)
-    elif cfg.model_arch == 'sls':
-        model = sls_model(args, device)
     elif cfg.model_arch == 'linear_head':
         model = LinearHead(args, device)
     elif cfg.model_arch == 'aasist_raw':
