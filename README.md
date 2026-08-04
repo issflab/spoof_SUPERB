@@ -232,8 +232,9 @@ main.py                training entry point
 ```
 
 Also in the repo: `humanpending.md` (open items needing a decision),
-`PLANNED_CHANGES.md` and `REORG_PLAN.md` (the design record behind the current
-layout). These are working documents, not user documentation.
+`CLEANUP.md` (what is still to be trimmed before release), `PLANNED_CHANGES.md`
+and `REORG_PLAN.md` (the design record behind the current layout). These are
+working documents, not user documentation.
 
 ---
 
