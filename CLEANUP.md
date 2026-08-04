@@ -131,40 +131,44 @@ them, so the corpus is 1,980. See `data/prep/segment_deepfake_eval.py`.
 
 ---
 
-## Tier 2 -- superseded, but deleting loses provenance
+## Tier 2 -- done, except the committed-data group
 
-These produced published figures or generate committed data. Deleting is
-defensible; doing it silently is not. Decide per group.
+Deleted: 14 modules, 4,784 lines. Nothing imported any of them -- checked by
+grep for imports across the package, `main.py` and `tests/` before removing.
 
 **The legacy TTS chain** -- replaced by `analysis/tts_systems.py` + `views.py`:
-- [?] `analysis/compute_eer_tts.py` (531), `compute_far_matrix.py` (502),
+- [x] `compute_eer_tts.py` (531), `compute_far_matrix.py` (502),
       `create_tts_eer_heatmaps.py` (275), `apply_zscore_and_pool.py` (347),
       `apply_sigmoid_and_pool.py` (232), `organize_tts_scores.py` (631),
       `organize_mlaad_scores.py` (205), `strip_bonafide_from_tts.py` (97)
-- Note: the z-score/sigmoid poolers exist only for normalised scores, which
+- The z-score/sigmoid poolers existed only for normalised scores, which
   P11-D8 established this project does not use.
 
 **The legacy degradation chain** -- replaced by `analysis/acoustic_degradation.py`:
-- [?] `analysis/compute_eer_matrix.py` (233) -- docs/09 already calls it superseded
-- [?] `analysis/verify_and_split_condition_scores.py` (625),
-      `check_condition_composition.py` (311) -- condition splitting, now done by
-      `views.py` + `conditions.py` from the protocols
+- [x] `compute_eer_matrix.py` (233), `verify_and_split_condition_scores.py` (625),
+      `check_condition_composition.py` (311). Condition composition is now a
+      property of `views.py` + `conditions.py`, built from the protocols, rather
+      than something asserted after the fact.
 
 **One-off score-file surgery on the legacy tree:**
-- [?] `analysis/merge_filtered_scores.py` (425),
-      `merge_asv21la_into_hashim_baseline.py` (138),
+- [x] `merge_filtered_scores.py` (425), `merge_asv21la_into_hashim_baseline.py` (138),
       `combine_asvspoofld_scores.py` (232)
 
-**Generates committed data -- check before deleting:**
-- [?] `analysis/build_mlaad_dir_map.py` (313) writes
+**Near-miss worth recording.** `create_tts_eer_heatmaps` (deleted) and
+`create_mlaad_tts_eer_heatmaps` (LIVE -- `tts_systems` imports `plot_heatmap`
+and `auc_bonafide_vs_spoof` from it) differ by one word. The delete list was
+checked against the live twins by name before running.
+
+### Kept -- generates committed data, or still has a consumer
+
+- [ ] `analysis/build_mlaad_dir_map.py` (313) writes
       `mlaad_v10_dir_to_system.csv` and `mlaad_v10_table4_provenance.csv`,
-      which `views.py` and `tts_systems.py` READ. Deleting it makes those CSVs
-      unreproducible. Keep, or record their provenance elsewhere first.
-- [?] `analysis/create_combined_mlaad_meta.py` (111),
-      `create_combined_mlaad_meta_all.py` (145) -- MLAAD metadata assembly;
-      confirm nothing regenerates the taxonomy CSV through them.
-- [?] `analysis/verify_tts_protocols.py` (596) -- checks the TTS protocol CSV
-      drafts, which the view pipeline no longer uses.
+      which `views.py` and `tts_systems.py` READ. It is the provenance of live
+      committed data, not a superseded step.
+- [ ] `analysis/create_combined_mlaad_meta.py` (111),
+      `create_combined_mlaad_meta_all.py` (145) -- MLAAD metadata assembly.
+- [ ] `analysis/verify_tts_protocols.py` (596) -- the one remaining consumer of
+      `create_combined_mlaad_meta.py`'s output.
 
 ---
 

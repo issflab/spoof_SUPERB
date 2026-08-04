@@ -1,7 +1,7 @@
 """
 Generate acoustic-degradation EER heatmaps from a pre-computed CSV.
 
-Expected CSV layout (produced by compute_eer_matrix.py):
+Expected CSV layout (produced by analysis/acoustic_degradation.py):
     Model, Baseline, Codec, Noise, Resampling, Reverb, Channel
 
 Two output figures:
@@ -189,7 +189,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--csv", required=True,
-        help="Path to eer_matrix.csv produced by compute_eer_matrix.py.",
+        help="Path to eer_matrix.csv produced by acoustic_degradation.py.",
     )
     parser.add_argument(
         "--out_dir", default="outputs/figures",

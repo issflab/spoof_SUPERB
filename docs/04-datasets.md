@@ -194,10 +194,11 @@ The `_all` variant sets `csv.field_size_limit` and `QUOTE_NONE` because default
 quoting silently drops rows -- `ja/kokoro` loses 53 of 1000. It asserts a total
 of 456,000 rows so a silent loss cannot recur.
 
-> **The English-only variant still has that bug.** Its output feeds
-> `organize_tts_scores.py` and `verify_tts_protocols.py`. Tracked as RP-2 in
-> `humanpending.md`; fix it deliberately, with a before/after comparison,
-> because it changes downstream results.
+> **The English-only variant still has that bug.** Its remaining consumer is
+> `verify_tts_protocols.py` -- `organize_tts_scores.py` was part of the legacy
+> TTS chain and has been deleted. Tracked as RP-2 in `humanpending.md`; fix it
+> deliberately, with a before/after comparison, because it changes downstream
+> results.
 
 Directory names in MLAAD v10 are not the canonical TTS system names, so a
 mapping is built separately:
@@ -342,7 +343,6 @@ happens and agreement with the reference is near-exact.
 
 ```bash
 python -m spoof_superb.analysis.verify_tts_protocols --master M.csv --lookup L.csv
-python -m spoof_superb.analysis.check_condition_composition --help
 ```
 
 `verify_tts_protocols` checks referential integrity: every lookup key must

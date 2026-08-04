@@ -192,37 +192,36 @@ python -m spoof_superb.analysis.recompute_main_results --out_dir outputs/main_re
 See [reproducing results](02-reproducing-results.md) -- this is the authority
 on what the two results tables report.
 
-## The legacy chains
+## The legacy chains (removed)
 
-These predate the entry points above and read the legacy view trees. Kept
-because they produced published figures; superseded for new work.
+Two pipelines used to sit here: `compute_eer_matrix` for acoustic degradation,
+and `build_mlaad_dir_map` -> `organize_mlaad_scores` -> `apply_zscore_and_pool`
+-> `compute_eer_tts` -> `compute_far_matrix` -> `create_tts_eer_heatmaps` for
+TTS. Both read view trees that exist only in the legacy score tree, and both are
+superseded by `acoustic_degradation` and `tts_systems`, which build the view
+they report over as part of the analysis.
 
-```bash
-# acoustic degradation, from the legacy scores_by_acoustic_degradation tree
-python -m spoof_superb.analysis.compute_eer_matrix \
-    --baseline_dir  $SCORES/Baseline_by_Hashim \
-    --augmented_dir $SCORES/scores_by_acoustic_degradation \
-    --output_csv    outputs/eer_matrix.csv
-python -m spoof_superb.analysis.create_heatmap --csv outputs/eer_matrix.csv --out_dir outputs/figures
+They have been deleted -- 14 modules, ~4,800 lines. Git history has them.
 
-# TTS, in order: dir map, fan out, normalise, metrics, figures
-python -m spoof_superb.analysis.build_mlaad_dir_map
-python -m spoof_superb.analysis.organize_mlaad_scores
-python -m spoof_superb.analysis.apply_zscore_and_pool --linear_head_dir ... --tts_dir ... --out_base ...
-python -m spoof_superb.analysis.compute_eer_tts    --norm_dir ... --tts_dir ... --out_dir outputs/tts_eer
-python -m spoof_superb.analysis.compute_far_matrix --tts_dir ... --combined_dir ... --out_dir outputs/tts_far
-python -m spoof_superb.analysis.create_tts_eer_heatmaps --eer_dir outputs/tts_eer --out_dir outputs/figures
-python -m spoof_superb.analysis.create_mlaad_group_ranked_figures
-python -m spoof_superb.analysis.create_mlaad_tts_system_ranked_figure
-```
+Two of that group survive because they are not part of the chain:
 
-Use `scores_by_acoustic_degradation/`, not `scores_by_category_augmented/`: the
-latter carries the old fp16-NaN noise scores and no recompression. That two
-trees hold the same view built twice, with this line left to say which to
-trust, is the drift the new views exist to prevent.
+* `build_mlaad_dir_map` writes `mlaad_v10_dir_to_system.csv` and
+  `mlaad_v10_table4_provenance.csv`, which `views.py` and `tts_systems.py` READ.
+  It is the provenance of committed data, not a superseded step.
+* `create_mlaad_tts_eer_heatmaps` is the LIVE figure module `tts_systems` hands
+  off to. Note the name: the deleted one was `create_tts_eer_heatmaps`, without
+  `mlaad`.
 
-Note on the aggregates: "Overall Mean" in the legacy TTS matrices is a mean of
-per-system means, not a pooled recomputation. `tts_systems` pools instead.
+Two facts worth keeping from the old chain:
+
+* The legacy tree held the degradation view built twice --
+  `scores_by_acoustic_degradation/` and `scores_by_category_augmented/`, the
+  latter carrying fp16-NaN noise scores and no recompression, with only a line
+  of documentation to say which to trust. That drift is what the new views exist
+  to prevent.
+* "Overall Mean" in the legacy TTS matrices was a mean of per-system means, not
+  a pooled recomputation. `tts_systems` pools instead, so a 1,000-utterance
+  system no longer counts the same as a 34,000-utterance one.
 
 ## Ad-hoc EER
 

@@ -1049,3 +1049,58 @@ a working tree containing files the repository did not. Nothing in the suite
 distinguished "present on disk" from "present in the repo", and no test cloned.
 That gap is the actual defect; the two `.gitignore` lines are just where it
 showed up.
+
+## P19  Tier-2 cleanup: the legacy analysis chains  [DONE 2026-08-04]
+
+**Deleted: 14 modules, 4,784 lines.**
+
+*Legacy TTS chain* -- `compute_eer_tts`, `compute_far_matrix`,
+`create_tts_eer_heatmaps`, `apply_zscore_and_pool`, `apply_sigmoid_and_pool`,
+`organize_tts_scores`, `organize_mlaad_scores`, `strip_bonafide_from_tts`.
+Superseded by `analysis/tts_systems.py` + `views.py`, which build the grouping
+they report over so a number and its view cannot disagree. The two poolers
+existed only for normalised scores, which P11-D8 established this project does
+not use.
+
+*Legacy degradation chain* -- `compute_eer_matrix`,
+`verify_and_split_condition_scores`, `check_condition_composition`. Superseded
+by `analysis/acoustic_degradation.py`. Condition composition is now a property
+of `views.py` + `conditions.py`, derived from the corpus protocols, rather than
+something asserted about a file after the fact.
+
+*One-off surgery on the legacy tree* -- `merge_filtered_scores`,
+`merge_asv21la_into_hashim_baseline`, `combine_asvspoofld_scores`.
+
+**Kept at the user's direction**: `build_mlaad_dir_map` (writes
+`mlaad_v10_dir_to_system.csv` and `mlaad_v10_table4_provenance.csv`, which
+`views.py` and `tts_systems.py` read), `create_combined_mlaad_meta{,_all}`, and
+`verify_tts_protocols`.
+
+**The near-miss.** `create_tts_eer_heatmaps` (deleted) and
+`create_mlaad_tts_eer_heatmaps` (LIVE -- `tts_systems` imports `plot_heatmap`
+and `auc_bonafide_vs_spoof` from it) differ by one word. Every target was
+checked for importers across the package, `main.py` and `tests/`, and the delete
+list was explicitly diffed against the live twins by name, before anything was
+removed.
+
+**Verified by execution, not by import checks alone.** A full re-run of the two
+analyses that consumed those chains -- 19 models, 4.5M rows per model on
+degradation, 91 TTS systems -- then level-2 verification against
+`reference/analysis/`:
+
+    degradation/eer_matrix.csv           IDENTICAL
+    tts/eer_by_tts_system.csv            IDENTICAL
+    tts/eer_by_architecture.csv          IDENTICAL
+    tts/eer_by_generation_mode.csv       IDENTICAL
+    tts/eer_by_vocoder_family.csv        IDENTICAL
+
+Suite: 252 passed.
+
+**Docs.** `docs/09`'s "legacy chains" section, which was a runnable recipe for
+the deleted pipelines, is now a short record of what they were, why they went,
+and the two facts worth keeping from them: that the legacy tree held the
+degradation view built twice with only a line of prose to say which copy to
+trust, and that the old TTS "Overall Mean" was a mean of per-system means rather
+than a pooled recomputation. `create_heatmap`'s docstring pointed at
+`compute_eer_matrix` as the producer of its input; that is now
+`acoustic_degradation`. RP-4 in `docs/11` is closed by the deletion.

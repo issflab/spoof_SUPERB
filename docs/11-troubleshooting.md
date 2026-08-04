@@ -60,10 +60,11 @@ Tracked in `humanpending.md`:
   retroactively by a refactor. Record your `soxr` version with any new results.
 * **RP-2** — `create_combined_mlaad_meta.py` (English-only) still has the
   quoting bug that its `_all` sibling fixes: `ja/kokoro` silently loses 53 of
-  1000 rows. Its output feeds two downstream scripts.
+  1000 rows. Its one remaining consumer is `verify_tts_protocols.py`.
 * **RP-3** — Confirm `Filtering` should remain in the default ASVLD skip list.
-* **RP-4** — `compute_far_matrix` and `compute_eer_tts` duplicate their
-  aggregation logic; FAR has no home in `core/metrics.py`.
+* **RP-4** — *(closed)* `compute_far_matrix` and `compute_eer_tts` duplicated
+  their aggregation logic. Both were deleted with the legacy TTS chain. FAR
+  still has no home in `core/metrics.py`, and nothing computes it now.
 * **RP-5** — The score directory holds ~19 GB of duplicated or regenerable
   views. Reorganisation deferred.
 

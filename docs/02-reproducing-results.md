@@ -165,8 +165,7 @@ it exists so a bug in the repo's own EER code cannot be reproduced by its own
 verifier.
 
 The degradation matrix and the TTS figures are produced by `bin/analyze.sh`
-(step 4). The older `compute_eer_matrix` / `compute_eer_tts` chain read view
-trees that exist only in the legacy score tree and is superseded; see
+(step 4). The older chain that read legacy view trees has been removed; see
 [analysis](09-analysis.md).
 
 ## Next

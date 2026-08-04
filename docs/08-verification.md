@@ -260,12 +260,6 @@ correcting them is the point, and their EER moves by 5.8 to 8.0 pp.
 # ASVLD rerun vs reference, per (model, condition). No pass/fail, just a table.
 python -m spoof_superb.verification.asvld_report
 
-# every utt_id in a condition file is attributable to exactly one source
-python -m spoof_superb.analysis.verify_and_split_condition_scores --help
-
-# exact expected row counts per condition
-python -m spoof_superb.analysis.check_condition_composition --help
-
 # the TTS protocol CSVs actually match the raw dataset protocols
 python -m spoof_superb.analysis.verify_tts_protocols --master M.csv --lookup L.csv
 
