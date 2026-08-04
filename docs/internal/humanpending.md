@@ -1,6 +1,34 @@
 # humanpending.md
 
-## OPEN — 1 of 20 baseline cells blocked by the recurring CUDA fault
+**Status 2026-08-04: 5 items genuinely open, everything else closed.**
+
+Still needing a human decision:
+
+| # | Item | Why it is gated |
+|---|---|---|
+| 8 | `best_val_eer = 1` for the SSL architectures | a **live bug**: a model whose dev EER never drops below 1% finishes training and saves nothing. Fixing it means re-running any SSL model that hit it |
+| RP-1 | pin one `soxr` version | resampled columns were produced by two resamplers; deciding whether to re-score is a provenance call |
+| RP-2 | `create_combined_mlaad_meta.py` quoting bug | fixing it changes downstream results, so it wants its own before/after |
+| RP-3 | confirm `Filtering` stays skipped | excluded from the published ASVLD column; confirm that is intended |
+| RP-5 | dispose of the legacy score tree | 49 GB, ~19 GB duplicated. v3 is authoritative now, so this is deletion, not reorganisation |
+
+Item 8 is the only one that is a defect rather than a decision.
+
+Everything below is kept as the record. Closed items say so and why.
+
+---
+
+## CLOSED 2026-08-04 — 1 of 20 baseline cells blocked by the recurring CUDA fault
+
+**Resolved.** The cell was scored on 2026-07-31:
+`raw/non_ssl/mlaad_v10/aasist_raw.txt`, 42 MB. The AASIST row in
+`reference/analysis/main_results/main_results_table.csv` is complete --
+MLAAD 26.336, Mean 31.957, no withheld cells.
+
+`watch_and_run_aasist_mlaad.sh`, the watcher referenced below, has since been
+deleted along with the other one-off operational scripts (P17).
+
+### (original)
 
 **Blocked:** `aasist_raw` x MLAAD only. The other 19 (model, dataset) cells are complete.
 
@@ -359,8 +387,9 @@ loses 53 of 1000 rows under default quoting. Its older sibling
 `analysis/create_combined_mlaad_meta.py` still uses plain `delimiter="|"` and
 still has the bug.
 
-Its output is consumed as the MLAAD protocol by `analysis/organize_tts_scores.py`
-and `analysis/verify_tts_protocols.py`.
+Its output is consumed as the MLAAD protocol by `analysis/verify_tts_protocols.py`.
+(`organize_tts_scores.py`, the other consumer, was deleted in P19 -- so the blast
+radius of fixing this is now one script.)
 
 Decision needed: fixing it could change downstream results, so it wants its own
 change with a before/after comparison rather than being folded into a
@@ -375,7 +404,14 @@ same content -- current behaviour preserved exactly.
 `Filtering` is excluded from the published ASVLD column, so this is probably
 correct. Confirm, and if it should be scored, drop it from the default.
 
-### RP-4  Duplicated aggregation between the two TTS matrix builders
+### RP-4  Duplicated aggregation between the two TTS matrix builders  [CLOSED 2026-08-04]
+
+**Resolved by deletion.** Both modules were removed with the legacy TTS chain
+(P19), so the duplication is gone. FAR still has no home in `core/metrics.py`
+and nothing in the repo computes it now; if a FAR matrix is wanted again it
+should be written against `views.py` rather than resurrected.
+
+#### (original)
 `analysis/compute_far_matrix.py` and `analysis/compute_eer_tts.py` are the same
 program over the same 56-system tree; their `pooled_*`, `*_by_tag` and
 `build_*_matrix` functions are line-for-line equivalent, differing only in the
@@ -387,6 +423,15 @@ blast radius from the structural reorg. Note also that "Overall Mean" in both is
 a mean of per-system means, not a pooled recomputation over utterances.
 
 ### RP-5  Score directory `/data/ssl_anti_spoofing/asd_superb_score_files`
+
+**Restated 2026-08-04.** This is now a disposal question, not a reorganisation
+one. The v3 tree is authoritative, `reference/manifest.json` indexes it
+(215 cells, 234 files, 6.5 GB) and level-1 verification runs against it, so
+nothing in the pipeline reads the legacy tree any more. The remaining decision is
+whether to keep it as an archive or delete it. It is READ-ONLY by standing
+instruction and has not been touched.
+
+#### (original)
 Audited but deliberately untouched. 49 GB, 32 top-level entries, 2,509 score
 files, zero symlinks; roughly 19 GB is duplicated or regenerable (every "view"
 is a physical copy -- `scores_by_acoustic_degradation/Reverberation` is

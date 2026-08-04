@@ -1104,3 +1104,42 @@ trust, and that the old TTS "Overall Mean" was a mean of per-system means rather
 than a pooled recomputation. `create_heatmap`'s docstring pointed at
 `compute_eer_matrix` as the producer of its input; that is now
 `acoustic_degradation`. RP-4 in `docs/11` is closed by the deletion.
+
+## P20  Close and relocate the internal design record  [DONE 2026-08-04]
+
+`humanpending.md`, `PLANNED_CHANGES.md` and `REORG_PLAN.md` sat in the repo root
+alongside the README, where a reader arriving to reproduce the paper met three
+working documents before finding the instructions. They are now
+`docs/internal/`, with a `README.md` index.
+
+**Closed with evidence, not by deletion:**
+
+* *1 of 20 baseline cells blocked by the CUDA fault* -- resolved. The cell was
+  scored 2026-07-31 (`raw/non_ssl/mlaad_v10/aasist_raw.txt`, 42 MB) and the
+  AASIST row in `reference/analysis/` is complete: MLAAD 26.336, Mean 31.957,
+  nothing withheld. The watcher script it referenced was deleted in P17.
+* *RP-4, duplicated aggregation between the two TTS matrix builders* -- resolved
+  by deletion in P19. FAR now has no implementation anywhere; if a FAR matrix is
+  wanted again it should be written against `views.py`, not resurrected.
+* *RP-2* -- narrowed rather than closed. `organize_tts_scores.py` was one of its
+  two consumers and is gone, so the blast radius of fixing the quoting bug is
+  now a single script.
+* *RP-5* -- restated. It was a reorganisation question about a 49 GB tree; with
+  v3 authoritative and `reference/manifest.json` published, it is now simply
+  whether to archive or delete the legacy tree. Untouched, per the standing
+  read-only instruction.
+
+**Five items remain open**, listed in a table at the top of `humanpending.md`.
+Four are decisions. One is a defect and is called out separately in
+`docs/internal/README.md` so a cleanup cannot bury it:
+
+    main.py: best_val_eer = 1 is compared against calculate_EER(), which
+    returns a PERCENTAGE. An SSL model whose dev EER never drops below 1%
+    trains every epoch and saves no checkpoint at all -- neither epoch_*.pth
+    nor swa.pth. Corrected for the two non-SSL baselines; deliberately left in
+    place for the SSL architectures, because changing it means re-running any
+    model that hit it.
+
+Every reference to the three files -- 9 in `docs/` and in source comments -- was
+repointed, so no pointer goes dead. All relative links in `docs/` and `README.md`
+verified to resolve.

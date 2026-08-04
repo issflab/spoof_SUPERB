@@ -12,7 +12,7 @@ preserved exactly:
   - score: gmm_bona.score(X) - gmm_spoof.score(X)   [mean log-lik per frame]
 
 Two deliberate deviations from the reference (both verified equivalent, see
-humanpending.md):
+docs/internal/humanpending.md):
   1. Features are held in RAM instead of pickled per-utterance to disk. The
      reference caches because it re-reads features on every EM iteration; /data
      has ~244 GB free and caching 10 eval sets would be reckless. ASV19 LA
@@ -79,7 +79,7 @@ def load_lfcc(path, sr=None):
     ~6e-05, i.e. inaudible; 320 of them from LLASA) and 2 in MLAAD. Tiling them
     up to a scoreable length was implemented and then reverted, because it
     manufactures a score from a fragment that carries no usable signal. The
-    consequence is recorded in humanpending.md: the LFCC-GMM column for those
+    consequence is recorded in docs/internal/humanpending.md: the LFCC-GMM column for those
     two datasets covers marginally fewer trials than the SSL columns, which
     score these files by tiling them to 4 s.
     """

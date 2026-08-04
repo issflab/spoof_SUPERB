@@ -15,7 +15,7 @@ Why reimplement rather than add the dependency:
   - Bit-exactness is verifiable: tests/test_lfcc_frontend.py compares this
     module against spafe 0.3.3 (available in the SER env) on real ASV19 audio.
 
-Fidelity note (deliberate, see humanpending.md):
+Fidelity note (deliberate, see docs/internal/humanpending.md):
   The reference calls lfcc() with num_ceps=20, nfilts=70, low_freq=0,
   high_freq=4000 and the pipeline defaults win_len=0.030 / win_hop=0.015 /
   nfft=1024 / pre_emph=0. Those defaults are preserved verbatim here so this

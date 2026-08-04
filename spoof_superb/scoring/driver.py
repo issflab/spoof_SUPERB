@@ -24,7 +24,7 @@ copies of the same program differing only in where the trial list came from.
     python -m spoof_superb.scoring.driver --model linear_head --ssl_model xls_r_300m \
         --model_path .../swa.pth --source protocol_csv --output_file out.txt
 
-Decisions carried into this merge (see REORG_PLAN.md D1-D6):
+Decisions carried into this merge (see docs/internal/REORG_PLAN.md D1-D6):
   D1  fp32 is the default; --amp is opt-in. eval_mlaad and eval_baselines
       exposed fp16 autocast, eval_asvld had no AMP path at all, and fp16 is
       what produced the NaN documented in verify_noise_rerun.py.

@@ -58,7 +58,7 @@ comparable to ours, record your `soxr` version:
 python -c "import soxr, librosa; print('soxr', soxr.__version__, 'librosa', librosa.__version__)"
 ```
 
-This is tracked as item RP-1 in `humanpending.md`.
+This is tracked as item RP-1 in `internal/humanpending.md`.
 
 ## Next
 

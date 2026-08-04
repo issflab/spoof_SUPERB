@@ -87,7 +87,7 @@ Note the upstream filename misspelling,
 The combined protocol we now build **does** carry a `condition` column, so for a
 protocol-driven run that index is redundant work -- `trials_from_protocol` reads
 only `utt_col` and `label_col` and discards the rest. Harmless but wasteful;
-tracked as P10 in `PLANNED_CHANGES.md` rather than changed under a running sweep.
+tracked as P10 in `internal/PLANNED_CHANGES.md` rather than changed under a running sweep.
 
 ## Where trial lists come from
 
@@ -196,7 +196,7 @@ of 456,000 rows so a silent loss cannot recur.
 
 > **The English-only variant still has that bug.** Its remaining consumer is
 > `verify_tts_protocols.py` -- `organize_tts_scores.py` was part of the legacy
-> TTS chain and has been deleted. Tracked as RP-2 in `humanpending.md`; fix it
+> TTS chain and has been deleted. Tracked as RP-2 in `internal/humanpending.md`; fix it
 > deliberately, with a before/after comparison, because it changes downstream
 > results.
 
@@ -238,7 +238,7 @@ there is no MLAAD number.
 
 The orchestrator scores both and marks them `ok`, because each protocol was read
 in full and contains no NaN -- it does not know the column is not yet a column.
-**This is tracked as P8 in `PLANNED_CHANGES.md` and is open.** The tooling below
+**This is tracked as P8 in `internal/PLANNED_CHANGES.md` and is open.** The tooling below
 is the pre-reorganisation path and predates the v2 score layout, so check it
 before relying on it:
 

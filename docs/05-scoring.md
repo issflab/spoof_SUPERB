@@ -67,7 +67,7 @@ wild                   source=benchmark    trials=31779 ref=linear_head_wild_...
 
 Datasets with their own protocol are scored from it. The seven that show
 `source=benchmark` have no corpus-derived trial list yet and read the published
-score file instead -- see RP-7 in `humanpending.md`.
+score file instead -- see RP-7 in `internal/humanpending.md`.
 
 Setting the dataset and the protocol separately used to be possible, and they
 could disagree silently: `--dataset wild --source protocol_csv` scored

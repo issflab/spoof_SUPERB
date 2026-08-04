@@ -231,10 +231,10 @@ tests/                 contract tests, all on synthetic fixtures
 main.py                training entry point
 ```
 
-Also in the repo: `humanpending.md` (open items needing a decision),
-`CLEANUP.md` (what is still to be trimmed before release), `PLANNED_CHANGES.md`
-and `REORG_PLAN.md` (the design record behind the current layout). These are
-working documents, not user documentation.
+Also in the repo: `CLEANUP.md` (what is still to be trimmed before release) and
+[`docs/internal/`](docs/internal/) (the design record: gated decisions, the
+change log behind the current layout, and the audit it came from). Working
+documents, not user documentation.
 
 ---
 

@@ -522,7 +522,7 @@ if __name__ == '__main__':
         # Only the non-SSL baselines are corrected here, to honour the
         # "do not change existing SSL behaviour" constraint. This needs a
         # global fix (and probably a re-run of any SSL model whose dev EER
-        # never went below 1%) -- see humanpending.md.
+        # never went below 1%) -- see docs/internal/humanpending.md.
         if cfg.model_arch in ('aasist_raw', 'lfcc_gmm'):
             best_val_eer = float('inf')
         else:
