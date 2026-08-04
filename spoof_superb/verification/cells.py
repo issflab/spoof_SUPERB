@@ -31,7 +31,8 @@ import numpy as np
 
 from spoof_superb.core.metrics import compute_eer
 from spoof_superb.core.scorefile import read_scored
-from spoof_superb.core.scorepath import mlaad_pool_paths, score_path
+from spoof_superb.core.scorepath import (DATASET_KEY_BY_LAYOUT, layout_key,
+                                         mlaad_pool_paths, score_path)
 from spoof_superb.verification.verdicts import EXACT_TOL
 
 __all__ = ["DATASETS", "DATASET_KEY_BY_LAYOUT", "cell_paths", "compare_cell",
@@ -57,25 +58,6 @@ DATASETS = [
 #: are built the way the pre-reorganisation code built them.
 LEGACY_ASVLD_EXTRA = ("asvld_rerun", "Recompression",
                       "linear_head_Recompression_{slug}.txt")
-
-#: DFEval24 is a different measurement under v2/v3: every 4 s window rather than
-#: one window per recording. Comparing them is meaningful only as coverage.
-DATASET_KEY_BY_LAYOUT = {
-    "deepfake_eval_2024": {"v2": "deepfake_eval_2024_segmented",
-                           "v3": "deepfake_eval_2024_segmented"},
-}
-
-
-def layout_key(dataset, layout):
-    """The registry key this benchmark column is stored under, in this layout.
-
-    Only DFEval24 differs, and it differs because the measurement did: v2/v3
-    score every 4 s window rather than one window per recording. Enumeration
-    and path construction must agree on this or a column silently reports as
-    unscored -- which is what happened when only `cell_paths` knew about it.
-    """
-    return DATASET_KEY_BY_LAYOUT.get(dataset, {}).get(layout, dataset)
-
 
 def cell_paths(layout, root, dataset, slug):
     """Every score file composing one (dataset, model) cell, in pool order."""

@@ -453,16 +453,60 @@ def test_d4_the_two_variants_write_to_different_paths():
     assert a != b
 
 
-def test_d5_the_segmented_column_is_not_the_published_one():
-    """Guards against anyone comparing the new column to the paper's number.
+def test_d5_the_dfeval_column_resolves_to_the_segmented_measurement():
+    """The DFEval24 column must read the SEGMENTED trial set under v2/v3.
 
-    The paper reports n=1,976 for DFEval24 -- one 4 s window per recording. The
-    segmented set is an order of magnitude larger and weights long recordings
-    more, so the EERs are different quantities.
+    Two different measurements share one column name:
+
+        deepfake_eval_2024              1,980 trials -- one 4 s window per file
+        deepfake_eval_2024_segmented   56,481 trials -- every 4 s window
+
+    A 4 s model never saw past the first four seconds of a minutes-long
+    recording, so the unsegmented column left most of the corpus unexamined.
+    Per-segment trials weight long recordings far more heavily, so the two EERs
+    are different quantities -- not a corrected value.
+
+    This asserts the RESOLUTION, deliberately, rather than a trial count printed
+    in the paper. An earlier version compared against the literal 1,976 as "the
+    paper's number"; the paper is being updated to report the segmented column,
+    which would have made that test assert a premise that had stopped being
+    true. What must hold either way is that the mapping does not silently flip
+    -- doing so would change every DFEval number in the table while the code
+    went on reporting the same column name.
     """
+    from spoof_superb.core.scorepath import layout_key
     from spoof_superb.orchestration.jobs import expected_rows
-    # The paper's own figure, stated here as the literal it is. It used to be
-    # read out of the regression baseline, which made a published fact look
-    # derived from a file that no longer exists.
-    published = 1976
-    assert expected_rows("deepfake_eval_2024_segmented") > 10 * published
+
+    for layout in ("v2", "v3"):
+        assert layout_key("deepfake_eval_2024", layout) == \
+            "deepfake_eval_2024_segmented", layout
+    assert layout_key("deepfake_eval_2024", "legacy") == "deepfake_eval_2024"
+
+    n_seg = expected_rows("deepfake_eval_2024_segmented")
+    n_whole = expected_rows("deepfake_eval_2024")
+    assert n_seg > 10 * n_whole, (
+        f"the two DFEval sets are meant to be different measurements, but "
+        f"segmented={n_seg} is not an order of magnitude over "
+        f"unsegmented={n_whole}")
+
+
+def test_d5b_the_layout_mapping_has_exactly_one_definition():
+    """The producer and the verifier must resolve through the same object.
+
+    `recompute_main_results` builds the paper's table; `verification.cells`
+    checks it. Both used to carry a private copy of DATASET_KEY_BY_LAYOUT. Had
+    those drifted, the checker would have compared a segmented column against an
+    unsegmented one and reported EQUIVALENT -- blind to precisely the error it
+    exists to catch.
+    """
+    from spoof_superb.core import scorepath
+    from spoof_superb.verification import cells
+
+    assert cells.DATASET_KEY_BY_LAYOUT is scorepath.DATASET_KEY_BY_LAYOUT
+    assert cells.layout_key is scorepath.layout_key
+
+    import spoof_superb.analysis.recompute_main_results as rmr
+    assert not hasattr(rmr, "DATASET_KEY_BY_LAYOUT"), (
+        "recompute_main_results has its own copy again")
+    assert rmr.dataset_key("v3", "deepfake_eval_2024") == \
+        scorepath.layout_key("deepfake_eval_2024", "v3")

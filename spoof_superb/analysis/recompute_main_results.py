@@ -81,7 +81,8 @@ from spoof_superb.core.metrics import compute_eer  # type: ignore
 
 from spoof_superb.config import cfg
 from spoof_superb.core.scorefile import read_scored
-from spoof_superb.core.scorepath import mlaad_pool_paths, score_path
+from spoof_superb.core.scorepath import (layout_key, mlaad_pool_paths,
+                                         score_path)
 
 # Path resolution is layout-aware, so any tree can be reported on. The layout
 # is a property of the tree being read, not a comparison: nothing here reads a
@@ -113,15 +114,11 @@ from spoof_superb.core.scorepath import mlaad_pool_paths, score_path
 #          a minutes-long file. The EERs are NOT comparable: per-segment trials
 #          weight long recordings far more heavily. This is a different
 #          measurement, not a corrected one.
-DATASET_KEY_BY_LAYOUT = {
-    "deepfake_eval_2024": {"v2": "deepfake_eval_2024_segmented",
-                           "v3": "deepfake_eval_2024_segmented"},
-}
-
-
+#: Resolved through core.scorepath, which holds the single definition -- see the
+#: note there on why this must not be duplicated.
 def dataset_key(layout, dataset):
     """The registry key this column reads under a given layout."""
-    return DATASET_KEY_BY_LAYOUT.get(dataset, {}).get(layout, dataset)
+    return layout_key(dataset, layout)
 
 
 def column_paths(layout, scores_root, dataset, slug, system="linear_head"):

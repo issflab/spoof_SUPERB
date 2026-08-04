@@ -104,6 +104,33 @@ buys nothing at release and only destroys local work.
 
 ---
 
+## Pending the paper update
+
+The paper is being revised to report the **segmented** Deepfake-Eval column. The
+pipeline already does -- `reference/analysis/` carries n=56,481 -- so no number
+moves. What goes stale is the prose that describes the segmented set as *not*
+what the paper reports:
+
+- [ ] `scoring/datasets.py:336` -- "NOT comparable to the published DFEval24
+      column (n=1,976)"
+- [ ] `analysis/recompute_main_results.py:111` -- "1,976 published trials"
+- [ ] `core/scorepath.py` -- the DATASET_KEY_BY_LAYOUT note
+- [ ] `docs/04-datasets.md:324`, `docs/05-scoring.md:230`
+
+Each should become "an earlier draft reported the unsegmented column (1,976
+trials); the current paper reports the segmented one". The measurement contrast
+stays -- the two EERs are still different quantities -- only which one the paper
+prints changes.
+
+`test_d5` was already rewritten to assert the RESOLUTION rather than the printed
+trial count, so it holds under both drafts.
+
+Note the 1,976 vs 1,980 gap is separate and already explained: the published run
+could not read four `.dat` files that are really MP4 containers; ffmpeg recovers
+them, so the corpus is 1,980. See `data/prep/segment_deepfake_eval.py`.
+
+---
+
 ## Tier 2 -- superseded, but deleting loses provenance
 
 These produced published figures or generate committed data. Deleting is

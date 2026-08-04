@@ -84,7 +84,7 @@ from spoof_superb.config import cfg
 
 __all__ = ["LAYOUTS", "NON_SSL_SYSTEMS", "NON_SSL_DIR", "DATASET_DIRS",
            "score_path", "score_dir", "canonical_dataset", "mlaad_pool_paths",
-           "available_frontends"]
+           "available_frontends", "DATASET_KEY_BY_LAYOUT", "layout_key"]
 
 LAYOUTS = ("v3", "v2", "legacy")
 
@@ -94,6 +94,33 @@ NON_SSL_SYSTEMS = ("aasist_raw", "lfcc_gmm")
 
 #: Directory holding the non-SSL systems in v3.
 NON_SSL_DIR = "non_ssl"
+
+#: Benchmark column -> the registry key it reads, per layout.
+#:
+#: Only DFEval24 differs, and it differs because the MEASUREMENT does. Legacy
+#: scored `deepfake_eval_2024`: one 4 s window per recording, 1,980 trials. v2
+#: and v3 score `deepfake_eval_2024_segmented`: every 4 s window of every
+#: recording, 56,481 trials -- because a 4 s model never saw past the first four
+#: seconds of a minutes-long file, so most of the corpus was never looked at.
+#:
+#: Per-segment trials weight long recordings far more heavily, so the two EERs
+#: are DIFFERENT QUANTITIES, not a corrected value.
+#:
+#: This lives here, once, because both the module that PRODUCES the paper's
+#: table and the module that VERIFIES it resolve through it. They each carried
+#: their own copy; had those drifted, verification would have compared two
+#: different measurements and passed -- blind to exactly the class of error it
+#: exists to catch.
+DATASET_KEY_BY_LAYOUT = {
+    "deepfake_eval_2024": {"v2": "deepfake_eval_2024_segmented",
+                           "v3": "deepfake_eval_2024_segmented"},
+}
+
+
+def layout_key(dataset, layout):
+    """The registry key a benchmark column reads under `layout`."""
+    return DATASET_KEY_BY_LAYOUT.get(dataset, {}).get(layout, dataset)
+
 
 #: Registry key -> canonical directory name.
 #:
