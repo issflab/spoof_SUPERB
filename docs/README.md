@@ -20,8 +20,10 @@ Read these in order if you are new. Each one stands alone if you are not.
 
 ```bash
 conda env create -f environment.yaml && conda activate spoof_SUPERB
-$EDITOR configs/paths.yaml        # point it at your data
-bin/reproduce_main_results.sh           # regenerate the paper's tables and check them
+$EDITOR configs/paths.yaml         # point it at your data
+bin/fetch_scores.sh                # the published score files (~6.5 GB)
+bin/reproduce_main_results.sh      # the main table, checked against reference/
+bin/analyze.sh                     # all three analyses, then verified
 ```
 
 If that last command passes, your installation and your score files are good.

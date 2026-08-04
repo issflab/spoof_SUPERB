@@ -42,8 +42,15 @@ not because anything should be run through them now.
 
 ## The three analyses
 
-Each is one command. Each builds the grouping it reports over, so a number and
-the view behind it cannot disagree.
+All three, in order, then level-2 verification over what they wrote:
+
+```bash
+bin/analyze.sh
+```
+
+Individually. Each builds the grouping it reports over, so a number and the
+view behind it cannot disagree -- except main results, which reads the raw tree
+directly and has nothing to group by.
 
 ```bash
 # the paper's main table

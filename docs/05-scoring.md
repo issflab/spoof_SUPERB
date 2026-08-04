@@ -248,12 +248,14 @@ Expect `IDENTICAL` or `EQUIVALENT`. A failure here is paths or environment, not
 the sweep -- fix it before going further.
 
 **Step 3 -- sweep.** See [orchestration](06-orchestration.md). Then merge
-M-AILABS into MLAAD and check the tables:
+M-AILABS into MLAAD, analyse the finished tree, and verify BOTH levels -- a
+tree you built yourself is the only case where level 1 says anything:
 
 ```bash
 python -m spoof_superb.data.prep.append_mailabs --dry-run
 python -m spoof_superb.data.prep.append_mailabs
-bin/reproduce_main_results.sh
+bin/analyze.sh                  # all three analyses + level-2 verification
+bin/verify.sh                   # LEVEL="all": adds level 1, the score files
 ```
 
 A `MANIFEST.csv` over the finished tree, if you want one, is generated last by

@@ -24,37 +24,63 @@ legitimately contain spaces -- MLAAD v10 has 39,000 rows with TTS system
 directories like `Cartesia.ai (Sonic-3)`. Where that matters, a tab-separated
 `.tsv` twin is written alongside.
 
-## Step 1 -- point the repo at the score files
+## Step 1 -- get the score files
+
+They are **not in this repo**: 234 files, 6.5 GB. What is in the repo is
+`reference/manifest.json` (222 KB) -- every file's path, byte size, sha256, row
+and class counts, EER, and a digest of its trial list.
+
+```bash
+export SPOOF_SUPERB_SCORES_URL=...   # see the note below
+bin/fetch_scores.sh --list           # what the manifest offers; fetches nothing
+bin/fetch_scores.sh                  # edit DATASET / MODEL at the top first
+```
+
+Files are fetched individually, so checking one model on one dataset costs a
+megabyte rather than a gigabyte. Every download is checked against its sha256
+and written atomically; a file already present and matching is skipped, so
+re-running is cheap. Leave `DATASET` and `MODEL` empty to fetch everything,
+which is what reproducing the full tables needs.
+
+> **The archive URL is not published yet.** The score files are being uploaded
+> to Hugging Face. Once they are, the URL is recorded in the manifest and
+> `bin/fetch_scores.sh` needs no environment variable. Until then, set
+> `SPOOF_SUPERB_SCORES_URL` yourself.
+
+If you already have a score tree, skip the download and go straight to step 2.
+
+## Step 2 -- point the repo at them
 
 Edit `configs/paths.yaml`:
 
 ```yaml
-scores_root: /data/ssl_anti_spoofing/asd_superb_score_files
+scores_root: /data/ssl_anti_spoofing/spoof_superb_score_files
+score_layout: v3
 ```
 
 Confirm it took effect:
 
 ```bash
-python -m spoof_superb.config | head -3
+python -m spoof_superb.config | head -4
 ```
 
 Nothing else in that file matters for reproduction.
 
-## Step 2 -- reproduce the results tables
+## Step 3 -- the main table
 
 ```bash
 bin/reproduce_main_results.sh
 ```
 
 This recomputes every per-model, per-dataset EER behind the paper's main table
-and then verifies the result against `reference/analysis/`. It takes about
-2m40s and reads roughly 15 GB.
+and then verifies it against `reference/analysis/`. It takes about 2m40s and
+reads roughly 15 GB. No GPU, no checkpoints, no audio.
 
 Expected output ends with:
 
 ```
 === VERDICTS ===
-  IDENTICAL              6
+  IDENTICAL              1
 ```
 
 The verification is graded on whether the paper's CLAIMS survive -- which model
@@ -64,7 +90,23 @@ mean EER -- with the per-cell deltas reported beside them as diagnostics. See
 
 Set `MODE="compute"` to recompute without checking.
 
-To recompute directly:
+If this passes, your installation and your score files are good.
+
+## Step 4 -- all three analyses
+
+```bash
+bin/analyze.sh
+```
+
+Runs main results, then acoustic degradation (Section 4.4.2), then TTS systems
+(Sections 4.4.3 and 3.2.3), then level-2 verification over all six tables. The
+latter two build the view they report over as they go; main results reads the
+raw tree directly and has nothing to group by.
+
+`WHICH` runs a subset, `VERIFY="no"` skips the check, `OUT_ROOT` moves the
+output. See [analysis](09-analysis.md) for what each one produces.
+
+To recompute the main table directly:
 
 ```bash
 python -m spoof_superb.analysis.recompute_main_results --out_dir outputs/main_results
@@ -111,24 +153,21 @@ The gate fails only if the *set* of problems grows.
 ## Other published artefacts
 
 ```bash
-# acoustic degradation matrix (Section 5.2) and its heatmaps
-python -m spoof_superb.analysis.compute_eer_matrix \
-    --baseline_dir  $SCORES/Baseline_by_Hashim \
-    --augmented_dir $SCORES/scores_by_acoustic_degradation \
-    --output_csv    outputs/eer_matrix.csv
-python -m spoof_superb.analysis.create_heatmap --csv outputs/eer_matrix.csv --out_dir outputs/figures
-
 # independent cross-check of the MLAAD column against the LaTeX source
 python -m spoof_superb.analysis.verify_mlaad_column --tex access.tex
 ```
 
 `verify_mlaad_column` checks three things: the number printed in the paper
-against a fresh recomputation (≤ 0.0005), the repo's EER estimator against an
-independent sklearn/Brent implementation (≤ 0.01 pp), and the full pool against
-the balanced pool (≤ 0.2 pp). The duplicate estimator is deliberate -- it exists
-so a bug in the repo's own EER code cannot be reproduced by its own verifier.
+against a fresh recomputation (<= 0.0005), the repo's EER estimator against an
+independent sklearn/Brent implementation (<= 0.01 pp), and the full pool
+against the balanced pool (<= 0.2 pp). The duplicate estimator is deliberate --
+it exists so a bug in the repo's own EER code cannot be reproduced by its own
+verifier.
 
-See [analysis](09-analysis.md) for the full figure pipeline.
+The degradation matrix and the TTS figures are produced by `bin/analyze.sh`
+(step 4). The older `compute_eer_matrix` / `compute_eer_tts` chain read view
+trees that exist only in the legacy score tree and is superseded; see
+[analysis](09-analysis.md).
 
 ## Next
 

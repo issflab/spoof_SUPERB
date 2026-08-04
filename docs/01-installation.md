@@ -5,8 +5,8 @@
 * Linux, Python 3.10
 * NVIDIA GPU for training and for scoring the SSL models. Reproducing the
   published tables and running the LFCC-GMM baseline need no GPU.
-* ~50 GB for the score files if you want to reproduce the tables; the corpora
-  themselves are considerably larger.
+* ~6.5 GB for the published score files (234 files) if you want to reproduce
+  the tables; the corpora themselves are considerably larger.
 
 ## Install
 
@@ -37,7 +37,7 @@ verified-working set; the file's header explains each one.
 ```bash
 python -c "import torch, s3prl, librosa; print(torch.__version__, torch.cuda.is_available())"
 python -m spoof_superb.config      # prints the resolved settings
-pytest tests/ -q                   # ~16 s, no GPU needed
+pytest tests/ -q                   # ~25 s, no GPU needed
 ```
 
 Expected: `2.7.1+cu126 True` (or `False` if you have no GPU, which is fine for
