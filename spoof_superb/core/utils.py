@@ -3,6 +3,7 @@ Utilization functions
 """
 
 import os
+from collections.abc import Mapping
 import random
 import sys
 
@@ -135,23 +136,79 @@ def create_optimizer(model_parameters, optim_config):
 def seed_worker(worker_id):
     """
     Used in generating seed for the worker of torch.utils.data.Dataloader
+
+    NOT currently wired into main.py's DataLoaders, which run with
+    num_workers=8 and no worker_init_fn -- so the workers are seeded by torch's
+    default, not by this. Passing it as worker_init_fn would change training
+    results, so it is a deliberate decision rather than an oversight to fix in
+    passing.
     """
     worker_seed = torch.initial_seed() % 2**32
     np.random.seed(worker_seed)
     random.seed(worker_seed)
 
 
-def set_seed(seed, config = None):
-    """ 
-    set initial seed for reproduction
+def _toggle(config, name, default):
+    """Read one cuDNN toggle from whatever `config` happens to be.
+
+    Three shapes reach this, and they are not interchangeable:
+
+      * ``None``                -- nothing configured; use `default`
+      * an argparse ``Namespace`` -- attributes, already real booleans
+      * a mapping                 -- items, historically strings from JSON
+
+    The mapping case goes through `str_to_bool`, which calls ``.lower()`` and
+    therefore raises on a real bool. That is exactly why this repo used to carry
+    two seeding functions: the vendored one read attributes and the local one
+    subscripted a dict through `str_to_bool`, so neither could take the other's
+    argument. Only strings are converted.
     """
     if config is None:
-        raise ValueError("config should not be None")
+        return default
+    if hasattr(config, name):
+        value = getattr(config, name)
+    elif isinstance(config, Mapping) and name in config:
+        value = config[name]
+    else:
+        return default
+    return str_to_bool(value) if isinstance(value, str) else bool(value)
 
+
+def set_seed(seed, config=None):
+    """Seed every RNG a training run touches, and fix the cuDNN backend.
+
+    Replaces `core_scripts.startup_config.set_random_seed`, which was the only
+    thing this repo used out of a 38-file vendored copy of Xin Wang's
+    project-NN-Pytorch-scripts. Behaviour is preserved exactly, including the
+    two stdout notices, so a run seeded before and after the removal draws the
+    same numbers.
+
+    `config` may be None, an argparse Namespace, or a mapping -- see `_toggle`.
+    With None the backend is set to the safe pair (deterministic on, benchmark
+    off) rather than raising, because "seed everything and leave cuDNN alone"
+    is a reasonable thing for a caller to ask for.
+
+    Note on PYTHONHASHSEED: setting it here cannot affect THIS process, whose
+    hash randomisation was fixed before the first line of Python ran. It is set
+    because the original did, and because it does reach subprocesses. Making a
+    run's `str` hashing reproducible requires the variable to be exported
+    before the interpreter starts.
+    """
+    deterministic = _toggle(config, "cudnn_deterministic_toggle", True)
+    benchmark = _toggle(config, "cudnn_benchmark_toggle", False)
+
+    torch.manual_seed(seed)
     random.seed(seed)
     np.random.seed(seed)
-    torch.manual_seed(seed)
+    os.environ["PYTHONHASHSEED"] = str(seed)
+
+    if config is not None:
+        if not deterministic:
+            print("cudnn_deterministic set to False")
+        if benchmark:
+            print("cudnn_benchmark set to True")
+
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
-        torch.backends.cudnn.deterministic = str_to_bool(config["cudnn_deterministic_toggle"])
-        torch.backends.cudnn.benchmark = str_to_bool(config["cudnn_benchmark_toggle"])
+        torch.backends.cudnn.deterministic = deterministic
+        torch.backends.cudnn.benchmark = benchmark

@@ -908,3 +908,59 @@ like a unit test. Verified end to end: 6/6 `IDENTICAL`.
 
 Suite: 240 passed (was 246 passed / 3 skipped; the six removed were
 `test_verification.py`, and the three skips were the opt-in regression gate).
+
+## P16  Remove the vendored core_scripts tree  [DONE 2026-08-04]
+
+**What it was.** A 38-file, 336 KB copy of Xin Wang's
+project-NN-Pytorch-scripts (NII) -- a complete training framework: data IO,
+`nn_manager` training loops, `op_manager` optimisers and LR schedulers, config
+parsing. Every file carries `Copyright 2020, Xin Wang`.
+
+**What was reachable.** One file. `main.py` imported `set_random_seed` from
+`startup_config.py` and called it once. `startup_config.py` imports nothing
+from `core_scripts` -- only stdlib, torch and numpy -- so the other 37 files
+were unreachable: nothing outside the tree imported them, and the one reachable
+file did not either. Every other `core_scripts` import in the repo was
+`core_scripts` importing itself.
+
+**It was already duplicated.** `main.py` imported TWO seeding functions:
+
+    line 18  from spoof_superb.core.utils import create_optimizer, seed_worker, set_seed, str_to_bool
+    line 24  from core_scripts.startup_config import set_random_seed
+
+and called only the vendored one. `set_seed`, `seed_worker` and `str_to_bool`
+were all dead imports.
+
+They could not be swapped, and the reason is worth keeping: `str_to_bool` calls
+`.lower()`, so the local `set_seed` -- which pushed `config["..."]` through it
+-- raised `AttributeError` on argparse's real booleans, while the vendored one
+read attributes directly. Two implementations of one thing, each unable to
+accept the other's argument. That is why both survived.
+
+**The licensing argument, which is the decisive one.** This repo is Apache-2.0.
+`core_scripts/` carried another author's copyright headers and shipped NO
+license file. project-NN-Pytorch-scripts is BSD-3-Clause, whose terms require
+the notice to travel with the code. Shipping it in a public release was a real
+problem independent of tidiness.
+
+**What replaced it.** `core.utils.set_seed` now accepts None, an argparse
+Namespace, or a mapping (`_toggle` converts strings only), sets PYTHONHASHSEED,
+and preserves the two stdout notices.
+
+**Verified by execution, before deleting anything.** A probe seeded with each
+function over three configurations -- default toggles, flipped toggles, and
+`config=None` -- and compared five draws each from torch, numpy and random,
+plus PYTHONHASHSEED and both cuDNN flags. EQUIVALENT on every field. A training
+run seeded after this change draws the same numbers as before it.
+
+(The probe failed on the first attempt because the vendored function prints its
+cuDNN notices to STDOUT, which corrupted the JSON it was writing there. The new
+one preserves that behaviour, and `test_seeding.py` pins it.)
+
+**Left alone, deliberately.** `seed_worker` is still not wired into main.py's
+DataLoaders, which run `num_workers=8` with no `worker_init_fn` -- so the eight
+workers are seeded by torch's default rather than by it. Passing it would
+CHANGE TRAINING RESULTS, so it is a decision to take on purpose, not a tidy-up
+to fold into a deletion. Recorded in the function's docstring.
+
+Suite: 251 passed (11 new in `tests/test_seeding.py`).

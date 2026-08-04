@@ -15,13 +15,12 @@ from spoof_superb.models.aasist import Model as aasist_model
 from spoof_superb.models.linear_head import UtteranceLevel as LinearHead
 from spoof_superb.models.aasist_raw import Model as aasist_raw_model
 from spoof_superb.config import cfg
-from spoof_superb.core.utils import create_optimizer, seed_worker, set_seed, str_to_bool
+from spoof_superb.core.utils import create_optimizer, set_seed
 from spoof_superb.core.metrics import calculate_EER
 
 from s3prl import hub
 
 from tensorboardX import SummaryWriter
-from core_scripts.startup_config import set_random_seed
 
 from sklearn.metrics import balanced_accuracy_score
 import json
@@ -379,7 +378,7 @@ if __name__ == '__main__':
     optim_config["epochs"] = args.num_epochs
 
     #make experiment reproducible
-    set_random_seed(args.seed, args)
+    set_seed(args.seed, args)
 
     #define model saving path
     # The non-SSL baselines take no upstream; recording --ssl_model's default
