@@ -36,7 +36,11 @@ echo "+ recompute the results tables${OUT_DIR:+ -> $OUT_DIR}"
 [ "$MODE" = "check" ] || exit 0
 
 echo
-echo "+ verify the tables against reference/analysis/"
-VARGS=()
+# --tables main_results, because this script computes ONLY the main table.
+# Without it the check reports the degradation and TTS tables as MISSING, which
+# for a first-time user is five failures caused by not having run two analyses
+# the script never claimed to run.
+echo "+ verify the main-results table against reference/analysis/"
+VARGS=(--tables main_results)
 [ -n "$OUT_DIR" ] && VARGS+=(--candidate "$(dirname "$OUT_DIR")")
 exec "$PY" -m spoof_superb.verification analysis "${VARGS[@]}"

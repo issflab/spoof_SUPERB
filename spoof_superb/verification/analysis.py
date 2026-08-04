@@ -278,10 +278,18 @@ def compare_table(ref, cand, exclude=(), mean_col=None, reference_col=None):
     return verdict, rep
 
 
-def verify_analysis(candidate_root, reference_root, progress=print):
-    """One entry per reference table."""
+def verify_analysis(candidate_root, reference_root, tables=None, progress=print):
+    """One entry per reference table.
+
+    `tables` restricts the check to some of them, by sub-directory or by
+    `sub/name`. It exists so a script that computed ONE analysis can verify what
+    it computed, instead of reporting the other five as MISSING failures. It is
+    a narrowing of the QUESTION, not a tolerance: a table you asked for and did
+    not produce is still MISSING, and the default remains all six.
+    """
+    wanted = _select(tables)
     out = []
-    for sub, name, opts in TABLES:
+    for sub, name, opts in wanted:
         ref_path = Path(reference_root) / sub / name
         cand_path = Path(candidate_root) / sub / name
         entry = {"table": f"{sub}/{name}", "reference": str(ref_path),
@@ -304,3 +312,15 @@ def verify_analysis(candidate_root, reference_root, progress=print):
         progress(f"  {entry['table']:<36} {entry['verdict']}")
         out.append(entry)
     return out
+
+
+def _select(tables):
+    """Resolve a --tables filter, or every table when none is given."""
+    if not tables:
+        return TABLES
+    keep = set(tables)
+    chosen = [t for t in TABLES if t[0] in keep or f"{t[0]}/{t[1]}" in keep]
+    if not chosen:
+        known = sorted({t[0] for t in TABLES})
+        raise SystemExit(f"--tables matched nothing. Known: {', '.join(known)}")
+    return chosen
