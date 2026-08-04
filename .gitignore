@@ -1,8 +1,22 @@
 # etc
-_*
+#
+# `_*` was unscoped and matched at EVERY depth, so it silently excluded all 11
+# `spoof_superb/**/__init__.py`, `verification/__main__.py`, and
+# `bin/_common.sh` -- i.e. the package did not import at all from a fresh clone
+# and no bin/ script could source its preamble. Scoped to the repo root, which
+# is where the scratch directories it was written for live, plus explicit
+# re-includes so a future broad rule cannot take the package out again.
+/_*
+!**/__init__.py
+!**/__main__.py
+!bin/_common.sh
 /.codex
 exp_result/
-models/
+# Root-scoped: checkpoint directories live at the repo root. Unscoped, this also
+# matched `spoof_superb/models/`, which is source -- its .py files survived only
+# because they had been force-added before the rule landed, while
+# `models/__init__.py` never was and so never shipped.
+/models/
 depreciated/
 LA/
 /home/suryasss/speaker-specific-ASD/__pycache__/*
@@ -189,3 +203,7 @@ model_*
 # the record of WHICH tree and WHICH commit these tables came from -- the part
 # that makes them a reference rather than six loose CSVs.
 !/reference/analysis/provenance.json
+
+# The paper's display-name -> slug mapping. Source data that production code
+# reads, not an artefact -- the global *.json rule above would swallow it.
+!/spoof_superb/scoring/paper_roster.json

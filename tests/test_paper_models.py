@@ -23,7 +23,7 @@ from spoof_superb.orchestration.jobs import (
 )
 from spoof_superb.scoring.models import (
     PAPER_TABLE_ROWS,
-    MAIN_RESULTS_BASELINE,
+    PAPER_ROSTER,
     _slug_by_display,
     is_paper_model,
     non_paper_models,
@@ -66,10 +66,10 @@ def _main_results_rows():
 def test_m1_roster_matches_the_paper_table_exactly():
     """The reconciliation this module exists for.
 
-    The first implementation derived the roster from baseline_main_results_table.json and
-    claimed it "cannot drift from the paper". It had already drifted: the
-    baseline carries FBANK and Mockingjay, which the table does not print. This
-    test is what makes the explicit list trustworthy.
+    The first implementation derived the roster from the regression baseline
+    and claimed it "cannot drift from the paper". It had already drifted: the
+    roster file carries FBANK and Mockingjay, which the table does not print.
+    This test is what makes the explicit list trustworthy.
     """
     printed = _main_results_rows()
     assert list(PAPER_TABLE_ROWS) == printed, (
@@ -78,28 +78,28 @@ def test_m1_roster_matches_the_paper_table_exactly():
         f"  only in paper: {[r for r in printed if r not in PAPER_TABLE_ROWS]}")
 
 
-def test_m2_the_baseline_is_a_superset_of_the_paper():
-    """The regression gate deliberately tracks more models than are printed.
+def test_m2_the_roster_file_is_a_superset_of_the_paper():
+    """paper_roster.json maps more models than the table prints.
 
-    That is fine -- it guards computed columns -- but it means the baseline is
-    not the roster, which is the mistake this replaced.
+    That is fine -- it is a name-to-slug dictionary, not the roster -- but it
+    means the file cannot BE the roster, which is the mistake this replaced.
+    Nothing in it distinguishes FBANK and Mockingjay from the 19 printed rows.
     """
-    with open(MAIN_RESULTS_BASELINE) as f:
-        rows = json.load(f)["results"]
-    tracked = {r["slug"] for r in rows.values() if r.get("slug")}
-    assert paper_models() < tracked, "the baseline should track at least the paper's models"
+    with open(PAPER_ROSTER) as f:
+        tracked = set(json.load(f)["roster"].values())
+    assert paper_models() < tracked, "the roster file should map at least the paper's models"
     extra = sorted(tracked - paper_models())
-    assert extra, "expected the baseline to track unprinted models"
+    assert extra, "expected the roster file to map unprinted models"
 
 
 def test_m3_every_printed_row_maps_to_a_slug():
     """A printed row with no slug means the two sources have diverged."""
     for name in PAPER_TABLE_ROWS:
-        assert name in _slug_by_display(), f"{name} has no slug in the baseline"
+        assert name in _slug_by_display(), f"{name} has no slug in the roster file"
     assert len(paper_models()) == len(PAPER_TABLE_ROWS)
 
 
-def test_m4_a_missing_baseline_raises_instead_of_widening(tmp_path):
+def test_m4_a_missing_roster_file_raises_instead_of_widening(tmp_path):
     """Falling back to "score everything" would silently burn a day of GPU."""
     paper_models.cache_clear()
     _slug_by_display.cache_clear()
@@ -109,10 +109,10 @@ def test_m4_a_missing_baseline_raises_instead_of_widening(tmp_path):
     _slug_by_display.cache_clear()
 
 
-def test_m4b_a_row_the_baseline_does_not_know_raises(tmp_path):
+def test_m4b_a_row_the_roster_file_does_not_know_raises(tmp_path):
     """Renaming a table row must fail loudly, not silently shrink the roster."""
     part = tmp_path / "partial.json"
-    part.write_text(json.dumps({"results": {"APC": {"slug": "apc"}}}))
+    part.write_text(json.dumps({"roster": {"APC": "apc"}}))
     paper_models.cache_clear()
     _slug_by_display.cache_clear()
     with pytest.raises(ValueError, match="diverged"):
@@ -461,7 +461,8 @@ def test_d5_the_segmented_column_is_not_the_published_one():
     more, so the EERs are different quantities.
     """
     from spoof_superb.orchestration.jobs import expected_rows
-    with open(MAIN_RESULTS_BASELINE) as f:
-        published = json.load(f)["results"]["XLS-R"]["datasets"]["DFEval24"]["n"]
-    assert published == 1976
+    # The paper's own figure, stated here as the literal it is. It used to be
+    # read out of the regression baseline, which made a published fact look
+    # derived from a file that no longer exists.
+    published = 1976
     assert expected_rows("deepfake_eval_2024_segmented") > 10 * published

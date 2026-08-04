@@ -36,7 +36,7 @@ DATASETS=""
 MODELS=""
 
 # "yes" scores only the 21 SSL upstreams the paper reports, out of the 24 trained
-# heads on disk. The roster is read from tests/baseline_main_results_table.json, so it cannot
+# heads on disk. Slugs are read from spoof_superb/scoring/paper_roster.json, so they cannot
 # drift from the paper. "no" scores every head.
 # Naming models in MODELS above overrides this either way.
 PAPER_ONLY="yes"

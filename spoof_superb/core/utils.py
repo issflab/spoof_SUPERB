@@ -133,21 +133,6 @@ def create_optimizer(model_parameters, optim_config):
     return optimizer, scheduler
 
 
-def seed_worker(worker_id):
-    """
-    Used in generating seed for the worker of torch.utils.data.Dataloader
-
-    NOT currently wired into main.py's DataLoaders, which run with
-    num_workers=8 and no worker_init_fn -- so the workers are seeded by torch's
-    default, not by this. Passing it as worker_init_fn would change training
-    results, so it is a deliberate decision rather than an oversight to fix in
-    passing.
-    """
-    worker_seed = torch.initial_seed() % 2**32
-    np.random.seed(worker_seed)
-    random.seed(worker_seed)
-
-
 def _toggle(config, name, default):
     """Read one cuDNN toggle from whatever `config` happens to be.
 

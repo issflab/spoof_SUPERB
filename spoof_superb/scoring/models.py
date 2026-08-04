@@ -7,11 +7,11 @@ reads, and on the two biggest corpora that is hours per model.
 
 WHY THE LIST IS EXPLICIT HERE
 -----------------------------
-The first version of this module derived the roster from
-``tests/baseline_main_results_table.json`` on the argument that a hand-kept list would drift
-from the paper. That argument was right about the risk and wrong about the
-remedy: the baseline had **already** drifted. It carries 21 rows, two of which
-the paper does not print --
+The first version of this module derived the roster from the regression
+baseline on the argument that a hand-kept list would drift from the paper. That
+argument was right about the risk and wrong about the remedy: the baseline had
+**already** drifted. ``paper_roster.json`` carries 21 rows, two of which the
+paper does not print --
 
     FBANK        has mean/pooled, not printed
     Mockingjay   no MLAAD cell, not printed
@@ -42,21 +42,20 @@ from spoof_superb import REPO_ROOT
 __all__ = ["paper_models", "paper_table_rows", "paper_table_order",
            "display_by_slug", "family_separator_rows", "PAPER_TABLE_FAMILIES",
            "is_paper_model",
-           "non_paper_models", "MAIN_RESULTS_BASELINE", "PAPER_TABLE_ROWS"]
+           "non_paper_models", "PAPER_ROSTER", "PAPER_TABLE_ROWS"]
 
-#: The display-name -> slug mapping for the paper's roster.
+#: Display name -> score-file slug, the only record of which score file produced
+#: which printed row. The two cannot be derived from each other: slugs are s3prl
+#: upstream names, display names are what the table prints, and no rule maps
+#: between them.
 #:
-#: This file began as the fixture for a regression test that has since been
-#: retired -- reproducibility is now checked by `spoof_superb.verification`
-#: against `reference/`, which is a refreshable published artefact rather than a
-#: capture pinned to the legacy tree. The file stays because `_slug_by_display`
-#: reads it: it is the only record of which score-file slug produced which
-#: printed row, and every roster decision in the repo depends on that mapping.
-#:
-#: It therefore lives under tests/ for historical reasons only, and its name
-#: describes a job it no longer has. Moving and renaming it is a change worth
-#: making; it is deferred because it is unrelated to what retired the test.
-MAIN_RESULTS_BASELINE = os.path.join(str(REPO_ROOT), "tests", "baseline_main_results_table.json")
+#: This used to be read out of `tests/baseline_main_results_table.json`, the
+#: fixture of the regression gate retired in P15 -- so production code depended
+#: on a test fixture, and 97% of that file was per-model EERs measured on the
+#: legacy tree, stale and superseded by `reference/`. Only the mapping was live,
+#: so only the mapping was kept. Git history has the rest.
+PAPER_ROSTER = os.path.join(str(REPO_ROOT), "spoof_superb", "scoring",
+                            "paper_roster.json")
 
 #: The SSL rows of the paper's main results table, in printed order. The two
 #: non-SSL reference systems (LFCC-GMM, AASIST) are excluded: they are not
@@ -141,34 +140,34 @@ def family_separator_rows(display_names):
 
 @functools.lru_cache(maxsize=None)
 def _slug_by_display(path=None):
-    """Table-row display name -> model slug. See MAIN_RESULTS_BASELINE."""
-    path = path or MAIN_RESULTS_BASELINE
+    """Table-row display name -> model slug. See PAPER_ROSTER."""
+    path = path or PAPER_ROSTER
     try:
         with open(path) as f:
-            results = json.load(f)["results"]
+            roster = json.load(f)["roster"]
     except FileNotFoundError:
         raise FileNotFoundError(
             f"cannot map the paper's model roster to slugs: {path} is missing. "
-            f"Pass explicit --models, or restore the main-results baseline.")
+            f"Pass explicit --models, or restore paper_roster.json.")
     except (KeyError, ValueError) as exc:
-        raise ValueError(f"{path} is not a readable main-results baseline: {exc}")
-    return {name: row["slug"] for name, row in results.items() if row.get("slug")}
+        raise ValueError(f"{path} is not a readable paper roster: {exc}")
+    return dict(roster)
 
 
 @functools.lru_cache(maxsize=None)
 def paper_models(path=None):
     """frozenset of the SSL slugs the paper's results table reports.
 
-    Raises if a printed row has no slug in the baseline: that means the two have
-    diverged, and guessing would either drop a reported model or score an
+    Raises if a printed row has no slug in the roster file: that means the two
+    have diverged, and guessing would either drop a reported model or score an
     unreported one.
     """
     mapping = _slug_by_display(path)
     missing = [n for n in PAPER_TABLE_ROWS if n not in mapping]
     if missing:
         raise ValueError(
-            f"these paper table rows have no slug in {path or MAIN_RESULTS_BASELINE}: "
-            f"{missing}. PAPER_TABLE_ROWS and the baseline have diverged.")
+            f"these paper table rows have no slug in {path or PAPER_ROSTER}: "
+            f"{missing}. PAPER_TABLE_ROWS and the roster file have diverged.")
     return frozenset(mapping[n] for n in PAPER_TABLE_ROWS)
 
 
