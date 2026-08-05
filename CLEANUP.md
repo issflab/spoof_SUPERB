@@ -130,10 +130,15 @@ reader. Archive it or delete it, but do not leave it in between.
 
 ## Pending the paper update
 
-The paper is being revised to report the **segmented** Deepfake-Eval column. The
-pipeline already does -- `reference/analysis/` carries n=56,481 -- so no number
-moves. What goes stale is the prose that describes the segmented set as *not*
-what the paper reports:
+**The main table is already in sync.** `access.tex` was checked cell by cell
+against `reference/analysis/`: `tab:results_main` differs in 0 of 231 cells and
+`tab:top_ssl_lineage` matches to printed precision, so the segmented DFEval
+column is already what the paper prints. See
+[docs/internal/RESULTS_DELTA.md](docs/internal/RESULTS_DELTA.md) for what moved
+relative to the earlier draft, and why.
+
+What is left is the PROSE that still describes the segmented set as *not* what
+the paper reports:
 
 - [ ] `scoring/datasets.py:336` -- "NOT comparable to the published DFEval24
       column (n=1,976)"

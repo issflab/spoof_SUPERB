@@ -12,6 +12,7 @@ able to see what it was weighed against.
 | [humanpending.md](humanpending.md) | decisions that were gated on a human, and defects deferred rather than fixed | **5 open**, the rest closed with evidence |
 | [PLANNED_CHANGES.md](PLANNED_CHANGES.md) | P1-P19: every structural change, why it was made, and what was measured | complete |
 | [REORG_PLAN.md](REORG_PLAN.md) | the Phase-0 audit the current layout came from | historical; names are as they were at audit time |
+| [RESULTS_DELTA.md](RESULTS_DELTA.md) | what every published number moved by when the v3 tree replaced the old one, and why | the paper is already in sync; this is the revision record |
 
 ## The one live defect
 
