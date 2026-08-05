@@ -35,7 +35,6 @@ Run this once when publishing a score tree, not as part of normal work.
 Usage
 -----
     python -m spoof_superb.tools.build_release_manifest --dry-run
-    python -m spoof_superb.tools.build_release_manifest --layout v3
     python -m spoof_superb.tools.build_release_manifest --datasets ITW --limit 2
 """
 
@@ -49,25 +48,23 @@ import numpy as np
 from spoof_superb import REPO_ROOT
 from spoof_superb.core.metrics import compute_eer
 from spoof_superb.core.scorepath import available_frontends
-from spoof_superb.verification.cells import (DATASETS, cell_paths,
-                                             layout_key)
+from spoof_superb.verification.cells import DATASETS, cell_paths, column_key
 from spoof_superb.verification.scores import cell_summary, sha256, utt_digest
 
 QUANTILES = [0.0, 0.25, 0.5, 0.75, 1.0]
 
 
-def discover_models(dataset_key, scores_root, layout):
+def discover_models(dataset_key, scores_root):
     """Model slugs with a score file for this dataset, by inverting the layout.
 
     Filenames are never parsed here: model names contain underscores and cannot
     be split out reliably, which is the ambiguity that helped the old eval
     scripts diverge in the first place. `available_frontends` inverts the
-    layout's own naming rule instead.
+    the layout's own naming rule instead.
     """
     try:
-        return available_frontends("linear_head",
-                                   layout_key(dataset_key, layout),
-                                   scores_root=scores_root, layout=layout)
+        return available_frontends("linear_head", column_key(dataset_key),
+                                   scores_root=scores_root)
     except KeyError:
         return []
 
@@ -134,8 +131,6 @@ def main(argv=None):
                                                   "manifest.json"))
     ap.add_argument("--scores_root", default=None,
                     help="default: the configured scores_root")
-    ap.add_argument("--layout", default=None, choices=("legacy", "v2", "v3"),
-                    help="default: the configured score_layout")
     ap.add_argument("--datasets", nargs="*", default=None,
                     help="benchmark column display names, e.g. ITW MLAAD")
     ap.add_argument("--archive_url", default=None,
@@ -147,7 +142,6 @@ def main(argv=None):
     args = ap.parse_args(argv)
 
     scores_root = args.scores_root or cfg.scores_root
-    layout = args.layout or getattr(cfg, "score_layout", "legacy")
 
     wanted = DATASETS
     if args.datasets:
@@ -159,7 +153,7 @@ def main(argv=None):
 
     plan = {}
     for disp, key in wanted:
-        models = discover_models(key, scores_root, layout)
+        models = discover_models(key, scores_root)
         if args.limit:
             models = models[:args.limit]
         plan[key] = models
@@ -167,14 +161,13 @@ def main(argv=None):
 
     if args.dry_run:
         print(f"\nwould index {sum(len(m) for m in plan.values())} cells "
-              f"under {scores_root} (layout {layout})")
+              f"under {scores_root}")
         print(f"would write {args.out}")
         return 0
 
     manifest = {
         "generated": date.today().isoformat(),
         "scores_root_at_build": scores_root,
-        "layout_at_build": layout,
         "archive_url": args.archive_url,
         "files": {},
         "cells": {},
@@ -187,7 +180,7 @@ def main(argv=None):
         manifest["files"][key] = {}
         manifest["cells"][key] = {}
         for model in models:
-            paths = cell_paths(layout, scores_root, key, model)
+            paths = cell_paths(scores_root, key, model)
             if any(not p.exists() for p in paths):
                 continue
             # A pooled column is several files; index each so they fetch

@@ -124,7 +124,7 @@ def auc_bonafide_vs_spoof(bonafide: np.ndarray, spoof: np.ndarray) -> float:
     return float((ranks[:n_b].sum() - n_b * (n_b + 1) / 2) / (n_b * n_s))
 
 
-def load_model_scores(scores_root, layout, slug: str,
+def load_model_scores(scores_root, slug: str,
                       dir_map: pd.DataFrame) -> tuple[np.ndarray, pd.DataFrame]:
     """Return (pooled bonafide scores, retained spoof rows with canonical_system).
 
@@ -132,7 +132,7 @@ def load_model_scores(scores_root, layout, slug: str,
     spoof half is read from its tab-separated copy, which is mandatory because
     ~8.6% of utt_ids contain literal spaces.
     """
-    paths = mlaad_pool_paths(slug, scores_root=scores_root, layout=layout)
+    paths = mlaad_pool_paths(slug, scores_root=scores_root)
     utt, lab, sc = read_scored(paths)
     df = pd.DataFrame({"utt_id": utt, "label": lab, "score": sc})
     if df["score"].isna().any():
@@ -229,15 +229,12 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--scores_root", default=None,
                         help="score tree to read (default: the configured one)")
-    parser.add_argument("--layout", default=None, choices=("legacy", "v2", "v3"),
-                        help="layout of that tree (default: the configured one)")
     parser.add_argument("--dir-map", type=Path, default=DIR_MAP)
     parser.add_argument("--arch-csv", type=Path, default=None)
     parser.add_argument("--out-dir", type=Path, default=DEFAULT_OUT)
     args = parser.parse_args()
 
     scores_root = args.scores_root or cfg.scores_root
-    layout = args.layout or getattr(cfg, "score_layout", "legacy")
     args.out_dir.mkdir(parents=True, exist_ok=True)
 
     dir_map = pd.read_csv(args.dir_map)[["raw_dir", "canonical_system"]]
@@ -257,7 +254,7 @@ def main() -> None:
 
     for display, slug in MODELS:
         paths = [Path(p) for p in mlaad_pool_paths(slug, scores_root=scores_root,
-                                                   layout=layout)]
+                                                   )]
         absent = [p for p in paths if not p.is_file()]
         if absent:
             # Not fatal: a tree legitimately holds a subset of the roster (the
@@ -266,7 +263,7 @@ def main() -> None:
             skipped.append(f"{display} ({absent[0].name})")
             continue
         print(f"[{display}] {slug}")
-        bonafide, spoof = load_model_scores(scores_root, layout, slug, dir_map)
+        bonafide, spoof = load_model_scores(scores_root, slug, dir_map)
         system = spoof["canonical_system"]
 
         if not support:

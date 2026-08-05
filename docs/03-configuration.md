@@ -66,7 +66,6 @@ bin/score.sh --cuda_device cuda:1
 | `protocols_path` | training protocols | ASVspoof2019 LA cm protocols |
 | `train_protocol`, `dev_protocol` | protocol filenames | ASVspoof2019 train / dev |
 | `reference_ssl` | the SSL model whose score file defines a trial list | `xls_r_300m` |
-| `score_layout` | score-file directory layout: `v2` or `legacy` | `legacy` |
 | `cuda_device` | default device | `cuda:0` |
 | `python` | interpreter the orchestrator launches subprocesses with | the running one |
 
@@ -76,40 +75,26 @@ Derived values are computed, not configured: `reference_dir` is always
 
 ## Score-file layout
 
-`score_layout` decides where score files are written and read.
+Score files are written and read at
 
 ```
-v2      {scores_root}/raw/{system}/{dataset}/{frontend}.txt
-legacy  the pre-reorganisation paths
+{scores_root}/raw/{method}/{dataset}/{varies}.txt
 ```
 
-`v2` example:
+`method` is `linear_head` or `non_ssl`; `varies` is the s3prl upstream for the
+former and the system name for the latter. Three properties this buys:
 
-```
-raw/linear_head/mlaad_v10/xls_r_300m.txt
-raw/linear_head/asvspoof_ld/tera.txt
-raw/lfcc_gmm/in_the_wild/none.txt
-```
-
-Four properties it is built for:
-
-* **Nothing is parsed.** `linear_head_Noise_Addition_wavlm_large_babble_10.txt`
-  cannot be split by any regex, because model names contain underscores.
-  Directory levels have no such problem.
+* **Nothing is parsed.** The old flat names could not be split reliably --
+  model names contain underscores.
 * **One glob per question.** `raw/*/*/xls_r_300m.txt` is every score file for
   one upstream; `raw/linear_head/mlaad_v10/*.txt` is every model on one set.
 * **Versions are in the name.** `mlaad_v10` and `mlaad_legacy` are different
-  datasets rather than two directories you must know to tell apart.
-* **No condition level.** ASVLD conditions are rows inside one file. The five
-  condition protocols are mutually disjoint -- 2,065,873 rows, 2,065,873
-  distinct utt_ids, zero collisions -- so the condition is already carried by
-  the utt_id and a directory for it would add nothing. Pooling also forces a
-  file to have one provenance instead of hiding a mixture.
+  datasets, not two directories you have to know to tell apart.
 
-The default is `legacy`, so an existing tree keeps working untouched. Set `v2`
-in `configs/paths.yaml` for a new one. Every path comes from
-`spoof_superb.core.scorepath.score_path`, so switching is a config change
-rather than a refactor, and both layouts stay readable during a migration.
+There used to be a `score_layout` setting offering two older conventions for
+reading. Both were retired on 2026-08-05: nothing a user can obtain is in
+either, since the published tree is in this layout and `bin/fetch_scores.sh`
+places files directly into it. See `spoof_superb/core/scorepath.py`.
 
 Dataset directory names are canonical (lowercase, version-bearing) and mapped
 in `scorepath.DATASET_DIRS`; the registry keys stay as the CLI vocabulary, so

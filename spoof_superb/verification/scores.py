@@ -211,9 +211,9 @@ def _wanted(datasets):
     return [d for d in DATASETS if d[0] in keep or d[1] in keep]
 
 
-def verify_scores(candidate_root, candidate_layout, models, datasets=None,
-                  ref_root=None, ref_layout=None, manifest_path=None,
-                  rewrite_ref=None, rewrite_cand=None, progress=print):
+def verify_scores(candidate_root, models, datasets=None, ref_root=None,
+                  manifest_path=None, rewrite_ref=None,
+                  rewrite_cand=None, progress=print):
     """One row per (dataset, model). Tree mode if `ref_root`, else manifest."""
     wanted = _wanted(datasets)
     manifest = None
@@ -227,10 +227,10 @@ def verify_scores(candidate_root, candidate_layout, models, datasets=None,
             row = {"dataset": disp, "model": slug,
                    "mode": "tree" if ref_root else "manifest"}
             try:
-                cand_paths = cell_paths(candidate_layout, candidate_root, key, slug)
+                cand_paths = cell_paths(candidate_root, key, slug)
                 if ref_root:
                     row.update(compare_cell(
-                        cell_paths(ref_layout, ref_root, key, slug), cand_paths,
+                        cell_paths(ref_root, key, slug), cand_paths,
                         rewrite_ref, rewrite_cand))
                     verdict, reason = grade_tree_cell(row)
                     if (row.get("eer_a_common") is not None

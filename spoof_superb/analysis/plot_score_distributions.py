@@ -131,7 +131,7 @@ def kde_curve(scores, n_points=500):
 # Figure generators
 # ---------------------------------------------------------------------------
 def make_by_dataset_figure(linear_head_dir: str, title_suffix: str, out_path: str,
-                           scores_root=None, layout=None) -> None:
+                           scores_root=None) -> None:
     """2×2 grid: KDE per dataset (all scores combined) for 4 selected models."""
     fig, axes = plt.subplots(2, 2, figsize=(14, 10))
     axes_flat = axes.flatten()
@@ -141,7 +141,7 @@ def make_by_dataset_figure(linear_head_dir: str, title_suffix: str, out_path: st
         ax.set_title(STEM_DISPLAY[stem], fontsize=12, fontweight="bold")
 
         for ds_idx, dataset in enumerate(ALL_DATASETS):
-            filepath = raw_score_path(dataset, stem, linear_head_dir, scores_root, layout)
+            filepath = raw_score_path(dataset, stem, linear_head_dir, scores_root)
             if not os.path.exists(filepath):
                 continue
 
@@ -170,7 +170,7 @@ def make_by_dataset_figure(linear_head_dir: str, title_suffix: str, out_path: st
 
 
 def make_by_class_figure(linear_head_dir: str, title_suffix: str, out_path: str,
-                         scores_root=None, layout=None) -> None:
+                         scores_root=None) -> None:
     """
     2×2 grid: bonafide (solid) vs spoof (dashed) KDE per TTS-relevant dataset.
     Shows where each dataset's EER crossing point lies.
@@ -183,7 +183,7 @@ def make_by_class_figure(linear_head_dir: str, title_suffix: str, out_path: str,
         ax.set_title(STEM_DISPLAY[stem], fontsize=12, fontweight="bold")
 
         for ds_idx, dataset in enumerate(TTS_DATASETS):
-            filepath = raw_score_path(dataset, stem, linear_head_dir, scores_root, layout)
+            filepath = raw_score_path(dataset, stem, linear_head_dir, scores_root)
             if not os.path.exists(filepath):
                 continue
 
@@ -239,11 +239,8 @@ def main() -> None:
     parser.add_argument("--scores_root", default=None,
                         help="score tree to read raw files from, when "
                              "--linear_head_dir is not given")
-    parser.add_argument("--layout", default=None, choices=("legacy", "v2", "v3"),
-                        help="layout of that tree (default: the configured one)")
     args = parser.parse_args()
     scores_root = args.scores_root or cfg.scores_root
-    layout = args.layout or getattr(cfg, "score_layout", "legacy")
 
 
     os.makedirs(args.out_dir, exist_ok=True)
@@ -256,13 +253,13 @@ def main() -> None:
         args.linear_head_dir,
         "(Before Z-Score)",
         os.path.join(args.out_dir, "score_dist_before_by_dataset.png"),
-        scores_root, layout,
+        scores_root,
     )
     make_by_class_figure(
         args.linear_head_dir,
         "(Before Z-Score)",
         os.path.join(args.out_dir, "score_dist_before_by_class.png"),
-        scores_root, layout,
+        scores_root,
     )
 
     print("Generating after-normalization figures ...")

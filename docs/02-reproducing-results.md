@@ -55,13 +55,12 @@ Edit `configs/paths.yaml`:
 
 ```yaml
 scores_root: /data/ssl_anti_spoofing/spoof_superb_score_files
-score_layout: v3
 ```
 
 Confirm it took effect:
 
 ```bash
-python -m spoof_superb.config | head -4
+python -m spoof_superb.config | head -3
 ```
 
 Nothing else in that file matters for reproduction.

@@ -48,7 +48,6 @@ VERIFY="yes"
 
 # Score tree to analyse. Empty = the configured scores_root.
 SCORES_ROOT_OVERRIDE=""
-LAYOUT=""                 # legacy | v2 | v3. Empty = the configured layout.
 
 # Where the degradation and TTS views are written. Empty = beside the scores.
 # The degradation view is ~4.5M rows per model, so point this at a disk with
@@ -92,7 +91,6 @@ done
 # is threaded to the two of them differently on purpose.
 COMMON=()
 [ -n "$SCORES_ROOT_OVERRIDE" ] && COMMON+=(--scores_root "$SCORES_ROOT_OVERRIDE")
-[ -n "$LAYOUT" ]               && COMMON+=(--layout "$LAYOUT")
 
 VIEW_ARGS=()
 [ -n "$VIEWS_ROOT" ] && VIEW_ARGS+=(--out_root "$VIEWS_ROOT")

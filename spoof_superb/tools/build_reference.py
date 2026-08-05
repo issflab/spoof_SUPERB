@@ -100,7 +100,6 @@ def main(argv=None):
         "generated": date.today().isoformat(),
         "built_from": str(src),
         "scores_root": args.scores_root or cfg.scores_root,
-        "score_layout": getattr(cfg, "score_layout", None),
         "git_commit": _git("rev-parse", "HEAD"),
         "git_describe": _git("describe", "--always", "--dirty"),
         "tables": [f"{sub}/{name}" for sub, name, _ in TABLES],
@@ -115,8 +114,7 @@ def main(argv=None):
         "reproduction against.",
         "",
         f"- generated: {provenance['generated']}",
-        f"- from score tree: `{provenance['scores_root']}` "
-        f"(layout `{provenance['score_layout']}`)",
+        f"- from score tree: `{provenance['scores_root']}`",
         f"- built from outputs: `{provenance['built_from']}`",
         f"- repo commit: `{provenance['git_commit'] or 'unknown'}`",
         "",

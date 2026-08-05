@@ -105,7 +105,6 @@ def main(argv=None):
                     help="where the CSVs and figures go")
     ap.add_argument("--scores_root", default=None,
                     help="score tree to read (default: the configured one)")
-    ap.add_argument("--layout", default=None, choices=("legacy", "v2", "v3"))
     ap.add_argument("--out_root", default=None,
                     help="where views/ is written (default: --scores_root)")
     ap.add_argument("--models", nargs="*", default=None,
@@ -115,7 +114,6 @@ def main(argv=None):
     args = ap.parse_args(argv)
 
     scores_root = args.scores_root or cfg.scores_root
-    layout = args.layout or getattr(cfg, "score_layout", "legacy")
     spec = VIEW_SPECS["acoustic_degradation"]
     models = args.models or sorted(paper_models())
 
@@ -131,7 +129,7 @@ def main(argv=None):
     # roster to score it afterwards would cost tens of GB to no purpose.
     rows = []
     for model, groups, _bonafide in build(
-            spec, models, scores_root=scores_root, layout=layout,
+            spec, models, scores_root=scores_root,
             out_root=args.out_root or scores_root):
         eers = {}
         for cond in CONDITIONS:

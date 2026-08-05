@@ -92,13 +92,6 @@ class Config:
     # Each analysis still takes --out_dir, which wins over this.
     outputs_root: str = ''
 
-    # Score-file directory layout. 'legacy' reproduces the pre-reorg paths;
-    # 'v2' is raw/{system}/{dataset}/{frontend}.txt; 'v3' is the same for
-    # linear_head but puts the non-SSL systems in raw/non_ssl/{dataset}/
-    # {system}.txt. Default is legacy so an existing tree keeps working; set
-    # v3 in configs/paths.yaml for a new one. v2 is retained for reading,
-    # because run_status.json files record absolute v2 paths.
-    score_layout: Literal['legacy', 'v2', 'v3'] = 'legacy'
 
     linear_head_prefix: str = 'model_weighted_CCE_50_64_linear_head_ASV19_'
     reference_ssl: str = 'xls_r_300m'
@@ -154,7 +147,6 @@ _ENV_MAP = {
     'models_root': 'SPOOF_SUPERB_MODELS_ROOT',
     'baseline_models_root': 'SPOOF_SUPERB_BASELINE_MODELS_ROOT',
     'python': 'SPOOF_SUPERB_PYTHON',
-    'score_layout': 'SPOOF_SUPERB_SCORE_LAYOUT',
 }
 
 

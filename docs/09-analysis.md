@@ -15,13 +15,12 @@ will fail with `ModuleNotFoundError`.
 
 ## Which tree a script reads
 
-Every script that reads RAW score files takes `--scores_root` and `--layout`,
-and resolves paths through `core.scorepath`. Omit them and the configured tree
-is used.
+Every script that reads RAW score files takes `--scores_root` and resolves
+paths through `core.scorepath`. Omit it and the configured tree is used.
 
 ```bash
 python -m spoof_superb.analysis.recompute_main_results \
-    --scores_root /data/ssl_anti_spoofing/spoof_superb_score_files --layout v3
+    --scores_root /data/ssl_anti_spoofing/spoof_superb_score_files
 ```
 
 Scripts that read DERIVED views -- the per-condition and per-TTS trees -- take
@@ -32,13 +31,12 @@ a path the layout can compute. Those are marked below.
 |---|---|
 | raw, and builds its own view | `acoustic_degradation`, `tts_systems`, `build_view` |
 | raw score files | `recompute_main_results`, `verify_mlaad_column`, `organize_mlaad_scores`, `build_mlaad_dir_map`, `compare_trees`, `verification.scores` |
-| raw, then writes a legacy tree | `apply_zscore_and_pool`, `apply_sigmoid_and_pool`, `plot_score_distributions` |
 | a LEGACY view tree | `compute_eer_matrix`, `compute_eer_tts`, `compute_far_matrix`, `create_*_heatmaps` |
 | neither (checkpoints, corpus metadata) | `layer_weight_analysis`, `create_combined_mlaad_meta_all` |
 
 The last group predates the entry points above and reads view trees that exist
-only in the legacy tree. They are kept because they produced published figures,
-not because anything should be run through them now.
+only in the retired legacy tree. They are kept because they produced published
+figures, not because anything should be run through them now.
 
 ## The three analyses
 
@@ -64,8 +62,8 @@ python -m spoof_superb.analysis.tts_systems --out_dir outputs/tts
 ```
 
 The latter two write their view under `{scores_root}/views/` as they go. Use
-`--out_root` to put it somewhere else, and `--scores_root` / `--layout` to read
-a different tree.
+`--out_root` to put it somewhere else, and `--scores_root` to read a different
+tree.
 
 **Where the figures go.** `--out_dir` on any analysis, or set `outputs_root` in
 `configs/paths.yaml` to move all three at once -- each writes a sub-directory
@@ -157,8 +155,7 @@ contains -- which corpus partitions compose each degradation condition, and
 which condition codes those are in the corpus's own numbering. `_manifest.json`
 is the machine-readable record beside it.
 
-**Superseded.** `compute_eer_matrix` and `compute_eer_tts` read the legacy view
-trees and predate these entry points. `create_mlaad_tts_eer_heatmaps` still
+**Superseded.** `create_mlaad_tts_eer_heatmaps` still
 computes the four base TTS matrices from raw; `tts_systems` reproduces it
 exactly (max|d| = 0.000000 across all 11 architecture groups) and additionally
 produces the ranked figures.
@@ -167,8 +164,8 @@ produces the ranked figures.
 
 ```bash
 python -m spoof_superb.tools.compare_trees \
-    --a /data/ssl_anti_spoofing/asd_superb_score_files   --a-layout legacy \
-    --b /data/ssl_anti_spoofing/spoof_superb_score_files --b-layout v3 \
+    --a /path/to/reference/tree \
+    --b /path/to/your/tree \
     --out outputs/tree_comparison "--a-id-rewrite=-=Bonafide"
 ```
 

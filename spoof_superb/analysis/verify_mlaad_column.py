@@ -35,7 +35,7 @@ Usage
 
     # against a new tree: checks 2 and 3 bind, check 1 is reported
     python -m spoof_superb.analysis.verify_mlaad_column \\
-        --scores_root /data/ssl_anti_spoofing/spoof_superb_score_files --layout v3
+        --scores_root /data/ssl_anti_spoofing/spoof_superb_score_files
 """
 
 import argparse
@@ -192,16 +192,13 @@ def main():
         REPO_ROOT.parent / "spoof_SUPERB_IEEE_ACCESS" / "access.tex"))
     ap.add_argument("--scores_root", default=None,
                     help="score tree to read (default: the configured one)")
-    ap.add_argument("--layout", default=None, choices=("legacy", "v2", "v3"),
-                    help="layout of that tree (default: the configured one)")
     ap.add_argument("--expect-tex-match", action="store_true",
                     help="treat disagreement with access.tex as a failure. Set "
                          "this only for the tree the paper was written from.")
     args = ap.parse_args()
 
     scores_root = args.scores_root or cfg.scores_root
-    layout = args.layout or getattr(cfg, "score_layout", "legacy")
-    print(f"reading {scores_root}  (layout={layout})")
+    print(f"reading {scores_root}")
     if not args.expect_tex_match:
         print("transcription check is REPORTED, not enforced "
               "(pass --expect-tex-match to enforce)\n")
@@ -214,13 +211,14 @@ def main():
     fails = []
     missing = []
     diverged = []
-    rows = list(MODELS)
-    if layout != "legacy":
-        rows += NON_SSL_ROWS
+    # The two non-SSL systems were only ever scored on MLAAD after the
+    # reorganisation, so this used to be conditional on not reading the legacy
+    # tree. That tree is gone; every tree this can read has them.
+    rows = list(MODELS) + NON_SSL_ROWS
     for disp, slug in rows:
         system = slug if (disp, slug) in NON_SSL_ROWS else "linear_head"
         pool = [Path(p) for p in mlaad_pool_paths(slug, scores_root=scores_root,
-                                                  layout=layout, system=system)]
+                                                  system=system)]
         absent = [p for p in pool if not p.exists()]
         if absent:
             missing.append(f"{disp}: no MLAAD scores ({absent[0].name})")

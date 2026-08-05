@@ -15,7 +15,8 @@ producer has three faults, and this repo had all three:
   marking its own homework cannot distinguish *the code changed* from *the
   scores changed*, and the reference was a literal that no one could refresh.
 * Both graded against the **legacy layout**, which pinned a tree that is no
-  longer authoritative.
+  longer authoritative. That layout, and the intermediate `v2`, have since been
+  retired entirely -- see `core.scorepath`.
 
 All of that is gone. One command replaces it:
 
@@ -53,7 +54,7 @@ python -m spoof_superb.verification scores
 # full: every utterance compared against a reference tree
 bin/fetch_scores.sh
 python -m spoof_superb.verification scores \
-    --ref-root /path/to/reference/tree --ref-layout v3
+    --ref-root /path/to/reference/tree
 ```
 
 ### What is reported, and why each field is there
@@ -225,8 +226,8 @@ For anything that is not "candidate vs published reference":
 
 ```bash
 python -m spoof_superb.tools.compare_trees \
-    --a /data/ssl_anti_spoofing/asd_superb_score_files   --a-layout legacy \
-    --b /data/ssl_anti_spoofing/spoof_superb_score_files --b-layout v3 \
+    --a /path/to/reference/tree \
+    --b /path/to/your/tree \
     --out outputs/tree_comparison "--a-id-rewrite=-=Bonafide"
 ```
 

@@ -101,7 +101,7 @@ def norm(text: str) -> str:
     return re.sub(r"[^a-z0-9]", "", text.lower())
 
 
-def load_utt_index(scores_root, layout, ssl: str) -> pd.DataFrame:
+def load_utt_index(scores_root, ssl: str) -> pd.DataFrame:
     """Return spoof rows with language / raw_dir columns parsed from utt_id.
 
     Only the utt_ids are used -- this builds a directory map, not a metric -- so
@@ -109,7 +109,7 @@ def load_utt_index(scores_root, layout, ssl: str) -> pd.DataFrame:
     tab-separated copy is used: ~8.6% of utt_ids contain literal spaces
     (``Cartesia.ai (Sonic-3)``, ``OpenAI TTS-1 HD``).
     """
-    paths = mlaad_pool_paths(ssl, scores_root=scores_root, layout=layout)
+    paths = mlaad_pool_paths(ssl, scores_root=scores_root)
     utt, lab, _sc = read_scored(paths)
     df = pd.DataFrame({"utt_id": utt, "label": lab})
     spoof = df[df["label"] == "spoof"].copy()
@@ -195,8 +195,6 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--scores_root", default=None,
                         help="score tree to read (default: the configured one)")
-    parser.add_argument("--layout", default=None, choices=("legacy", "v2", "v3"),
-                        help="layout of that tree (default: the configured one)")
     parser.add_argument("--mlaad-root", type=Path, default=MLAAD_ROOT)
     parser.add_argument("--arch-csv", type=Path, default=None)
     parser.add_argument("--provenance-csv", type=Path, default=None)
@@ -204,19 +202,18 @@ def main() -> None:
     args = parser.parse_args()
 
     scores_root = args.scores_root or cfg.scores_root
-    layout = args.layout or getattr(cfg, "score_layout", "legacy")
     arch_csv = args.arch_csv or metadata_csv(ARCH_NAME)
     provenance_csv = args.provenance_csv or metadata_csv(PROVENANCE_NAME)
 
     models = available_frontends("linear_head", "Multilingual",
-                                 scores_root=scores_root, layout=layout,
+                                 scores_root=scores_root,
                                  ext=".tsv")
     if not models:
-        sys.exit(f"FATAL: no MLAAD score files under {scores_root} ({layout})")
-    index = load_utt_index(scores_root, layout, models[0])
+        sys.exit(f"FATAL: no MLAAD score files under {scores_root}")
+    index = load_utt_index(scores_root, models[0])
     counts = Counter(index["raw_dir"])
     total_spoof = int(sum(counts.values()))
-    print(f"Reference model: {models[0]}  ({scores_root}, layout={layout})")
+    print(f"Reference model: {models[0]}  ({scores_root})")
     print(f"  spoof rows: {total_spoof}   distinct dirs: {len(counts)}")
 
     if total_spoof != EXPECTED_TOTAL_SPOOF:

@@ -1143,3 +1143,70 @@ Four are decisions. One is a defect and is called out separately in
 Every reference to the three files -- 9 in `docs/` and in source comments -- was
 repointed, so no pointer goes dead. All relative links in `docs/` and `README.md`
 verified to resolve.
+
+## P21  Retire the legacy and v2 layouts  [DONE 2026-08-05]
+
+Score-file paths were resolved through three conventions: `v3`, the
+intermediate `v2`, and `legacy` (the pre-reorganisation tree). Both older ones
+are gone.
+
+**Why now.** Nothing a user of this benchmark can obtain is in either. The
+published tree is v3, `reference/manifest.json` indexes it, and
+`bin/fetch_scores.sh` places files directly into it -- so `--layout {legacy,v2,v3}`
+on THIRTEEN commands was thirteen ways to point a correct command at a tree that
+does not exist. The comparison those layouts existed to enable has also already
+been done and its answer recorded: P12 found ASV19 LA at 0/19 and ITW at 0/19 on
+identical trials with zero label disagreement, and P13 explained AASIST. Keeping
+the code that produced those findings does not make them more true.
+
+**Removed.** `LAYOUTS`; the `score_layout` config field and its env override;
+the five distinct layout flags across 13 commands; every `layout=` parameter
+through `score_path`, `mlaad_pool_paths`, `available_frontends`, `score_dir`,
+`cell_paths`, `column_paths`, `mlaad_paths`, `load_view`, `build`, and the
+analysis entry points; `_LEGACY_LINEAR_HEAD`; and
+`tools/migrate_layout.py` + `tests/test_migrate_layout.py`, whose only job was
+v2 -> v3.
+
+**Layout is not format, and the distinction is load-bearing.**
+`core/scorefile.py` still reads all three on-disk shapes -- 4-column space,
+4-column tab, and 3-column tab with a header -- because the v3 tree carries a
+`.tsv` twin beside every `.txt` (MLAAD utt_ids contain spaces). Not one line of
+that changed. The three "legacy" mentions in that module are about bytes, not
+paths.
+
+**What had to be preserved rather than deleted.** `layout_key`'s `legacy` branch
+was the only place recording that the published DFEval column was the
+UNSEGMENTED set -- 1,980 trials, one 4 s window per recording -- against this
+tree's 56,481. That contrast outlives the layout: an earlier draft of the paper
+printed the unsegmented column, so anyone comparing a number here against that
+draft is comparing two measurements. It is now prose on `COLUMN_KEYS`, and the
+function is `column_key(dataset)` with no layout argument.
+
+**Two mistakes made and caught during the edit**, both from over-broad regex:
+
+* A `.*?\n\n\n` sub intended to remove a comment block ate `cell_paths` as well.
+  Caught by an import sweep over every module in the package, not by the test
+  suite -- which passed, because nothing imported that module at collection
+  time.
+* Removing a dict key left two adjacent f-strings in a list literal, which
+  Python concatenates silently: two `REFERENCE.md` lines became one. Caught by
+  reading the diff.
+
+**Verified by execution.** Level 1 against the published manifest, 76 cells over
+four columns: all `IDENTICAL`. Then a full `bin/analyze.sh` -- main results,
+degradation (19 models x 4.5M rows), TTS (91 systems) -- and level 2:
+
+    main_results/main_results_table.csv  IDENTICAL
+    degradation/eer_matrix.csv           IDENTICAL
+    tts/eer_by_tts_system.csv            IDENTICAL
+    tts/eer_by_architecture.csv          IDENTICAL
+    tts/eer_by_generation_mode.csv       IDENTICAL
+    tts/eer_by_vocoder_family.csv        IDENTICAL
+
+Suite: 239 passed. `test_scorepath.py` was rewritten for one layout and gained
+`test_the_retired_layouts_are_really_gone`; `test_score_reading.py` lost its
+five legacy-path tests and kept every format test.
+
+**Consequence for RP-5.** Nothing in the repo can now read the 49 GB legacy
+tree. Keeping it is keeping bytes with no reader -- it should be archived or
+deleted, not left in between.

@@ -251,18 +251,18 @@ def view_dir(view, scores_root):
 
 # --- loading ----------------------------------------------------------------
 
-def _read_dataset(dataset, frontend, scores_root, layout, ext=".txt"):
+def _read_dataset(dataset, frontend, scores_root, ext=".txt"):
     path = score_path("linear_head", dataset, frontend,
-                      scores_root=scores_root, layout=layout, ext=ext)
+                      scores_root=scores_root, ext=ext)
     return read_scored(path)
 
 
-def _load_composite(spec, frontend, scores_root, layout):
+def _load_composite(spec, frontend, scores_root):
     groups = {}
     for group, parts in spec.groups.items():
         utts, labels, scores = [], [], []
         for part in parts:
-            u, l, s = _read_dataset(part.dataset, frontend, scores_root, layout)
+            u, l, s = _read_dataset(part.dataset, frontend, scores_root)
             cond = condition_of(part.dataset)
             if cond is None:
                 keep = np.ones(u.size, dtype=bool)
@@ -278,14 +278,14 @@ def _load_composite(spec, frontend, scores_root, layout):
     return groups, None
 
 
-def _load_partition(spec, frontend, scores_root, layout):
+def _load_partition(spec, frontend, scores_root):
     if spec.bonafide_dataset:
-        pool = mlaad_pool_paths(frontend, scores_root=scores_root, layout=layout)
+        pool = mlaad_pool_paths(frontend, scores_root=scores_root)
         utts, labels, scores = read_scored(pool[0])
         bonafide = read_scored(pool[1])
     else:
         utts, labels, scores = _read_dataset(spec.dataset, frontend, scores_root,
-                                             layout, spec.ext)
+                                             spec.ext)
         bonafide = None
 
     buckets = {}
@@ -302,7 +302,7 @@ def _load_partition(spec, frontend, scores_root, layout):
     return groups, bonafide
 
 
-def load_view(spec, frontend, scores_root=None, layout=None):
+def load_view(spec, frontend, scores_root=None):
     """Group one model's raw scores as the view defines.
 
     Returns (groups, bonafide):
@@ -314,5 +314,5 @@ def load_view(spec, frontend, scores_root=None, layout=None):
     other; partition groups are disjoint and together reproduce their source.
     """
     if isinstance(spec, CompositeView):
-        return _load_composite(spec, frontend, scores_root, layout)
-    return _load_partition(spec, frontend, scores_root, layout)
+        return _load_composite(spec, frontend, scores_root)
+    return _load_partition(spec, frontend, scores_root)

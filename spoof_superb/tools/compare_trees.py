@@ -38,8 +38,8 @@ code in `verification.cells`; only the verdict vocabulary differs.
 Usage
 -----
     python -m spoof_superb.tools.compare_trees \\
-        --a /data/ssl_anti_spoofing/asd_superb_score_files      --a-layout legacy \\
-        --b /data/ssl_anti_spoofing/spoof_superb_score_files    --b-layout v3 \\
+        --a /path/to/reference/tree \\
+        --b /path/to/your/tree \\
         --out outputs/tree_comparison
 """
 
@@ -103,8 +103,6 @@ def main(argv=None):
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--a", required=True, help="first score tree (the reference)")
     ap.add_argument("--b", required=True, help="second score tree")
-    ap.add_argument("--a-layout", required=True, choices=("legacy", "v2", "v3"))
-    ap.add_argument("--b-layout", required=True, choices=("legacy", "v2", "v3"))
     ap.add_argument("--out", required=True, help="output directory")
     ap.add_argument("--models", nargs="*", default=None,
                     help="score-file slugs (default: the paper roster)")
@@ -140,8 +138,8 @@ def main(argv=None):
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    print(f"A = {args.a}  (layout={args.a_layout})")
-    print(f"B = {args.b}  (layout={args.b_layout})")
+    print(f"A = {args.a}")
+    print(f"B = {args.b}")
     print(f"{len(wanted)} datasets x {len(slugs)} models = "
           f"{len(wanted) * len(slugs)} cells\n", flush=True)
 
@@ -150,8 +148,8 @@ def main(argv=None):
         for slug in slugs:
             r = {"dataset": disp, "model": slug}
             try:
-                r.update(compare_cell(cell_paths(args.a_layout, args.a, key, slug),
-                                      cell_paths(args.b_layout, args.b, key, slug),
+                r.update(compare_cell(cell_paths(args.a, key, slug),
+                                      cell_paths(args.b, key, slug),
                                       rewrite_a, rewrite_b))
                 if r.get("status") == "ok":
                     r["verdict"] = verdict(r)
@@ -176,8 +174,8 @@ def main(argv=None):
 
     scored = [r for r in rows if r.get("d_eer_common") is not None]
     summary = {
-        "a": {"root": args.a, "layout": args.a_layout},
-        "b": {"root": args.b, "layout": args.b_layout},
+        "a": {"root": args.a},
+        "b": {"root": args.b},
         "cells": len(rows),
         "verdicts": tally,
         "worst_common_eer_gap": sorted(

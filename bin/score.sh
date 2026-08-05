@@ -40,7 +40,7 @@ SOURCE=""
 ASVLD_CONDITION="Noise_Addition"
 
 # --- output -----------------------------------------------------------------
-# Leave empty to place the file in the configured layout (score_layout in
+# Leave empty to place the file in the standard layout (see
 # configs/paths.yaml). Set it to write somewhere else.
 OUTPUT_FILE=""
 

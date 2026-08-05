@@ -162,8 +162,7 @@ def test_v0_a_partition_view_covers_every_row(tmp_path):
                         "rvc_dir": "EXCLUDED"}
     spec.key._mode = {"Edge-TTS": "closed_undisclosed", "Bark": "AR"}
     try:
-        groups, bonafide = load_view(spec, "m", scores_root=str(tmp_path),
-                                     layout="v3")
+        groups, bonafide = load_view(spec, "m", scores_root=str(tmp_path))
     finally:
         spec.key._system = spec.key._mode = None
 

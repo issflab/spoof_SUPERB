@@ -104,6 +104,30 @@ buys nothing at release and only destroys local work.
 
 ---
 
+## Done -- the legacy and v2 layouts are retired
+
+- [x] `LAYOUTS` collapsed to one. `--layout` / `--a-layout` / `--b-layout` /
+      `--candidate-layout` / `--ref-layout` removed from **13** commands, the
+      `score_layout` setting removed from `config.py` and `configs/paths.yaml`,
+      and every `layout=` parameter dropped from the call chain.
+- [x] `tools/migrate_layout.py` and `tests/test_migrate_layout.py` deleted -- its
+      only job was v2 -> v3.
+- [x] The DFEval knowledge that lived in the `legacy` branch of `layout_key` was
+      preserved as prose on `COLUMN_KEYS`: the retired tree scored the
+      unsegmented set (1,980 trials, one 4 s window per recording), this one
+      scores every window (56,481), and those are different measurements. The
+      function is now `column_key(dataset)` with no layout argument.
+
+**Layout is not format.** `core/scorefile.py` still reads all three on-disk
+shapes -- 4-column space, 4-column tab, 3-column tab with a header -- because
+the v3 tree carries a `.tsv` twin beside every `.txt`. None of that changed.
+
+This forces RP-5 (see `docs/internal/humanpending.md`): nothing in the repo can
+read the 49 GB legacy tree any more, so keeping it is keeping bytes with no
+reader. Archive it or delete it, but do not leave it in between.
+
+---
+
 ## Pending the paper update
 
 The paper is being revised to report the **segmented** Deepfake-Eval column. The

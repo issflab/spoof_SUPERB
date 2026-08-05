@@ -24,7 +24,6 @@ published artefact rather than a capture pinned to a tree. See
 | `test_scoring_driver.py` | the parsers and writer behind the merged scoring driver: right-peeled fields, pooled column order, atomic writes, the `.tsv` twin, walk filtering, per-utterance labels, restrict semantics, fp32 default |
 | `test_verification_levels.py` | each verdict on both ladders means exactly one thing, and the boundaries are where the reasoning says |
 | `test_seeding.py` | a seed reproduces all three RNGs, and the config shapes that kept two seeding functions alive stay distinguishable |
-| `test_migrate_layout.py` | the layout migration moves every file exactly once and is resumable |
 | `test_compare_trees.py` | the ad-hoc tree comparison distinguishes WHY two cells differ |
 | `test_views.py` | analysis views partition losslessly and compose as the paper's tables specify |
 

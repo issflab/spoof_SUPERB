@@ -27,7 +27,7 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 
 
 def raw_score_path(dataset, frontend, linear_head_dir=None, scores_root=None,
-                   layout=None):
+):
     """The raw linear_head score file for one (dataset, frontend).
 
     Several analysis tools take a `--linear_head_dir` and build the old flat
@@ -44,7 +44,7 @@ def raw_score_path(dataset, frontend, linear_head_dir=None, scores_root=None,
                             f"linear_head_{dataset}_{frontend}.txt")
     from spoof_superb.core.scorepath import score_path
     return score_path("linear_head", dataset, frontend,
-                      scores_root=scores_root, layout=layout)
+                      scores_root=scores_root)
 
 
 def metadata_csv(name, scores_root=None):

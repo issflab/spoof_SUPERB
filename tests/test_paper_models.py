@@ -473,14 +473,16 @@ def test_d5_the_dfeval_column_resolves_to_the_segmented_measurement():
     true. What must hold either way is that the mapping does not silently flip
     -- doing so would change every DFEval number in the table while the code
     went on reporting the same column name.
+
+    The unsegmented key still exists in the dataset registry, so it remains
+    scoreable by name; it is simply not what the benchmark column reads.
     """
-    from spoof_superb.core.scorepath import layout_key
+    from spoof_superb.core.scorepath import column_key
     from spoof_superb.orchestration.jobs import expected_rows
 
-    for layout in ("v2", "v3"):
-        assert layout_key("deepfake_eval_2024", layout) == \
-            "deepfake_eval_2024_segmented", layout
-    assert layout_key("deepfake_eval_2024", "legacy") == "deepfake_eval_2024"
+    assert column_key("deepfake_eval_2024") == "deepfake_eval_2024_segmented"
+    # every other column reads its own name
+    assert column_key("wild") == "wild"
 
     n_seg = expected_rows("deepfake_eval_2024_segmented")
     n_whole = expected_rows("deepfake_eval_2024")
@@ -490,23 +492,23 @@ def test_d5_the_dfeval_column_resolves_to_the_segmented_measurement():
         f"unsegmented={n_whole}")
 
 
-def test_d5b_the_layout_mapping_has_exactly_one_definition():
+def test_d5b_the_column_mapping_has_exactly_one_definition():
     """The producer and the verifier must resolve through the same object.
 
     `recompute_main_results` builds the paper's table; `verification.cells`
-    checks it. Both used to carry a private copy of DATASET_KEY_BY_LAYOUT. Had
-    those drifted, the checker would have compared a segmented column against an
+    checks it. Both used to carry a private copy of this mapping. Had those
+    drifted, the checker would have compared a segmented column against an
     unsegmented one and reported EQUIVALENT -- blind to precisely the error it
     exists to catch.
     """
     from spoof_superb.core import scorepath
     from spoof_superb.verification import cells
 
-    assert cells.DATASET_KEY_BY_LAYOUT is scorepath.DATASET_KEY_BY_LAYOUT
-    assert cells.layout_key is scorepath.layout_key
+    assert cells.COLUMN_KEYS is scorepath.COLUMN_KEYS
+    assert cells.column_key is scorepath.column_key
 
     import spoof_superb.analysis.recompute_main_results as rmr
-    assert not hasattr(rmr, "DATASET_KEY_BY_LAYOUT"), (
+    assert not hasattr(rmr, "COLUMN_KEYS"), (
         "recompute_main_results has its own copy again")
-    assert rmr.dataset_key("v3", "deepfake_eval_2024") == \
-        scorepath.layout_key("deepfake_eval_2024", "v3")
+    assert not hasattr(rmr, "dataset_key"), (
+        "the layout-aware wrapper should be gone with the layouts")

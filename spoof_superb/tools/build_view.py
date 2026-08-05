@@ -11,7 +11,6 @@ or on its own, to produce a view for browsing without running an analysis:
 
     python -m spoof_superb.tools.build_view --view tts_systems \\
         --scores_root /data/ssl_anti_spoofing/spoof_superb_score_files \\
-        --layout v3
 
 Writes, per P11:
 
@@ -53,18 +52,18 @@ from spoof_superb.core.scorepath import (available_frontends, mlaad_pool_paths,
 LINE = "{utt} - {key} {score}\n"
 
 
-def source_paths(spec, frontend, scores_root, layout):
+def source_paths(spec, frontend, scores_root):
     """Every raw file this view reads for one model."""
     if isinstance(spec, CompositeView):
         datasets = {p.dataset for parts in spec.groups.values() for p in parts}
         return [Path(score_path("linear_head", d, frontend,
-                                scores_root=scores_root, layout=layout))
+                                scores_root=scores_root))
                 for d in sorted(datasets)]
     if spec.bonafide_dataset:
         return [Path(p) for p in mlaad_pool_paths(frontend, scores_root=scores_root,
-                                                  layout=layout)]
+                                                  )]
     return [Path(score_path("linear_head", spec.dataset, frontend,
-                            scores_root=scores_root, layout=layout,
+                            scores_root=scores_root,
                             ext=spec.ext))]
 
 
@@ -113,7 +112,7 @@ def write_readme(spec, manifest, out):
     """
     lines = [f"# {spec.name}", "", spec.doc.strip(), "",
              f"Built {manifest['built_at']} from `{manifest['scores_root']}` "
-             f"(layout `{manifest['layout']}`).", ""]
+             f".", ""]
 
     n_models = len(manifest["group_rows"])
     plural = "model" if n_models == 1 else "models"
@@ -165,12 +164,11 @@ def write_readme(spec, manifest, out):
               "```bash",
               f"python -m spoof_superb.tools.build_view --view {spec.name} \\",
               f"    --scores_root {manifest['scores_root']} "
-              f"--layout {manifest['layout']}",
               "```", ""]
     (out / "README.md").write_text("\n".join(lines))
 
 
-def build(spec, models, scores_root=None, layout=None, out_root=None,
+def build(spec, models, scores_root=None, out_root=None,
           dry_run=False, verbose=True):
     """Materialise `spec` for each model, yielding (frontend, groups, bonafide).
 
@@ -183,7 +181,6 @@ def build(spec, models, scores_root=None, layout=None, out_root=None,
     failing on rather than writing a ragged view.
     """
     scores_root = scores_root or cfg.scores_root
-    layout = layout or getattr(cfg, "score_layout", "legacy")
     out = Path(view_dir(spec.name, out_root or scores_root))
 
     manifest = {
@@ -191,7 +188,6 @@ def build(spec, models, scores_root=None, layout=None, out_root=None,
         "doc": spec.doc,
         "kind": "composite" if isinstance(spec, CompositeView) else "partition",
         "scores_root": str(scores_root),
-        "layout": layout,
         "built_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
         "sources": {},
         "group_rows": {},
@@ -208,7 +204,7 @@ def build(spec, models, scores_root=None, layout=None, out_root=None,
 
     keys_seen = None
     for frontend in models:
-        srcs = source_paths(spec, frontend, scores_root, layout)
+        srcs = source_paths(spec, frontend, scores_root)
         missing = [p for p in srcs if not p.exists()]
         if missing:
             manifest["skipped"].append(f"{frontend} ({missing[0].name})")
@@ -224,7 +220,7 @@ def build(spec, models, scores_root=None, layout=None, out_root=None,
             for p in srcs
         ]
 
-        groups, bonafide = load_view(spec, frontend, scores_root, layout)
+        groups, bonafide = load_view(spec, frontend, scores_root)
 
         keys = set(groups)
         if keys_seen is None:
@@ -265,7 +261,7 @@ def build(spec, models, scores_root=None, layout=None, out_root=None,
     build.last_manifest = manifest
 
 
-def default_models(spec, scores_root, layout):
+def default_models(spec, scores_root):
     """Every model this tree scored for the view's source dataset."""
     if isinstance(spec, CompositeView):
         dataset = next(iter(next(iter(spec.groups.values())))).dataset
@@ -273,7 +269,7 @@ def default_models(spec, scores_root, layout):
     else:
         dataset, ext = spec.dataset, spec.ext
     return available_frontends("linear_head", dataset, scores_root=scores_root,
-                               layout=layout, ext=ext)
+                               ext=ext)
 
 
 def main(argv=None):
@@ -282,7 +278,6 @@ def main(argv=None):
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--view", required=True, choices=sorted(VIEW_SPECS))
     ap.add_argument("--scores_root", default=None)
-    ap.add_argument("--layout", default=None, choices=("legacy", "v2", "v3"))
     ap.add_argument("--out_root", default=None,
                     help="where views/ is written (default: --scores_root). "
                          "Point elsewhere to build without touching the tree.")
@@ -293,21 +288,20 @@ def main(argv=None):
 
     spec = VIEW_SPECS[args.view]
     scores_root = args.scores_root or cfg.scores_root
-    layout = args.layout or getattr(cfg, "score_layout", "legacy")
-    models = args.models or default_models(spec, scores_root, layout)
+    models = args.models or default_models(spec, scores_root)
     if not models:
         sys.exit(f"FATAL: no score files for {spec.name} under {scores_root} "
-                 f"({layout})")
+                 )
 
     print(f"view      {spec.name}")
-    print(f"reading   {scores_root}  (layout={layout})")
+    print(f"reading   {scores_root}")
     print(f"writing   {view_dir(spec.name, args.out_root or scores_root)}"
           + ("  [DRY RUN -- nothing written]" if args.dry_run else ""))
     print(f"models    {len(models)}\n", flush=True)
 
     n = 0
     for _frontend, _groups, _bonafide in build(
-            spec, models, scores_root, layout,
+            spec, models, scores_root,
             args.out_root or scores_root, args.dry_run):
         n += 1
 

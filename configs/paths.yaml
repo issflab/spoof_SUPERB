@@ -44,14 +44,6 @@ train_protocol: ASVspoof2019.LA.cm.train.trn.txt
 dev_protocol: ASVspoof2019.LA.cm.dev.trl.txt
 
 # --- defaults for the tools -------------------------------------------------
-# Score-file directory layout.
-#   v3      raw/linear_head/{dataset}/{frontend}.txt  -- current
-#           raw/non_ssl/{dataset}/{system}.txt        -- non-SSL systems
-#   v2      raw/{system}/{dataset}/{frontend}.txt   -- previous; still readable,
-#           because run_status.json files record absolute v2 paths
-#   legacy  the pre-reorganisation paths            -- for an existing tree
-# Set this to legacy if you point scores_root back at the old directory.
-score_layout: v3
 
 # Where the analyses write their CSVs and figures. Each analysis creates a
 # sub-directory under this: main_results/, degradation/, tts/.

@@ -138,7 +138,6 @@ def main(argv=None):
     ap.add_argument("--out_dir", default=None,
                     help="default: outputs_root/tts, or the repo's outputs/tts")
     ap.add_argument("--scores_root", default=None)
-    ap.add_argument("--layout", default=None, choices=("legacy", "v2", "v3"))
     ap.add_argument("--out_root", default=None,
                     help="where views/ is written (default: --scores_root)")
     ap.add_argument("--models", nargs="*", default=None)
@@ -148,7 +147,6 @@ def main(argv=None):
     import pandas as pd
 
     scores_root = args.scores_root or cfg.scores_root
-    layout = args.layout or getattr(cfg, "score_layout", "legacy")
     spec = VIEW_SPECS["tts_systems"]
     roster = set(args.models or paper_models())
     models = paper_table_order(roster)
@@ -165,7 +163,7 @@ def main(argv=None):
     results = {level: {} for level, _s, _t, _k in FIGURES}
     support = {}
     for model, groups, bonafide in build(
-            spec, models, scores_root=scores_root, layout=layout,
+            spec, models, scores_root=scores_root,
             out_root=args.out_root or scores_root):
         bona_scores = bonafide[2]
         eers = eers_for_model(groups, bona_scores, tax, model)

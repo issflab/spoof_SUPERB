@@ -51,14 +51,11 @@ def _parse_rules(pairs):
 def _add_scores_args(ap):
     ap.add_argument("--candidate", default=None,
                     help="score tree to verify (default: the configured one)")
-    ap.add_argument("--candidate-layout", default=None,
-                    choices=("legacy", "v2", "v3"))
     ap.add_argument("--manifest", default=str(DEFAULT_MANIFEST),
                     help="reference manifest for offline verification")
     ap.add_argument("--ref-root", default=None,
                     help="reference SCORE TREE; enables the full "
                          "per-utterance comparison instead of manifest mode")
-    ap.add_argument("--ref-layout", default="v3", choices=("legacy", "v2", "v3"))
     ap.add_argument("--models", nargs="*", default=None,
                     help="score-file slugs (default: the paper roster)")
     ap.add_argument("--datasets", nargs="*", default=None,
@@ -86,7 +83,6 @@ def run_scores(args):
     from spoof_superb.scoring.models import paper_models
 
     candidate = args.candidate or cfg.scores_root
-    layout = args.candidate_layout or getattr(cfg, "score_layout", "legacy")
     models = args.models or sorted(paper_models())
 
     if not args.ref_root and not Path(args.manifest).is_file():
@@ -98,20 +94,18 @@ def run_scores(args):
     print("=" * 78)
     print("LEVEL 1 -- score files")
     print("=" * 78)
-    print(f"candidate : {candidate}  (layout {layout})")
+    print(f"candidate : {candidate}")
     print(f"reference : {args.ref_root or args.manifest}"
-          f"{'  (layout ' + args.ref_layout + ')' if args.ref_root else '  (manifest)'}")
+          f"{'' if args.ref_root else '  (manifest)'}")
     print(flush=True)
 
     rows = verify_scores(
-        candidate, layout, models, datasets=args.datasets,
-        ref_root=args.ref_root, ref_layout=args.ref_layout,
+        candidate, models, datasets=args.datasets, ref_root=args.ref_root,
         manifest_path=args.manifest,
         rewrite_ref=_parse_rules(args.ref_id_rewrite),
         rewrite_cand=_parse_rules(args.candidate_id_rewrite))
 
-    meta = {"candidate_root": candidate, "candidate_layout": layout,
-            "ref_root": args.ref_root, "ref_layout": args.ref_layout,
+    meta = {"candidate_root": candidate, "ref_root": args.ref_root,
             "manifest": args.manifest, "n_models": len(models),
             "n_datasets": len(rows) // max(len(models), 1)}
     out_dir = _default_out("scores")

@@ -81,85 +81,49 @@ from spoof_superb.core.metrics import compute_eer  # type: ignore
 
 from spoof_superb.config import cfg
 from spoof_superb.core.scorefile import read_scored
-from spoof_superb.core.scorepath import (layout_key, mlaad_pool_paths,
+from spoof_superb.core.scorepath import (column_key, mlaad_pool_paths,
                                          score_path)
 
-# Path resolution is layout-aware, so any tree can be reported on. The layout
-# is a property of the tree being read, not a comparison: nothing here reads a
-# second tree.
+# Two columns are not the obvious single file, and the reasons are worth
+# keeping now that the layouts they contrast with are gone:
 #
-# The two layouts are not merely spelled differently. Two columns differ in
-# COMPOSITION, and pretending otherwise would silently compare different things:
+#   ASVLD  ONE file, scored from the combined protocol built by
+#          data.prep.build_protocols asvld, which already pools every condition
+#          (2,065,873 rows). The retired legacy tree needed two files pooled --
+#          the noise/reverb/resample set plus a separate Recompression re-run --
+#          and reading only the first silently reproduced a pre-6bf39a0 column.
 #
-#   ASVLD  legacy is TWO files pooled -- linear_head_asvspoofLD_<m>.txt
-#          (1,207,509 rows: noise x10, reverb x3, resample x4) plus
-#          asvld_rerun/Recompression/linear_head_Recompression_<m>.txt
-#          (427,422 = 71,237 x 6 bitrates), folded in by commit 6bf39a0.
-#          Reading only the first reproduces a pre-6bf39a0 column.
-#          v3 is ONE file, scored from the combined protocol built by
-#          data.prep.build_protocols asvld, which already pools all conditions.
+#   MLAAD  TWO single-class corpora pooled at read time via
+#          scorepath.mlaad_pool_paths: 456,000 MLAAD v10 spoof rows and 584,006
+#          M-AILABS bonafide rows, 1,040,006 together. Keeping them separate is
+#          what lets either be counted on its own. (P8.)
 #
-#   MLAAD  legacy reads the v10 .tsv, which ALREADY has M-AILABS bonafide pooled
-#          into it (1,040,006 rows = 456,000 spoof + 584,006 bonafide).
-#          v3 keeps them as two separate single-class datasets and pools them at
-#          read time, via scorepath.mlaad_pool_paths. Both layouts yield the same
-#          1,040,006 rows with the same 456,000/584,006 split -- verified -- so
-#          the column is formable under either. (This closed P8.)
-
-
-#   DFEval24  legacy scored deepfake_eval_2024: ONE 4 s window per recording,
-#          1,976 published trials. The v3 tree deliberately scores
-#          deepfake_eval_2024_segmented instead -- every 4 s window of every
-#          recording, 56,481 trials -- because a 4 s model never saw the rest of
-#          a minutes-long file. The EERs are NOT comparable: per-segment trials
-#          weight long recordings far more heavily. This is a different
-#          measurement, not a corrected one.
-#: Resolved through core.scorepath, which holds the single definition -- see the
-#: note there on why this must not be duplicated.
-def dataset_key(layout, dataset):
-    """The registry key this column reads under a given layout."""
-    return layout_key(dataset, layout)
-
-
-def column_paths(layout, scores_root, dataset, slug, system="linear_head"):
+#   DFEval24  reads deepfake_eval_2024_segmented -- every 4 s window of every
+#          recording, 56,481 trials -- resolved through scorepath.column_key.
+#          See the note there: this is a different measurement from the
+#          unsegmented column an earlier draft printed, not a corrected one.
+def column_paths(scores_root, dataset, slug, system="linear_head"):
     """Every score file that makes up one (dataset, model) cell, in pool order.
 
     `system` is "linear_head" for every SSL row. The two non-SSL reference rows
     pass their own system name, which is what puts them under raw/non_ssl/ with
     the system as the filename -- see core.scorepath.
     """
-    if system != "linear_head":
-        return [Path(score_path(system, dataset_key(layout, dataset), slug,
-                                scores_root=scores_root, layout=layout))]
-    if layout == "legacy":
-        # Derived from the scores_root PASSED IN, not from cfg.reference_dir.
-        # cfg.reference_dir is relative to the CONFIGURED root, so reading it
-        # here made --scores_root silently ineffective for legacy columns: the
-        # gate only worked because it also sets SPOOF_SUPERB_SCORES_ROOT.
-        legacy_dir = Path(scores_root) / "linear_head"
-        paths = [legacy_dir / f"linear_head_{dataset}_{slug}.txt"]
-        if dataset == "asvspoofLD":
-            paths.append(Path(scores_root) / "asvld_rerun" / "Recompression"
-                         / f"linear_head_Recompression_{slug}.txt")
-        return paths
-    return [Path(score_path("linear_head", dataset_key(layout, dataset), slug,
-                            scores_root=scores_root, layout=layout))]
+    return [Path(score_path(system, column_key(dataset), slug,
+                            scores_root=scores_root))]
 
 
-def mlaad_paths(layout, scores_root, slug, system="linear_head"):
+def mlaad_paths(scores_root, slug, system="linear_head"):
     """(pool_paths, balanced_path) for the MLAAD column.
 
-    `pool_paths` is a list because under v2/v3 the column is assembled from the
-    two single-class corpora that compose it; see `scorepath.mlaad_pool_paths`.
-    `balanced_path` is the pre-built 50/50 pool, which only legacy has on disk --
-    under v2/v3 it is None and the invariance check subsamples instead.
+    `pool_paths` is a list: the column is assembled from the two single-class
+    corpora that compose it; see `scorepath.mlaad_pool_paths`. `balanced_path`
+    is always None -- the pre-built 50/50 pool existed only in the retired
+    legacy tree, and the invariance check subsamples instead, which is a
+    stronger reference anyway (see `balanced_subsample`).
     """
     pool = [Path(p) for p in mlaad_pool_paths(slug, scores_root=scores_root,
-                                              layout=layout, system=system)]
-    if layout == "legacy":
-        bal = (Path(scores_root) / "linear_head_MLAAD_v10" / "balanced"
-               / f"linear_head_MLAAD_v10_balanced_{slug}.txt")
-        return pool, bal
+                                              system=system)]
     return pool, None
 
 
@@ -167,9 +131,10 @@ def balanced_subsample(labels, scores, seed=0):
     """Down-sample the majority class to the minority size, deterministically.
 
     The published contract is that EER is invariant to the bonafide:spoof ratio,
-    and legacy checked it against a `balanced/` file built once, by hand, whose
-    own provenance is not recorded anywhere. Constructing the balanced pool here
-    tests the same property against a stronger reference: an exact 50/50 draw
+    and the retired legacy tree checked it against a `balanced/` file built
+    once, by hand, whose own provenance was never recorded. Constructing the
+    balanced pool here tests the same property against a stronger reference: an
+    exact 50/50 draw
     from the very rows the full-pool EER was computed on, so a disagreement can
     only be the estimator, never a difference in what was sampled.
 
@@ -422,8 +387,6 @@ def main():
                     help="default: outputs_root/main_results, or the repo's outputs/")
     ap.add_argument("--scores_root", default=None,
                     help="score tree to read (default: the configured scores_root)")
-    ap.add_argument("--layout", default=None, choices=("legacy", "v2", "v3"),
-                    help="layout of that tree (default: the configured score_layout)")
     ap.add_argument("--roster", default="paper", choices=("paper", "baseline"),
                     help="which models to compute. 'paper' is the 19 rows the "
                          "results table prints. 'baseline' adds FBANK and the "
@@ -432,8 +395,7 @@ def main():
                          "them, a report does not.")
     args = ap.parse_args()
     scores_root = args.scores_root or cfg.scores_root
-    layout = args.layout or getattr(cfg, "score_layout", "legacy")
-    print(f"reading {scores_root}  (layout={layout})", flush=True)
+    print(f"reading {scores_root}", flush=True)
     out_dir = Path(args.out_dir or default_out_dir("main_results"))
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -466,7 +428,7 @@ def main():
         # per absent model buried the real problems in the v3 run's output.
         present = [c for c, prefix in DATASETS if prefix is not None
                    and all(p.exists() for p in
-                           column_paths(layout, scores_root, prefix, slug, system))]
+                           column_paths(scores_root, prefix, slug, system))]
         if not present:
             problems.append(f"{disp}: not scored on this tree -- no columns")
             results[disp] = row
@@ -476,10 +438,10 @@ def main():
         for col, prefix in DATASETS:
             if prefix is None:
                 continue
-            key = dataset_key(layout, prefix)
+            key = column_key(prefix)
             if key != prefix:
                 row["sources"][col] = key
-            paths = column_paths(layout, scores_root, prefix, slug, system)
+            paths = column_paths(scores_root, prefix, slug, system)
             missing = [p for p in paths if not p.exists()]
             if missing:
                 row["datasets"][col] = None
@@ -509,7 +471,7 @@ def main():
             pooled_scores.append(sc[finite])
 
         # ---- MLAAD v10, full pool --------------------------------------
-        pool, bal = mlaad_paths(layout, scores_root, slug, system)
+        pool, bal = mlaad_paths(scores_root, slug, system)
         missing = [p for p in pool if not p.exists()]
         if missing:
             row["datasets"]["MLAAD"] = None

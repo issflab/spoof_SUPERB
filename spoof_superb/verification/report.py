@@ -53,11 +53,10 @@ def score_markdown(rows, meta):
     status = "FAIL" if failed else "PASS"
 
     out = [f"# Score-file verification -- {status}", ""]
-    out.append(f"- candidate: `{meta['candidate_root']}`  (layout "
-               f"`{meta['candidate_layout']}`)")
+    out.append(f"- candidate: `{meta['candidate_root']}`")
     if meta.get("ref_root"):
-        out.append(f"- reference: `{meta['ref_root']}`  (layout "
-                   f"`{meta['ref_layout']}`, full per-utterance comparison)")
+        out.append(f"- reference: `{meta['ref_root']}`  "
+                   f"(full per-utterance comparison)")
     else:
         out.append(f"- reference: `{meta['manifest']}`  (manifest mode -- "
                    f"trial sets compared by digest, scores by EER)")

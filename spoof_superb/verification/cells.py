@@ -31,12 +31,12 @@ import numpy as np
 
 from spoof_superb.core.metrics import compute_eer
 from spoof_superb.core.scorefile import read_scored
-from spoof_superb.core.scorepath import (DATASET_KEY_BY_LAYOUT, layout_key,
+from spoof_superb.core.scorepath import (COLUMN_KEYS, column_key,
                                          mlaad_pool_paths, score_path)
 from spoof_superb.verification.verdicts import EXACT_TOL
 
-__all__ = ["DATASETS", "DATASET_KEY_BY_LAYOUT", "cell_paths", "compare_cell",
-           "eer_pct", "layout_key", "rewrite_components",
+__all__ = ["DATASETS", "COLUMN_KEYS", "cell_paths", "compare_cell",
+           "eer_pct", "column_key", "rewrite_components",
            "strip_absolute_prefix", "EXACT_TOL"]
 
 #: Benchmark columns, as (display name, registry key). Order is the paper's
@@ -54,25 +54,18 @@ DATASETS = [
     ("MLAAD",      "Multilingual"),
 ]
 
-#: Legacy has no per-dataset directory convention for linear_head, so its paths
-#: are built the way the pre-reorganisation code built them.
-LEGACY_ASVLD_EXTRA = ("asvld_rerun", "Recompression",
-                      "linear_head_Recompression_{slug}.txt")
 
-def cell_paths(layout, root, dataset, slug):
-    """Every score file composing one (dataset, model) cell, in pool order."""
+def cell_paths(root, dataset, slug):
+    """Every score file composing one (dataset, model) cell, in pool order.
+
+    MLAAD is the only column that is more than one file: it is pooled from the
+    two single-class corpora that compose it. DFEval24 is the only column whose
+    name differs from the registry key it reads -- see `scorepath.column_key`.
+    """
     if dataset == "Multilingual":
-        return [Path(p) for p in mlaad_pool_paths(slug, scores_root=root,
-                                                  layout=layout)]
-    if layout == "legacy":
-        paths = [Path(root) / "linear_head" / f"linear_head_{dataset}_{slug}.txt"]
-        if dataset == "asvspoofLD":
-            a, b, c = LEGACY_ASVLD_EXTRA
-            paths.append(Path(root) / a / b / c.format(slug=slug))
-        return paths
-    key = layout_key(dataset, layout)
-    return [Path(score_path("linear_head", key, slug, scores_root=root,
-                            layout=layout))]
+        return [Path(p) for p in mlaad_pool_paths(slug, scores_root=root)]
+    return [Path(score_path("linear_head", column_key(dataset), slug,
+                            scores_root=root))]
 
 
 def eer_pct(labels, scores):
