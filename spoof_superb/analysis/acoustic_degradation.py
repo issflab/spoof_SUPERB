@@ -91,9 +91,9 @@ def delta_eer(degraded, clean):
 def default_out_dir(name):
     """Where an analysis writes, unless --out_dir says otherwise.
 
-    `outputs_root` in configs/paths.yaml when set, the repo's outputs/ when not.
+    `analysis_root` in configs/paths.yaml when set, {bench_root}/analysis when not.
     """
-    root = getattr(cfg, "outputs_root", "") or str(REPO_ROOT / "outputs")
+    root = cfg.analysis_dir
     return os.path.join(root, name)
 
 

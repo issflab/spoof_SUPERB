@@ -213,3 +213,4 @@ docs/internal/
 CLEANUP.md
 
 /release/
+/bench/

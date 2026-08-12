@@ -262,7 +262,7 @@ def main(argv=None):
     args = ap.parse_args(argv)
 
     scores_root = args.scores_root or cfg.scores_root
-    root = getattr(cfg, "outputs_root", "") or str(REPO_ROOT / "outputs")
+    root = cfg.analysis_dir
     out_dir = Path(args.out_dir or os.path.join(root, "degradation_matched"))
     out_dir.mkdir(parents=True, exist_ok=True)
 

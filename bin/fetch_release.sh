@@ -3,9 +3,12 @@
 # Fetch the published release -- score files and detector checkpoints -- into
 # one directory.
 #
-#   DEST/
+#   {bench_root}/
 #     scores/   the raw score files, in the layout scores_root expects
 #     models/   the downstream detector weights
+#
+# The other two directories under bench_root, analysis/ and verification/, are
+# generated locally; only these two halves are downloaded.
 #
 # Everything is verified on arrival: score files against the sha256 in
 # reference/manifest.json, checkpoints against the SHA256SUMS published beside
@@ -23,9 +26,9 @@ source "$(dirname "${BASH_SOURCE[0]}")/_common.sh"
 # ---------------------------------------------------------------- SETTINGS --
 
 # Where to put everything. The two subdirectories are created inside it.
-# Defaults to release_root in configs/paths.yaml (RELEASE_DIR below), which
-# falls back to the repo's own release/ when that is unset.
-DEST="$RELEASE_DIR"
+# Defaults to bench_root in configs/paths.yaml, which falls back to the
+# repo's own bench/ when that is unset.
+DEST="$BENCH_DIR"
 
 # What to fetch: "all", "scores" or "models".
 WHAT="all"

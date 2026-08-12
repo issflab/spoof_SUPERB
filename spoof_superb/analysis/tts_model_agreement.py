@@ -27,13 +27,13 @@ Mean column and the Mean averages the models away.
    LLM-backbone systems, where codec vocoders are concentrated, to see how much
    of the difference is the vocoder and how much is the backbone that feeds it.
 
-Reads `{outputs_root}/tts/`: `eer_by_tts_system.csv` (all 19 models x 91
+Reads `{analysis_root}/tts/`: `eer_by_tts_system.csv` (all 19 models x 91
 systems, unclipped), `eer_by_tts_system_ranked.csv` for the `Mean (all 19)`
 column, `eer_by_vocoder_family_ranked.csv`, and the vocoder/architecture
 assignment in `analysis/mlaad_v10_tts_architecture_groups.csv`. Recomputes no
 EER.
 
-Writes `{outputs_root}/tts/model_agreement.{csv,md}`.
+Writes `{analysis_root}/tts/model_agreement.{csv,md}`.
 """
 
 import argparse
@@ -121,7 +121,7 @@ def main(argv=None):
     ap.add_argument("--out_dir", default=None)
     args = ap.parse_args(argv)
 
-    root = getattr(cfg, "outputs_root", "") or str(REPO_ROOT / "outputs")
+    root = cfg.analysis_dir
     in_dir = Path(args.in_dir or os.path.join(root, "tts"))
     out_dir = Path(args.out_dir or in_dir)
     out_dir.mkdir(parents=True, exist_ok=True)

@@ -20,16 +20,25 @@
 # Expected sub-directory layout is documented in docs/04-datasets.md.
 data_root: /data/Data
 
-# --- where the published release is downloaded ------------------------------
-# bin/fetch_release.sh puts everything it downloads under here:
+# --- the benchmark's data root ----------------------------------------------
+# Everything the benchmark reads and writes that is not a corpus and not source
+# lives under here:
 #
-#     {release_root}/scores/   the published score files (~8 GB)
-#     {release_root}/models/   the published detector checkpoints (19 MB)
+#     {bench_root}/scores/         raw/  views/  _runs/        <- scores_root
+#     {bench_root}/models/         the published checkpoints
+#     {bench_root}/analysis/       main_results/ degradation/ tts/ ...
+#     {bench_root}/verification/   analysis/  scores/
 #
-# Leave empty to use the repo's own release/ directory. Point it at a disk with
-# room; downloading into the repo is fine for a quick test but the score files
-# are large.
-release_root: /data/ssl_anti_spoofing/release
+# Only scores/raw/ and models/ are downloaded (bin/fetch_release.sh, ~8 GB and
+# 19 MB). Everything else is generated locally and can be rebuilt from them, so
+# if the disk fills up those are the two to keep.
+#
+# scores_root, analysis_root and verification_root each follow this when left
+# empty or deleted, so this is normally the only path you set. An explicit
+# value always wins.
+#
+# Leave empty to use the repo's own bench/ directory.
+bench_root: /data/ssl_anti_spoofing/release
 
 # --- where score files are read from and written to -------------------------
 # Reproducing the published tables reads from here.
@@ -37,16 +46,17 @@ release_root: /data/ssl_anti_spoofing/release
 # Leave this EMPTY to read whatever bin/fetch_release.sh downloaded, i.e.
 # {release_root}/scores -- one setting instead of two. Set it explicitly to
 # read a tree you built yourself, which is what the line below does.
-scores_root: /data/ssl_anti_spoofing/spoof_superb_score_files
+# scores_root: /data/ssl_anti_spoofing/spoof_superb_score_files
 
 # --- where trained checkpoints live -----------------------------------------
 # models_root holds one directory per SSL model, each containing swa.pth,
 # named "{linear_head_prefix}{ssl_model}".
-models_root: /data/ssl_anti_spoofing/asd_superb_models/linear_head_models
-linear_head_prefix: model_weighted_CCE_50_64_linear_head_ASV19_
+
+# models_root: /data/ssl_anti_spoofing/asd_superb_models/linear_head_models
+# linear_head_prefix: model_weighted_CCE_50_64_linear_head_ASV19_
 
 # aasist_raw and lfcc_gmm checkpoints.
-baseline_models_root: /data/ssl_anti_spoofing/asd_superb_models/baselines
+# baseline_models_root: /data/ssl_anti_spoofing/asd_superb_models/baselines
 #
 # Note that models_root is the TRAINING layout: one directory per model, each
 # holding swa.pth. The downloaded checkpoints are flat {slug}.pth files under
@@ -70,7 +80,10 @@ dev_protocol: ASVspoof2019.LA.cm.dev.trl.txt
 # Leave unset (or empty) to use the repo's own outputs/ directory.
 # --out_dir on any analysis overrides it.
 
-outputs_root: ./spoof_superb_outputs
+# Where the analyses write, and where verification writes. Both follow
+# bench_root when left empty. Set either to send that output elsewhere.
+analysis_root: ./spoof_superb_test_outputs
+#verification_root:
 
 # The SSL model whose published score file defines a dataset's trial list.
 reference_ssl: xls_r_300m

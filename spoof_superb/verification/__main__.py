@@ -34,8 +34,7 @@ DEFAULT_REFERENCE_ANALYSIS = REPO_ROOT / "reference" / "analysis"
 
 
 def _default_out(name):
-    root = getattr(cfg, "outputs_root", "") or str(REPO_ROOT / "outputs")
-    return Path(root) / "verification" / name
+    return Path(cfg.verification_dir) / name
 
 
 def _parse_rules(pairs):
@@ -69,7 +68,7 @@ def _add_scores_args(ap):
 def _add_analysis_args(ap):
     ap.add_argument("--candidate", default=None,
                     help="outputs root holding main_results/, degradation/, "
-                         "tts/ (default: the configured outputs_root)")
+                         "tts/ (default: the configured analysis_root)")
     ap.add_argument("--reference", default=str(DEFAULT_REFERENCE_ANALYSIS),
                     help="reference analysis tables")
     ap.add_argument("--tables", nargs="*", default=None,
@@ -118,8 +117,7 @@ def run_scores(args):
 
 
 def run_analysis(args):
-    candidate = args.candidate or (getattr(cfg, "outputs_root", "")
-                                   or str(REPO_ROOT / "outputs"))
+    candidate = args.candidate or (cfg.analysis_dir)
 
     if not Path(args.reference).is_dir():
         sys.exit(f"FATAL: no reference analysis tables at {args.reference}\n"
@@ -171,7 +169,7 @@ def main(argv=None):
     b = sub.add_parser("all", help="both levels; exits non-zero if either fails")
     _add_scores_args(b)
     b.add_argument("--analysis-candidate", default=None,
-                   help="outputs root (default: the configured outputs_root)")
+                   help="analysis output root (default: the configured analysis_root)")
     b.add_argument("--reference-analysis", default=str(DEFAULT_REFERENCE_ANALYSIS))
     b.add_argument("--tables", nargs="*", default=None)
 

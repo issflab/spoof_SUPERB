@@ -33,7 +33,7 @@ Environment variables
 ---------------------
     SPOOF_SUPERB_CONFIG      use a different YAML instead of configs/paths.yaml
     SPOOF_SUPERB_DATA_ROOT   SPOOF_SUPERB_SCORES_ROOT
-    SPOOF_SUPERB_RELEASE_DIR where bin/fetch_release.sh downloads to
+    SPOOF_SUPERB_BENCH_ROOT  the benchmark's data root
     SPOOF_SUPERB_MODELS_ROOT SPOOF_SUPERB_BASELINE_MODELS_ROOT
     SPOOF_SUPERB_PYTHON      interpreter the orchestrators launch
     SSL_MODEL_ARCH  SSL_SAVE_DIR  SSL_DATABASE_PATH  SSL_PROTOCOLS_PATH
@@ -80,35 +80,46 @@ class Config:
     # These were hardcoded across ~20 modules before the reorganisation.
     data_root: str = '/data/Data'
 
-    # Where `bin/fetch_release.sh` puts what it downloads. Two subdirectories
-    # are created inside it:
+    # The benchmark's own data root -- everything it reads and writes that is
+    # not a corpus and not source:
     #
-    #     {release_root}/scores/   the published score files
-    #     {release_root}/models/   the published detector checkpoints
+    #     {bench_root}/scores/         raw/, views/, _runs/
+    #     {bench_root}/models/         the published detector checkpoints
+    #     {bench_root}/analysis/       main_results/, degradation/, tts/, ...
+    #     {bench_root}/verification/   analysis/, scores/
     #
-    # Empty means the repo's own release/ directory. Point it at a disk with
-    # room -- the score files are about 8 GB.
+    # Only scores/raw/ and models/ come from the published release; everything
+    # else is generated locally and can be rebuilt from them.
     #
-    # Leaving `scores_root` empty makes it follow this automatically, so a
-    # fresh clone needs one setting rather than two. `models_root` deliberately
-    # does NOT follow it: that key means "one directory per model, each holding
-    # swa.pth", which is the training layout, whereas the download is flat
-    # `{slug}.pth` files. `release_models_dir` below is the download's shape.
-    release_root: str = ''
+    # Empty means the repo's own bench/ directory. Point it at a disk with room:
+    # the score files alone are about 8 GB.
+    #
+    # scores_root, analysis_root and verification_root each follow this when
+    # left empty, so a fresh clone sets one path rather than four. An explicit
+    # value always wins. `models_root` deliberately does NOT follow it: that key
+    # means "one directory per model, each holding swa.pth", the training
+    # layout, whereas the download is flat `{slug}.pth` files.
+    bench_root: str = ''
 
-    scores_root: str = '/data/ssl_anti_spoofing/asd_superb_score_files'
+    # Empty means {bench_root}/scores, so deleting this key -- or leaving it
+    # blank -- makes it follow the benchmark root rather than falling back to
+    # a path that only exists on the machine this was developed on.
+    scores_root: str = ''
     models_root: str = '/data/ssl_anti_spoofing/asd_superb_models/linear_head_models'
     baseline_models_root: str = '/data/ssl_anti_spoofing/asd_superb_models/baselines'
     save_dir: str = '/data/ssl_anti_spoofing/asd_superb/'
 
-    # Where analyses write their CSVs and figures. Empty means the repo's own
-    # outputs/ directory, which is what every analysis defaulted to before this
-    # existed -- so leaving it unset changes nothing. Set it in
-    # configs/paths.yaml to keep generated figures out of the working tree, or
-    # to write them somewhere shared.
+    # Where the analyses write their CSVs and figures, and where verification
+    # writes its reports. Empty means {bench_root}/analysis and
+    # {bench_root}/verification.
     #
-    # Each analysis still takes --out_dir, which wins over this.
-    outputs_root: str = ''
+    # Each analysis still takes --out_dir, and verification --out, which win
+    # over these.
+    #
+    # `outputs_root` is the former name of analysis_root and is still accepted
+    # in configs/paths.yaml so existing config files keep working.
+    analysis_root: str = ''
+    verification_root: str = ''
 
 
     linear_head_prefix: str = 'model_weighted_CCE_50_64_linear_head_ASV19_'
@@ -141,24 +152,39 @@ class Config:
         return os.path.join(self.scores_root, 'linear_head')
 
     @property
-    def release_dir(self) -> str:
-        """Where the download lands. Falls back to the repo's own release/."""
+    def bench_dir(self) -> str:
+        """The benchmark's data root. Falls back to the repo's own bench/."""
         from spoof_superb import REPO_ROOT
-        return self.release_root or str(REPO_ROOT / 'release')
+        return self.bench_root or str(REPO_ROOT / 'bench')
 
     @property
-    def release_scores_dir(self) -> str:
-        """The scores half of the download. Valid as a ``scores_root``."""
-        return os.path.join(self.release_dir, 'scores')
+    def bench_scores_dir(self) -> str:
+        """The scores tree. Valid as a ``scores_root``."""
+        return os.path.join(self.bench_dir, 'scores')
 
     @property
-    def release_models_dir(self) -> str:
-        """The checkpoints half: flat ``{slug}.pth``, plus ``non_ssl/``.
+    def bench_models_dir(self) -> str:
+        """The published checkpoints: flat ``{slug}.pth``, plus ``non_ssl/``.
 
         Not interchangeable with ``models_root``, which is the training layout
         of one directory per model containing ``swa.pth``.
         """
-        return os.path.join(self.release_dir, 'models')
+        return os.path.join(self.bench_dir, 'models')
+
+    @property
+    def analysis_dir(self) -> str:
+        """Where the analyses write. The one place this is decided."""
+        return self.analysis_root or os.path.join(self.bench_dir, 'analysis')
+
+    @property
+    def verification_dir(self) -> str:
+        """Where verification writes. A sibling of analysis, not a child.
+
+        Verification answers a different question from the analyses -- does the
+        result still match ``reference/`` -- and a reader looking for that
+        answer should not have to know it lives inside the analysis output.
+        """
+        return self.verification_root or os.path.join(self.bench_dir, 'verification')
 
     def prepare_dirs(self):
         """Create the output directories. Call explicitly; never on import."""
@@ -181,7 +207,9 @@ _ENV_MAP = {
     'protocols_path': 'SSL_PROTOCOLS_PATH',
     'save_dir': 'SSL_SAVE_DIR',
     'data_root': 'SPOOF_SUPERB_DATA_ROOT',
-    'release_root': 'SPOOF_SUPERB_RELEASE_DIR',
+    'bench_root': 'SPOOF_SUPERB_BENCH_ROOT',
+    'analysis_root': 'SPOOF_SUPERB_ANALYSIS_ROOT',
+    'verification_root': 'SPOOF_SUPERB_VERIFICATION_ROOT',
     'scores_root': 'SPOOF_SUPERB_SCORES_ROOT',
     'models_root': 'SPOOF_SUPERB_MODELS_ROOT',
     'baseline_models_root': 'SPOOF_SUPERB_BASELINE_MODELS_ROOT',
@@ -203,7 +231,10 @@ def _apply_yaml(config, path):
         return
 
     known = {f.name for f in fields(config)}
+    # Former names, still accepted so existing config files keep working.
+    aliases = {"outputs_root": "analysis_root", "release_root": "bench_root"}
     for key, value in data.items():
+        key = aliases.get(key, key)
         if key in known:
             setattr(config, key, value)
         else:
@@ -234,11 +265,11 @@ def load() -> Config:
         if value:
             setattr(config, field_name, value)
 
-    # An empty scores_root means "wherever the release was downloaded", so a
-    # fresh clone needs one setting instead of two. An explicit value always
-    # wins, which keeps every existing config working unchanged.
+    # An empty scores_root means "under the benchmark root", so a fresh clone
+    # needs one setting instead of several. An explicit value always wins,
+    # which keeps every existing config working unchanged.
     if not config.scores_root:
-        config.scores_root = config.release_scores_dir
+        config.scores_root = config.bench_scores_dir
 
     return config
 

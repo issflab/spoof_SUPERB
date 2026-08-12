@@ -65,10 +65,13 @@ bin/fetch_release.sh             # everything, into ./release
 ```
 
 ```
-release/
+{bench_root}/
   scores/   277 score files, ~8 GB, laid out exactly as scores_root expects
   models/   the 19 SSL detectors and the 2 reference systems, 19 MB
 ```
+
+`bench_root` in `configs/paths.yaml` decides where that is; the analyses and
+verification write their own directories alongside these two.
 
 Score files are checked against the sha256 in `reference/manifest.json`,
 checkpoints against the `SHA256SUMS` published beside them. Anything already
@@ -81,10 +84,11 @@ megabyte, not a gigabyte:
 ```bash
 bin/fetch_release.sh --models                              # weights only
 bin/fetch_release.sh --scores --dataset wild --model xls_r_300m
-bin/fetch_release.sh --dest /data/release                  # somewhere else
+bin/fetch_release.sh --dest /data/elsewhere                 # override bench_root
 ```
 
-Then point `scores_root` in `configs/paths.yaml` at `release/scores`.
+`scores_root` follows `bench_root` on its own, so there is nothing further
+to set unless you want to read a tree you built yourself.
 
 - Score files: https://huggingface.co/datasets/issf/spoof-superb-scores
 - Checkpoints: https://huggingface.co/issf/spoof-superb-models

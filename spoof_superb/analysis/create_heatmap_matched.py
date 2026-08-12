@@ -2,7 +2,7 @@
 
     python -m spoof_superb.analysis.create_heatmap_matched
 
-Reads `{outputs_root}/degradation_matched/{eer_matrix,eer_sd}.csv` and writes
+Reads `{analysis_root}/degradation_matched/{eer_matrix,eer_sd}.csv` and writes
 the two figures beside them. `create_heatmap.py` is left alone: it draws the
 published five-column figures and is what regenerates them.
 
@@ -205,7 +205,7 @@ def main(argv=None):
     ap.add_argument("--out_dir", default=None)
     args = ap.parse_args(argv)
 
-    root = getattr(cfg, "outputs_root", "") or str(REPO_ROOT / "outputs")
+    root = cfg.analysis_dir
     in_dir = Path(args.in_dir or os.path.join(root, "degradation_matched"))
     out_dir = Path(args.out_dir or in_dir)
     out_dir.mkdir(parents=True, exist_ok=True)

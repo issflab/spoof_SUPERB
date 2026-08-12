@@ -125,9 +125,9 @@ def _eer(bonafide, spoof, group, model):
 def default_out_dir(name):
     """Where an analysis writes, unless --out_dir says otherwise.
 
-    `outputs_root` in configs/paths.yaml when set, the repo's outputs/ when not.
+    `analysis_root` in configs/paths.yaml when set, {bench_root}/analysis when not.
     """
-    root = getattr(cfg, "outputs_root", "") or str(REPO_ROOT / "outputs")
+    root = cfg.analysis_dir
     return os.path.join(root, name)
 
 
@@ -136,7 +136,7 @@ def main(argv=None):
         prog="python -m spoof_superb.analysis.tts_systems",
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--out_dir", default=None,
-                    help="default: outputs_root/tts, or the repo's outputs/tts")
+                    help="default: analysis_root/tts")
     ap.add_argument("--scores_root", default=None)
     ap.add_argument("--out_root", default=None,
                     help="where views/ is written (default: --scores_root)")

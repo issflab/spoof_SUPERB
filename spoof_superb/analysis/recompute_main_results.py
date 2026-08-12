@@ -375,16 +375,16 @@ def write_table_csv(results, bold, path):
 def default_out_dir(name):
     """Where an analysis writes, unless --out_dir says otherwise.
 
-    `outputs_root` in configs/paths.yaml when set, the repo's outputs/ when not.
+    `analysis_root` in configs/paths.yaml when set, {bench_root}/analysiss/ when not.
     """
-    root = getattr(cfg, "outputs_root", "") or str(REPO_ROOT / "outputs")
+    root = cfg.analysis_dir
     return os.path.join(root, name)
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out_dir", default=None,
-                    help="default: outputs_root/main_results, or the repo's outputs/")
+                    help="default: analysis_root/main_results, or the repo's outputs/")
     ap.add_argument("--scores_root", default=None,
                     help="score tree to read (default: the configured scores_root)")
     ap.add_argument("--roster", default="paper", choices=("paper", "baseline"),

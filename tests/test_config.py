@@ -116,43 +116,66 @@ if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-v"]))
 
 
-# --- the release root -------------------------------------------------------
-# bin/fetch_release.sh downloads into one directory with scores/ and models/
-# inside it. These pin the two things that arrangement promises: the halves are
-# derived from the root, and an unset scores_root follows the download rather
-# than making the user set the same path twice.
+# --- the benchmark root -----------------------------------------------------
+# One root holds everything the benchmark reads and writes that is not a corpus
+# and not source. These pin what that arrangement promises: the four
+# subdirectories derive from the root, verification is a SIBLING of analysis
+# rather than a child, and a key left out follows the root instead of falling
+# back to a path that only exists on one machine.
 
-def test_release_dirs_derive_from_the_root():
+def test_bench_subdirs_derive_from_the_root():
     from spoof_superb.config import Config
-    c = Config()
-    c.release_root = "/data/release"
-    assert c.release_dir == "/data/release"
-    assert c.release_scores_dir == "/data/release/scores"
-    assert c.release_models_dir == "/data/release/models"
+    c = Config(); c.bench_root = "/data/bench"
+    assert c.bench_dir == "/data/bench"
+    assert c.bench_scores_dir == "/data/bench/scores"
+    assert c.bench_models_dir == "/data/bench/models"
+    assert c.analysis_dir == "/data/bench/analysis"
+    assert c.verification_dir == "/data/bench/verification"
 
 
-def test_unset_release_root_falls_back_to_the_repo():
+def test_verification_is_a_sibling_of_analysis_not_a_child():
+    from spoof_superb.config import Config
+    c = Config(); c.bench_root = "/data/bench"
+    assert not c.verification_dir.startswith(c.analysis_dir + "/")
+
+
+def test_unset_bench_root_falls_back_to_the_repo():
     from spoof_superb import REPO_ROOT
     from spoof_superb.config import Config
-    c = Config()
-    c.release_root = ""
-    assert c.release_dir == str(REPO_ROOT / "release")
+    c = Config(); c.bench_root = ""
+    assert c.bench_dir == str(REPO_ROOT / "bench")
 
 
-def test_empty_scores_root_follows_the_release(tmp_path, monkeypatch):
+def test_absent_scores_root_follows_the_bench_root(tmp_path, monkeypatch):
+    """Deleting the key must follow bench_root, not a hardcoded /data path."""
     import spoof_superb.config as config_module
-    yaml_file = tmp_path / "paths.yaml"
-    yaml_file.write_text("release_root: /data/release\nscores_root:\n")
-    monkeypatch.setenv("SPOOF_SUPERB_CONFIG", str(yaml_file))
+    f = tmp_path / "paths.yaml"
+    f.write_text("bench_root: /data/bench\n")          # scores_root absent entirely
+    monkeypatch.setenv("SPOOF_SUPERB_CONFIG", str(f))
     monkeypatch.delenv("SPOOF_SUPERB_SCORES_ROOT", raising=False)
-    assert config_module.load().scores_root == "/data/release/scores"
+    assert config_module.load().scores_root == "/data/bench/scores"
 
 
 def test_explicit_scores_root_is_not_overridden(tmp_path, monkeypatch):
     """A tree you built yourself must not be redirected at the download."""
     import spoof_superb.config as config_module
-    yaml_file = tmp_path / "paths.yaml"
-    yaml_file.write_text("release_root: /data/release\nscores_root: /somewhere/else\n")
-    monkeypatch.setenv("SPOOF_SUPERB_CONFIG", str(yaml_file))
+    f = tmp_path / "paths.yaml"
+    f.write_text("bench_root: /data/bench\nscores_root: /somewhere/else\n")
+    monkeypatch.setenv("SPOOF_SUPERB_CONFIG", str(f))
     monkeypatch.delenv("SPOOF_SUPERB_SCORES_ROOT", raising=False)
     assert config_module.load().scores_root == "/somewhere/else"
+
+
+def test_former_key_names_still_work(tmp_path, monkeypatch):
+    """outputs_root and release_root are the old names; configs using them must
+    keep working rather than being silently ignored."""
+    import spoof_superb.config as config_module
+    f = tmp_path / "paths.yaml"
+    f.write_text("release_root: /data/old\noutputs_root: /data/old_outputs\n")
+    monkeypatch.setenv("SPOOF_SUPERB_CONFIG", str(f))
+    for v in ("SPOOF_SUPERB_SCORES_ROOT", "SPOOF_SUPERB_BENCH_ROOT",
+              "SPOOF_SUPERB_ANALYSIS_ROOT"):
+        monkeypatch.delenv(v, raising=False)
+    c = config_module.load()
+    assert c.bench_root == "/data/old"
+    assert c.analysis_dir == "/data/old_outputs"

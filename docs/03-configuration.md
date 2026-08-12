@@ -1,29 +1,58 @@
 # 3. Configuration
 
 
-## Where the download goes
+## bench_root: the benchmark's data root
 
-`release_root` is the one setting that controls it. `bin/fetch_release.sh`
-creates two subdirectories inside it:
+Everything the benchmark reads and writes that is not a corpus and not source
+lives under one root:
 
 ```
-{release_root}/scores/   the published score files, ~8 GB
-{release_root}/models/   the published detector checkpoints, 19 MB
+{bench_root}/
+  scores/         raw/  views/  _runs/        <- this is scores_root
+  models/         the published checkpoints
+  analysis/       main_results/  degradation/  degradation_matched/  tts/
+  verification/   analysis/  scores/
 ```
 
-Leave it empty to use the repo's own `release/`. Point it at a disk with room
-otherwise; downloading into the repo is fine for a quick test but the score
-files are large.
+`scores_root`, `analysis_root` and `verification_root` each follow `bench_root`
+when left empty or deleted, so this is normally the only path you set. An
+explicit value always wins, so you can point `scores_root` at a tree you built
+yourself while the rest still follows the root.
 
-**Leave `scores_root` empty and it follows the download**, so a fresh clone
-needs one path rather than two. Set it explicitly to read a tree you built
-yourself; an explicit value always wins.
+Leave `bench_root` empty to use the repo's own `bench/`.
 
-`models_root` deliberately does *not* follow `release_root`. That key means the
-training layout -- one directory per model, each holding `swa.pth` -- while the
-download is flat `{slug}.pth` files. They are different shapes, so they stay
-different settings. Pass a downloaded checkpoint to `bin/score.sh` through
-`MODEL_PATH`.
+### What is downloaded and what is generated
+
+Only two of the four subtrees come from the published release:
+
+| Path | Origin | If you delete it |
+|---|---|---|
+| `scores/raw/` | downloaded, checksummed | re-fetch, ~8 GB |
+| `models/` | downloaded, checksummed | re-fetch, 19 MB |
+| `scores/views/`, `scores/_runs/` | generated | regenerate by re-running |
+| `analysis/`, `verification/` | generated | regenerate, minutes |
+
+When the disk fills up, the bottom two rows are the ones to clear.
+
+### Why verification is a sibling, not a child
+
+Verification answers a different question from the analyses -- *does the result
+still match `reference/`?* -- and someone looking for that answer should not
+have to know it lives inside the analysis output. It used to be written to
+`{outputs_root}/verification/`.
+
+### Why models_root does not follow bench_root
+
+`models_root` means the training layout: one directory per model, each holding
+`swa.pth`. The downloaded checkpoints are flat `{slug}.pth` files. Different
+shapes, so different settings -- pass a downloaded checkpoint to `bin/score.sh`
+through `MODEL_PATH`.
+
+### Former names
+
+`release_root` and `outputs_root` are the previous names of `bench_root` and
+`analysis_root`. Both are still accepted in `configs/paths.yaml`, so an older
+config file keeps working.
 
 
 ## There is one settings file

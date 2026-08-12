@@ -29,7 +29,8 @@ eval "$("$PY" - <<'PYEOF'
 from spoof_superb.config import cfg
 for name in ("data_root", "scores_root", "models_root", "baseline_models_root",
              "save_dir", "linear_head_prefix", "reference_ssl",
-             "release_dir", "release_scores_dir", "release_models_dir"):
+             "bench_dir", "bench_scores_dir", "bench_models_dir",
+             "analysis_dir", "verification_dir"):
     print(f'{name.upper()}="{getattr(cfg, name)}"')
 PYEOF
 )"

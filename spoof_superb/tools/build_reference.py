@@ -57,7 +57,7 @@ def main(argv=None):
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--from", dest="src", default=None,
                     help="outputs root holding main_results/, degradation/, "
-                         "tts/ (default: the configured outputs_root)")
+                         "tts/ (default: the configured analysis_root)")
     ap.add_argument("--out", default=str(DEFAULT_OUT))
     ap.add_argument("--scores_root", default=None,
                     help="recorded as the provenance of these tables "
@@ -67,8 +67,7 @@ def main(argv=None):
     ap.add_argument("--dry-run", dest="dry_run", action="store_true")
     args = ap.parse_args(argv)
 
-    src = Path(args.src or (getattr(cfg, "outputs_root", "")
-                            or str(REPO_ROOT / "outputs")))
+    src = Path(args.src or (cfg.analysis_dir))
     out = Path(args.out)
 
     found, missing = [], []

@@ -2,7 +2,7 @@
 
     python -m spoof_superb.analysis.degradation_appendix
 
-Reads `{outputs_root}/degradation_matched/` and writes three `.tex` fragments
+Reads `{analysis_root}/degradation_matched/` and writes three `.tex` fragments
 beside it. They are pasted into access.tex, not `\\input` from it, so the paper
 carries its own copy; regenerating here does not update the paper until they
 are re-inlined. Table floats must sit at top level in access.tex and never
@@ -309,7 +309,7 @@ def main(argv=None):
     ap.add_argument("--in_dir", default=None)
     args = ap.parse_args(argv)
 
-    root = getattr(cfg, "outputs_root", "") or str(REPO_ROOT / "outputs")
+    root = cfg.analysis_dir
     d = Path(args.in_dir or os.path.join(root, "degradation_matched"))
 
     per_variant = list(csv.DictReader(open(d / "per_variant_eer.csv")))
