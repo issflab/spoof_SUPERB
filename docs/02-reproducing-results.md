@@ -4,6 +4,32 @@
 main tables is recomputed from published score files. You need no GPU, no model
 checkpoints and no audio corpora -- only the score files.
 
+## Getting the published files
+
+`bin/fetch_release.sh` downloads both halves of the release into one directory:
+
+```
+release/
+  scores/   raw score files, in the layout scores_root expects
+  models/   downstream detector weights
+```
+
+```bash
+bin/fetch_release.sh                      # everything, ~8 GB of scores + 19 MB of weights
+bin/fetch_release.sh --list               # show what would be fetched, fetch nothing
+bin/fetch_release.sh --models             # weights only
+bin/fetch_release.sh --scores --dataset wild --model xls_r_300m
+bin/fetch_release.sh --dest /data/release # somewhere other than ./release
+```
+
+Every file is checked against a sha256 on arrival: score files against
+`reference/manifest.json`, checkpoints against the `SHA256SUMS` published beside
+them. Files that are already present and already verify are skipped, so the
+script is safe to re-run and safe to interrupt. It needs no `huggingface_hub`
+install; both repositories are public and are read over plain HTTPS.
+
+Afterwards, point `scores_root` in `configs/paths.yaml` at `release/scores`.
+
 ## What a score file is
 
 Every model-on-dataset run produces one plain-text file, four space-separated
