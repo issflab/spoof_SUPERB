@@ -1,18 +1,34 @@
 # humanpending.md
 
-**Status 2026-08-04: 5 items genuinely open, everything else closed.**
+**Status 2026-08-12: 0 items open. All five remaining items closed.**
 
-Still needing a human decision:
-
-| # | Item | Why it is gated |
+| # | Item | Resolution |
 |---|---|---|
-| 8 | `best_val_eer = 1` for the SSL architectures | a **live bug**: a model whose dev EER never drops below 1% finishes training and saves nothing. Fixing it means re-running any SSL model that hit it |
-| RP-1 | pin one `soxr` version | resampled columns were produced by two resamplers; deciding whether to re-score is a provenance call |
-| RP-2 | `create_combined_mlaad_meta.py` quoting bug | fixing it changes downstream results, so it wants its own before/after |
-| RP-3 | confirm `Filtering` stays skipped | excluded from the published ASVLD column; confirm that is intended |
-| RP-5 | dispose of the legacy score tree | 49 GB, ~19 GB duplicated. v3 is authoritative now, so this is deletion, not reorganisation |
+| 8 | `best_val_eer = 1` for the SSL architectures | **Fixed 2026-08-12**: initialised to `float('inf')` for every architecture, so the first epoch always saves. **No published result is affected** -- see the audit below. |
+| RP-1 | pin one `soxr` version | **Closed 2026-08-12**: both conda environments (`ASD_SUPERB`, `SER`) now report `soxr 0.5.0.post1`. The divergence is gone, so there is nothing to pin and no re-scoring question. |
+| RP-2 | `create_combined_mlaad_meta.py` quoting bug | **Won't fix** (author decision, 2026-08-12). Fixing it would change downstream results; the published numbers stand as computed. |
+| RP-3 | confirm `Filtering` stays skipped | **Confirmed** (author decision, 2026-08-12). `Filtering` remains excluded from the published ASVLD column. |
+| RP-5 | dispose of the legacy score tree | **Owner-handled.** Being carried out by the author directly; not actioned from here. The tree is 49 GB and parts of it are owned by root or by `adupa`. |
 
-Item 8 is the only one that is a defect rather than a decision.
+## Item 8 audit -- were any published models affected?
+
+**No.** `swa.pth` is written only when `n_swa_update > 0`, and `n_swa_update`
+increments only inside the same `if dev_eer < best_val_eer` block that writes
+`epoch_*.pth`. A directory holding `swa.pth` therefore proves at least one epoch
+passed the check and saved as intended.
+
+All 21 models in `spoof_superb/scoring/paper_roster.json` have `swa.pth` present
+under `/data/ssl_anti_spoofing/asd_superb_models`. None shows the bug's
+fingerprint of an empty checkpoint directory. No re-run is required and no
+printed number changes.
+
+Directories holding `swa.pth` but no `epoch_*.pth` reflect later cleanup of the
+per-epoch files, not a failure to save: the two are written together.
+
+Measured best dev EERs across the benchmark span 0.869 (HuBERT Large) to 45.448
+(FBANK), which is why the fix is `float('inf')` and not a finite threshold. A
+value of 10 would have silently dropped NPC (10.009), modified CPC (11.575) and
+FBANK (45.448).
 
 Everything below is kept as the record. Closed items say so and why.
 

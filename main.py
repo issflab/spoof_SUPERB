@@ -512,21 +512,19 @@ if __name__ == '__main__':
     os.path.join(str(metric_path), "dev_score.txt")
     # train vs eval
     if cfg.mode == 'train':
-        # BUG (pre-existing, left in place for the SSL architectures): this
-        # initial value is compared against calculate_EER(), which returns a
-        # PERCENTAGE (e.g. 24.53), not a fraction. With best_val_eer = 1 no
-        # checkpoint is written and no SWA update happens until dev EER drops
-        # below 1%, so a model that never gets there finishes 50 epochs and
-        # saves nothing at all -- neither epoch_*.pth nor swa.pth.
+        # Initialised to +inf so the first epoch always improves on it and the
+        # first checkpoint is always written. calculate_EER() returns a
+        # PERCENTAGE (e.g. 24.53), not a fraction, so any finite initial value
+        # is a silent filter rather than an initialiser: the previous value of 1
+        # meant a model whose dev EER never fell below 1% finished all its
+        # epochs and saved nothing -- no epoch_*.pth, and no swa.pth either,
+        # since n_swa_update never left 0.
         #
-        # Only the non-SSL baselines are corrected here, to honour the
-        # "do not change existing SSL behaviour" constraint. This needs a
-        # global fix (and probably a re-run of any SSL model whose dev EER
-        # never went below 1%) -- see docs/internal/humanpending.md.
-        if cfg.model_arch in ('aasist_raw', 'lfcc_gmm'):
-            best_val_eer = float('inf')
-        else:
-            best_val_eer = 1
+        # Measured dev EERs across the benchmark span 0.869 to 45.448, so any
+        # threshold in that range silently drops models: 10 would have lost NPC
+        # (10.009), modified CPC (11.575) and FBANK (45.448). See
+        # docs/internal/humanpending.md item 8.
+        best_val_eer = float('inf')
         n_swa_update = 0
 
         for epoch in range(args.num_epochs):
