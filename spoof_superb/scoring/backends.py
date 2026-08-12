@@ -91,6 +91,57 @@ def _run_torch_loop(model, items, device, batch_size, num_workers, amp, desc):
     return out, n_bad
 
 
+#: The tensors the linear-head recipe actually trains. Everything else in a
+#: full checkpoint is the frozen s3prl upstream, which the model has already
+#: loaded by the time we get here.
+_TRAINED_KEYS = (
+    "ssl_model.featurizer.weights",
+    "projector.weight",
+    "projector.bias",
+    "post_net.linear.weight",
+    "post_net.linear.bias",
+)
+
+
+def _load_linear_head_state(model, model_path, device):
+    """Load either a full checkpoint or a downstream-only one.
+
+    Two checkpoint shapes exist. ``swa.pth`` as written by training is the whole
+    UtteranceLevel module, frozen upstream included -- roughly 1.2 GB for a large
+    encoder, of which about 1 MB is trained. The published checkpoints carry only
+    the trained tensors, because the upstream is frozen and s3prl already serves
+    it byte-identically.
+
+    Both are accepted, and neither is accepted loosely: a downstream-only file
+    must contain every trained tensor and nothing the model does not expect, and
+    the only keys it is allowed to leave unfilled are upstream ones the frozen
+    encoder has already supplied.
+    """
+    sd = torch.load(model_path, map_location=device)
+    if any(k.startswith("ssl_model.model.") for k in sd):
+        model.load_state_dict(sd, strict=True)
+        return "full"
+
+    missing_trained = [k for k in _TRAINED_KEYS if k not in sd]
+    if missing_trained:
+        raise RuntimeError(
+            f"{model_path} looks like a downstream-only checkpoint but is missing "
+            f"trained tensors: {missing_trained}"
+        )
+    result = model.load_state_dict(sd, strict=False)
+    if result.unexpected_keys:
+        raise RuntimeError(
+            f"{model_path} carries tensors this model does not define: "
+            f"{result.unexpected_keys}"
+        )
+    left = [k for k in result.missing_keys if not k.startswith("ssl_model.model.")]
+    if left:
+        raise RuntimeError(
+            f"{model_path} left non-upstream tensors unfilled: {left}"
+        )
+    return "downstream-only"
+
+
 def score_linear_head(items, model_path, device, ssl_model,
                       batch_size=32, num_workers=6, amp=False):
     """The SSL linear head (UtteranceLevel) over an s3prl upstream.
@@ -103,8 +154,7 @@ def score_linear_head(items, model_path, device, ssl_model,
 
     args = SimpleNamespace(ssl_feature=ssl_model, ssl_model=ssl_model)
     model = LinearHead(args, device).to(device)
-    # swa.pth is a plain state_dict of the full UtteranceLevel module.
-    model.load_state_dict(torch.load(model_path, map_location=device), strict=True)
+    _load_linear_head_state(model, model_path, device)
     model.eval()
     print(f"  model loaded ({sum(p.numel() for p in model.parameters())} params) "
           f"<- {model_path}  amp={amp}", flush=True)
