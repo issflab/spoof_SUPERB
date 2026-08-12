@@ -16,9 +16,6 @@ Read these in order if you are new. Each one stands alone if you are not.
 | 10 | [Tests](10-testing.md) | you changed the code |
 | 11 | [Troubleshooting](11-troubleshooting.md) | something broke |
 
-Also [`internal/`](internal/) -- the design record behind these choices. Not
-needed to use the benchmark.
-
 ## The 60-second version
 
 ```bash

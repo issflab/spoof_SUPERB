@@ -99,7 +99,7 @@ class Config:
     # Interpreter the orchestrators launch scoring subprocesses with. Defaults
     # to the running one: four different absolute interpreter paths were
     # hardcoded across the old launchers, and two of them differed in soxr
-    # version -- librosa's resampler. See docs/internal/humanpending.md.
+    # version -- librosa's resampler.
     python: str = sys.executable
 
     # Which YAML actually supplied the values above. Set by load(); not a setting.

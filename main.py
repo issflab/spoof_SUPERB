@@ -522,8 +522,7 @@ if __name__ == '__main__':
         #
         # Measured dev EERs across the benchmark span 0.869 to 45.448, so any
         # threshold in that range silently drops models: 10 would have lost NPC
-        # (10.009), modified CPC (11.575) and FBANK (45.448). See
-        # docs/internal/humanpending.md item 8.
+        # (10.009), modified CPC (11.575) and FBANK (45.448).
         best_val_eer = float('inf')
         n_swa_update = 0
 

@@ -58,7 +58,8 @@ comparable to ours, record your `soxr` version:
 python -c "import soxr, librosa; print('soxr', soxr.__version__, 'librosa', librosa.__version__)"
 ```
 
-This is tracked as item RP-1 in `internal/humanpending.md`.
+Record these versions alongside any new results. Score files for datasets that
+get resampled to 16 kHz are not directly comparable across resampler versions.
 
 ## Next
 

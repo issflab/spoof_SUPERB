@@ -231,11 +231,6 @@ tests/                 contract tests, all on synthetic fixtures
 main.py                training entry point
 ```
 
-Also in the repo: `CLEANUP.md` (what is still to be trimmed before release) and
-[`docs/internal/`](docs/internal/) (the design record: gated decisions, the
-change log behind the current layout, and the audit it came from). Working
-documents, not user documentation.
-
 ---
 
 <details>

@@ -51,7 +51,7 @@ Nothing a user of this benchmark can obtain is in either: the published tree is
 v3, `reference/manifest.json` indexes it, and the score files are fetched
 already in this layout. The legacy tree was also established not to be
 authoritative -- two of its published columns do not regenerate from any score
-file in it (see `docs/internal/PLANNED_CHANGES.md`, P12) -- so the comparison
+file in it -- so the comparison
 those layouts existed to enable has been done, its answer recorded, and there is
 nothing further to learn by keeping the code that read them.
 

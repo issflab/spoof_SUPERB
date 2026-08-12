@@ -51,8 +51,6 @@ Score files produced before and after the change are directly comparable.
 
 ## Known open issues
 
-Tracked in `internal/humanpending.md`:
-
 * **RP-1** — Two environments on the original host disagreed on `soxr`
   (1.0.0 vs 0.5.0.post1), librosa's resampler. Existing score files for
   datasets that get resampled to 16 kHz were produced by both. New runs use one
