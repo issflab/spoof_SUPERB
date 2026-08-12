@@ -1,5 +1,31 @@
 # 3. Configuration
 
+
+## Where the download goes
+
+`release_root` is the one setting that controls it. `bin/fetch_release.sh`
+creates two subdirectories inside it:
+
+```
+{release_root}/scores/   the published score files, ~8 GB
+{release_root}/models/   the published detector checkpoints, 19 MB
+```
+
+Leave it empty to use the repo's own `release/`. Point it at a disk with room
+otherwise; downloading into the repo is fine for a quick test but the score
+files are large.
+
+**Leave `scores_root` empty and it follows the download**, so a fresh clone
+needs one path rather than two. Set it explicitly to read a tree you built
+yourself; an explicit value always wins.
+
+`models_root` deliberately does *not* follow `release_root`. That key means the
+training layout -- one directory per model, each holding `swa.pth` -- while the
+download is flat `{slug}.pth` files. They are different shapes, so they stay
+different settings. Pass a downloaded checkpoint to `bin/score.sh` through
+`MODEL_PATH`.
+
+
 ## There is one settings file
 
 ```

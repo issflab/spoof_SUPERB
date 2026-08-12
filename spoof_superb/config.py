@@ -33,6 +33,7 @@ Environment variables
 ---------------------
     SPOOF_SUPERB_CONFIG      use a different YAML instead of configs/paths.yaml
     SPOOF_SUPERB_DATA_ROOT   SPOOF_SUPERB_SCORES_ROOT
+    SPOOF_SUPERB_RELEASE_DIR where bin/fetch_release.sh downloads to
     SPOOF_SUPERB_MODELS_ROOT SPOOF_SUPERB_BASELINE_MODELS_ROOT
     SPOOF_SUPERB_PYTHON      interpreter the orchestrators launch
     SSL_MODEL_ARCH  SSL_SAVE_DIR  SSL_DATABASE_PATH  SSL_PROTOCOLS_PATH
@@ -78,6 +79,23 @@ class Config:
     # ---- shared roots ----------------------------------------------------
     # These were hardcoded across ~20 modules before the reorganisation.
     data_root: str = '/data/Data'
+
+    # Where `bin/fetch_release.sh` puts what it downloads. Two subdirectories
+    # are created inside it:
+    #
+    #     {release_root}/scores/   the published score files
+    #     {release_root}/models/   the published detector checkpoints
+    #
+    # Empty means the repo's own release/ directory. Point it at a disk with
+    # room -- the score files are about 8 GB.
+    #
+    # Leaving `scores_root` empty makes it follow this automatically, so a
+    # fresh clone needs one setting rather than two. `models_root` deliberately
+    # does NOT follow it: that key means "one directory per model, each holding
+    # swa.pth", which is the training layout, whereas the download is flat
+    # `{slug}.pth` files. `release_models_dir` below is the download's shape.
+    release_root: str = ''
+
     scores_root: str = '/data/ssl_anti_spoofing/asd_superb_score_files'
     models_root: str = '/data/ssl_anti_spoofing/asd_superb_models/linear_head_models'
     baseline_models_root: str = '/data/ssl_anti_spoofing/asd_superb_models/baselines'
@@ -122,6 +140,26 @@ class Config:
     def reference_dir(self) -> str:
         return os.path.join(self.scores_root, 'linear_head')
 
+    @property
+    def release_dir(self) -> str:
+        """Where the download lands. Falls back to the repo's own release/."""
+        from spoof_superb import REPO_ROOT
+        return self.release_root or str(REPO_ROOT / 'release')
+
+    @property
+    def release_scores_dir(self) -> str:
+        """The scores half of the download. Valid as a ``scores_root``."""
+        return os.path.join(self.release_dir, 'scores')
+
+    @property
+    def release_models_dir(self) -> str:
+        """The checkpoints half: flat ``{slug}.pth``, plus ``non_ssl/``.
+
+        Not interchangeable with ``models_root``, which is the training layout
+        of one directory per model containing ``swa.pth``.
+        """
+        return os.path.join(self.release_dir, 'models')
+
     def prepare_dirs(self):
         """Create the output directories. Call explicitly; never on import."""
         os.makedirs(self.save_dir, exist_ok=True)
@@ -143,6 +181,7 @@ _ENV_MAP = {
     'protocols_path': 'SSL_PROTOCOLS_PATH',
     'save_dir': 'SSL_SAVE_DIR',
     'data_root': 'SPOOF_SUPERB_DATA_ROOT',
+    'release_root': 'SPOOF_SUPERB_RELEASE_DIR',
     'scores_root': 'SPOOF_SUPERB_SCORES_ROOT',
     'models_root': 'SPOOF_SUPERB_MODELS_ROOT',
     'baseline_models_root': 'SPOOF_SUPERB_BASELINE_MODELS_ROOT',
@@ -194,6 +233,12 @@ def load() -> Config:
         value = os.getenv(env_name)
         if value:
             setattr(config, field_name, value)
+
+    # An empty scores_root means "wherever the release was downloaded", so a
+    # fresh clone needs one setting instead of two. An explicit value always
+    # wins, which keeps every existing config working unchanged.
+    if not config.scores_root:
+        config.scores_root = config.release_scores_dir
 
     return config
 

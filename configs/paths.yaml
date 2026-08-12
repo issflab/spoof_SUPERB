@@ -20,8 +20,23 @@
 # Expected sub-directory layout is documented in docs/04-datasets.md.
 data_root: /data/Data
 
+# --- where the published release is downloaded ------------------------------
+# bin/fetch_release.sh puts everything it downloads under here:
+#
+#     {release_root}/scores/   the published score files (~8 GB)
+#     {release_root}/models/   the published detector checkpoints (19 MB)
+#
+# Leave empty to use the repo's own release/ directory. Point it at a disk with
+# room; downloading into the repo is fine for a quick test but the score files
+# are large.
+release_root: /data/ssl_anti_spoofing/release
+
 # --- where score files are read from and written to -------------------------
 # Reproducing the published tables reads from here.
+#
+# Leave this EMPTY to read whatever bin/fetch_release.sh downloaded, i.e.
+# {release_root}/scores -- one setting instead of two. Set it explicitly to
+# read a tree you built yourself, which is what the line below does.
 scores_root: /data/ssl_anti_spoofing/spoof_superb_score_files
 
 # --- where trained checkpoints live -----------------------------------------
@@ -32,6 +47,11 @@ linear_head_prefix: model_weighted_CCE_50_64_linear_head_ASV19_
 
 # aasist_raw and lfcc_gmm checkpoints.
 baseline_models_root: /data/ssl_anti_spoofing/asd_superb_models/baselines
+#
+# Note that models_root is the TRAINING layout: one directory per model, each
+# holding swa.pth. The downloaded checkpoints are flat {slug}.pth files under
+# {release_root}/models, a different shape, so they are not the same setting.
+# Pass one to bin/score.sh with MODEL_PATH.
 
 # --- training ---------------------------------------------------------------
 # Where new training runs write checkpoints and logs.

@@ -114,3 +114,45 @@ def test_g7_unknown_key_is_reported_not_fatal(tmp_path, capsys):
 
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-v"]))
+
+
+# --- the release root -------------------------------------------------------
+# bin/fetch_release.sh downloads into one directory with scores/ and models/
+# inside it. These pin the two things that arrangement promises: the halves are
+# derived from the root, and an unset scores_root follows the download rather
+# than making the user set the same path twice.
+
+def test_release_dirs_derive_from_the_root():
+    from spoof_superb.config import Config
+    c = Config()
+    c.release_root = "/data/release"
+    assert c.release_dir == "/data/release"
+    assert c.release_scores_dir == "/data/release/scores"
+    assert c.release_models_dir == "/data/release/models"
+
+
+def test_unset_release_root_falls_back_to_the_repo():
+    from spoof_superb import REPO_ROOT
+    from spoof_superb.config import Config
+    c = Config()
+    c.release_root = ""
+    assert c.release_dir == str(REPO_ROOT / "release")
+
+
+def test_empty_scores_root_follows_the_release(tmp_path, monkeypatch):
+    import spoof_superb.config as config_module
+    yaml_file = tmp_path / "paths.yaml"
+    yaml_file.write_text("release_root: /data/release\nscores_root:\n")
+    monkeypatch.setenv("SPOOF_SUPERB_CONFIG", str(yaml_file))
+    monkeypatch.delenv("SPOOF_SUPERB_SCORES_ROOT", raising=False)
+    assert config_module.load().scores_root == "/data/release/scores"
+
+
+def test_explicit_scores_root_is_not_overridden(tmp_path, monkeypatch):
+    """A tree you built yourself must not be redirected at the download."""
+    import spoof_superb.config as config_module
+    yaml_file = tmp_path / "paths.yaml"
+    yaml_file.write_text("release_root: /data/release\nscores_root: /somewhere/else\n")
+    monkeypatch.setenv("SPOOF_SUPERB_CONFIG", str(yaml_file))
+    monkeypatch.delenv("SPOOF_SUPERB_SCORES_ROOT", raising=False)
+    assert config_module.load().scores_root == "/somewhere/else"

@@ -23,7 +23,9 @@ source "$(dirname "${BASH_SOURCE[0]}")/_common.sh"
 # ---------------------------------------------------------------- SETTINGS --
 
 # Where to put everything. The two subdirectories are created inside it.
-DEST="${SPOOF_SUPERB_RELEASE_DIR:-$REPO/release}"
+# Defaults to release_root in configs/paths.yaml (RELEASE_DIR below), which
+# falls back to the repo's own release/ when that is unset.
+DEST="$RELEASE_DIR"
 
 # What to fetch: "all", "scores" or "models".
 WHAT="all"
