@@ -207,3 +207,6 @@ model_*
 # The paper's display-name -> slug mapping. Source data that production code
 # reads, not an artefact -- the global *.json rule above would swallow it.
 !/spoof_superb/scoring/paper_roster.json
+
+# Internal design record: kept locally, not published.
+docs/internal/
