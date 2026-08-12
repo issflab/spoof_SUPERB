@@ -54,29 +54,44 @@ Details: [Installation](docs/01-installation.md) ·
 
 ## A. Reproduce the published results
 
-### A1. Get the score files
+### A1. Get the score files and the checkpoints
 
-They are **not in this repo** — 234 files, 6.5 GB. What *is* in the repo is
-`reference/manifest.json` (222 KB): every file's path, size, sha256, row and
-class counts, EER, and a digest of its trial list. Files are fetched
-individually, so checking one model on one dataset costs a megabyte rather than
-a gigabyte, and every download is verified against its hash.
+Neither is in this repo. Both are published, verified on download, and fetched
+by one script:
 
 ```bash
-export SPOOF_SUPERB_SCORES_URL=...   # see the note below
-bin/fetch_scores.sh --list           # what the manifest offers; fetches nothing
-bin/fetch_scores.sh                  # edit DATASET / MODEL at the top first
+bin/fetch_release.sh --list      # what would be fetched; fetches nothing
+bin/fetch_release.sh             # everything, into ./release
 ```
 
-Leave `DATASET` and `MODEL` empty in the script to fetch everything, which is
-what reproducing the full tables needs.
+```
+release/
+  scores/   277 score files, ~8 GB, laid out exactly as scores_root expects
+  models/   the 19 SSL detectors and the 2 reference systems, 19 MB
+```
 
-> **The archive URL is not published yet.** The score files are being uploaded
-> to Hugging Face; once they are, the URL will be recorded in the manifest and
-> `bin/fetch_scores.sh` will need no environment variable. Until then, set
-> `SPOOF_SUPERB_SCORES_URL` yourself.
+Score files are checked against the sha256 in `reference/manifest.json`,
+checkpoints against the `SHA256SUMS` published beside them. Anything already
+present that verifies is skipped, so the script is safe to re-run and safe to
+interrupt.
 
-Then point `scores_root` in `configs/paths.yaml` at wherever you put them.
+Fetch a subset when you only need one cell — one model on one dataset is about a
+megabyte, not a gigabyte:
+
+```bash
+bin/fetch_release.sh --models                              # weights only
+bin/fetch_release.sh --scores --dataset wild --model xls_r_300m
+bin/fetch_release.sh --dest /data/release                  # somewhere else
+```
+
+Then point `scores_root` in `configs/paths.yaml` at `release/scores`.
+
+- Score files: https://huggingface.co/datasets/issf/spoof-superb-scores
+- Checkpoints: https://huggingface.co/issf/spoof-superb-models
+
+The checkpoints carry only the trained tensors: the SSL upstream is frozen, so
+it is fetched from s3prl at run time rather than redistributed. `bin/score.sh`
+accepts them directly.
 
 ### A2. Confirm the setup — the main table
 
