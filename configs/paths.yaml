@@ -26,7 +26,7 @@ data_root: /data/Data
 #
 #     {bench_root}/scores/         raw/  views/  _runs/        <- scores_root
 #     {bench_root}/models/         checkpoints, in the training layout
-#     {bench_root}/analysis/       main_results/ degradation/ tts/ ...
+#     {bench_root}/analysis/       main_results/  degradation/  tts/
 #     {bench_root}/verification/   analysis/  scores/
 #
 # Only scores/raw/ and models/ are downloaded (bin/fetch_release.sh, ~8 GB and

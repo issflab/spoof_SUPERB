@@ -127,7 +127,7 @@ def main(argv=None):
         "```",
         "",
         "The score files behind them are indexed in `../manifest.json` with a "
-        "sha256 each, and fetched with `bin/fetch_scores.sh`.",
+        "sha256 each, and fetched with `bin/fetch_release.sh`.",
         "",
     ]
     if args.note:

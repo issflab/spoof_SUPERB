@@ -10,7 +10,7 @@ lives under one root:
 {bench_root}/
   scores/         raw/  views/  _runs/        <- this is scores_root
   models/         the published checkpoints
-  analysis/       main_results/  degradation/  degradation_matched/  tts/
+  analysis/       main_results/  degradation/  degradation/  tts/
   verification/   analysis/  scores/
 ```
 

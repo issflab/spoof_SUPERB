@@ -22,19 +22,22 @@ because an analysis produces more than one artifact.
 | Step | Modules, in order | Output directory |
 |---|---|---|
 | main results | `recompute_main_results` | `main_results/` |
-| acoustic degradation | `acoustic_degradation_matched`, then `create_heatmap_matched`, then `degradation_appendix` | `degradation_matched/` |
+| acoustic degradation | `acoustic_degradation`, then `create_heatmap`, then `degradation_appendix` | `degradation/` |
 | TTS systems | `tts_systems`, then `create_mlaad_tts_eer_timeline_figure`, then `tts_model_agreement` | `tts/` |
 
-### Degradation: matched only
+### Degradation: pools are matched
 
-`spoof_superb.analysis.acoustic_degradation` is superseded and nothing runs it.
-It substituted degraded partitions without holding the corpus mixture fixed, so
-its numbers mix the effect of the degradation with the change in mixture --
-re-mixing the clean partitions in the same proportions moves the pooled EER by
--18% to -44% on its own. The matched analysis holds composition fixed, degrades
-one corpus per cell, and reports nine cells instead of five conditions. Section
-4.4.2 reports that one. The old module is kept only so its numbers can be
-regenerated for comparison.
+`acoustic_degradation` holds pool composition and coverage fixed: exactly one
+corpus is degraded per cell, the other three stay at their clean Baseline
+partitions, and every corpus is weighted to contribute a quarter of the pooled
+EER. That is why it reports nine cells rather than five conditions -- codec and
+channel each appear in three corpora, and the versions those corpora carry are
+not equivalent.
+
+An earlier unmatched version substituted degraded partitions without holding the
+mixture fixed. It has been removed. Re-mixing the CLEAN partitions in its
+proportions, with no degradation applied at all, moved the pooled EER by -18% to
+-44%, which is the size of the artifact it reported as an effect.
 
 ### The appendix tables come in two forms
 

@@ -12,6 +12,10 @@
 # heatmaps, then the appendix tables; TTS writes the per-system tables, then
 # the timeline figure, then the model-agreement decomposition.
 #
+# The degradation analysis holds pool composition and coverage fixed. The
+# earlier unmatched version has been removed -- it reported an artifact of the
+# corpus mixture as an effect of the degradation.
+#
 # Only the last two build views. Main results reads the raw tree directly, so
 # there is nothing to group it by.
 #
@@ -28,8 +32,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/_common.sh"
 
 # Which analyses to run:  all | main | degradation | tts
 # Space-separated for a subset, e.g. WHICH="degradation tts".
-#
-# "degradation" runs the matched analysis and writes degradation_matched/.
+
 WHICH="all"
 
 # Where the tables and figures go. Each analysis writes a sub-directory under
@@ -78,9 +81,8 @@ esac
 TABLE_NAMES=""
 for s in $STEPS; do
     case "$s" in
-        main)        TABLE_NAMES="$TABLE_NAMES main_results" ;;
-        degradation) TABLE_NAMES="$TABLE_NAMES degradation_matched" ;;
-        *)           TABLE_NAMES="$TABLE_NAMES $s" ;;
+        main) TABLE_NAMES="$TABLE_NAMES main_results" ;;
+        *)    TABLE_NAMES="$TABLE_NAMES $s" ;;
     esac
 done
 TABLE_NAMES="${TABLE_NAMES# }"
@@ -149,17 +151,14 @@ for s in $STEPS; do
             spoof_superb.analysis.recompute_main_results main_results
         ;;
       degradation)
-        # The composition- and coverage-matched analysis. The earlier
-        # spoof_superb.analysis.acoustic_degradation is superseded: it
-        # substituted degraded partitions without holding the corpus mixture
-        # fixed, so its numbers mix the effect of the degradation with the
-        # change in mixture. Section 4.4.2 reports this one.
-        run "2/3  acoustic degradation, matched (Section 4.4.2)" \
-            spoof_superb.analysis.acoustic_degradation_matched degradation_matched
-        DEG_DIR="${OUT_ROOT:+$OUT_ROOT/}degradation_matched"
-        [ -n "$OUT_ROOT" ] || DEG_DIR="$ANALYSIS_DIR/degradation_matched"
-        run_plain "     heatmaps (Figures 1 and 2)" \
-            spoof_superb.analysis.create_heatmap_matched --in_dir "$DEG_DIR"
+        run "2/3  acoustic degradation (Section 4.4.2)" \
+            spoof_superb.analysis.acoustic_degradation degradation
+        DEG_DIR="${OUT_ROOT:+$OUT_ROOT/}degradation"
+        [ -n "$OUT_ROOT" ] || DEG_DIR="$ANALYSIS_DIR/degradation"
+        if [ "$FIGURES" = "yes" ]; then
+            run_plain "     heatmaps (Figures 1 and 2)" \
+                spoof_superb.analysis.create_heatmap --in_dir "$DEG_DIR"
+        fi
         run_plain "     appendix tables (Supplementary S1-S3)" \
             spoof_superb.analysis.degradation_appendix --in_dir "$DEG_DIR"
         ;;
