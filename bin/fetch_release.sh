@@ -74,12 +74,12 @@ MANIFEST="$REPO/reference/manifest.json"
 [ -f "$MANIFEST" ] || { echo "no manifest at $MANIFEST" >&2; exit 2; }
 
 exec "$PY" - "$MANIFEST" "$DEST" "$WHAT" "$DATASET" "$MODEL" "$FORCE" \
-             "$SCORES_REPO" "$MODELS_REPO" "$@" <<'PYEOF'
+             "$SCORES_REPO" "$MODELS_REPO" "$BENCH_DIR" "$SCORES_ROOT" "$@" <<'PYEOF'
 import hashlib, json, os, sys, urllib.request, urllib.error
 
 (manifest_path, dest, what, want_ds, want_model, force,
- scores_repo, models_repo) = sys.argv[1:9]
-flags = sys.argv[9:]
+ scores_repo, models_repo, bench_dir, scores_root) = sys.argv[1:11]
+flags = sys.argv[11:]
 listing = "--list" in flags
 
 scores_dir = os.path.join(dest, "scores")
@@ -204,8 +204,20 @@ if what in ("all", "models"):
 print(f"\n  fetched {counts['ok']}, already present {counts['skipped']}, "
       f"failed {counts['failed']}")
 if counts["ok"] or counts["skipped"]:
-    print(f"\n  point the benchmark at the download by setting, in configs/paths.yaml:")
-    print(f"    scores_root: {scores_dir}")
-    print(f"  and pass a checkpoint with --model_path {os.path.join(models_dir, 'xls_r_300m.pth')}")
+    # Only say something if there is something to do. When the download went to
+    # the configured bench_root and scores_root follows it, the benchmark is
+    # already pointed at these files and any instruction here would be noise.
+    if os.path.realpath(dest) != os.path.realpath(bench_dir):
+        print(f"\n  This went to {dest}, which is not the configured bench_root")
+        print(f"  ({bench_dir}). To read it, set in configs/paths.yaml:")
+        print(f"    bench_root: {dest}")
+    elif os.path.realpath(scores_root) != os.path.realpath(scores_dir):
+        print(f"\n  scores_root is set to {scores_root}, so the analyses will NOT")
+        print(f"  read what was just downloaded. Delete that key from")
+        print(f"  configs/paths.yaml to follow bench_root, or set it to:")
+        print(f"    scores_root: {scores_dir}")
+    if what in ("all", "models"):
+        print(f"\n  Checkpoints are in {models_dir}. bin/score.sh takes one through")
+        print(f"  MODEL_PATH; they are not a models_root, which is the training layout.")
 raise SystemExit(1 if counts["failed"] else 0)
 PYEOF
