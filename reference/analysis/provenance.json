@@ -1,10 +1,9 @@
 {
-  "generated": "2026-08-03",
-  "built_from": "spoof_superb_outputs",
+  "generated": "2026-08-13",
+  "built_from": "/tmp/claude-114240904/-home-alhashim-ASD-SUPERB/8d041cb2-7b18-468b-8ad2-3f4dace39e7b/scratchpad/refsrc",
   "scores_root": "/data/ssl_anti_spoofing/spoof_superb_score_files",
-  "score_layout": "v3",
-  "git_commit": "c4544ea6196f913494ab2eed55480b4a29543eee",
-  "git_describe": "c4544ea-dirty",
+  "git_commit": "816a898cfe7df5fc52abb8209ac638e9744aeb2a",
+  "git_describe": "816a898-dirty",
   "tables": [
     "main_results/main_results_table.csv",
     "degradation/eer_matrix.csv",
@@ -13,5 +12,5 @@
     "tts/eer_by_generation_mode.csv",
     "tts/eer_by_vocoder_family.csv"
   ],
-  "note": "Level-2 reference for IEEE Access submission: v3 score tree, 19 SSL + 2 non-SSL rows."
+  "note": "degradation/ is now the composition- and coverage-matched analysis; the earlier unmatched module was removed."
 }
