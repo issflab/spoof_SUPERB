@@ -13,6 +13,46 @@ python -m spoof_superb.analysis.<name> --help
 Running them by file path (`python spoof_superb/analysis/create_heatmap.py`)
 will fail with `ModuleNotFoundError`.
 
+
+## What each analysis produces
+
+`bin/analyze.sh` runs three analyses; two of them run more than one module,
+because an analysis produces more than one artifact.
+
+| Step | Modules, in order | Output directory |
+|---|---|---|
+| main results | `recompute_main_results` | `main_results/` |
+| acoustic degradation | `acoustic_degradation_matched`, then `create_heatmap_matched`, then `degradation_appendix` | `degradation_matched/` |
+| TTS systems | `tts_systems`, then `create_mlaad_tts_eer_timeline_figure`, then `tts_model_agreement` | `tts/` |
+
+### Degradation: matched only
+
+`spoof_superb.analysis.acoustic_degradation` is superseded and nothing runs it.
+It substituted degraded partitions without holding the corpus mixture fixed, so
+its numbers mix the effect of the degradation with the change in mixture --
+re-mixing the clean partitions in the same proportions moves the pooled EER by
+-18% to -44% on its own. The matched analysis holds composition fixed, degrades
+one corpus per cell, and reports nine cells instead of five conditions. Section
+4.4.2 reports that one. The old module is kept only so its numbers can be
+regenerated for comparison.
+
+### The appendix tables come in two forms
+
+`degradation_appendix` writes each table twice:
+
+```
+tab_degradation_cells.tex     tab_degradation_cells.csv
+tab_degradation_spread.tex    tab_degradation_spread.csv
+tab_degradation_variants.tex  tab_degradation_variants.csv
+```
+
+The `.tex` fragments are pasted into the manuscript; the `.csv` files carry the
+same numbers with no markup, for reading, diffing and loading. Neither is
+derived from the other: both are written from the same computed values.
+`tab_degradation_variants.csv` is long-form -- one row per variant -- so it can
+be filtered and joined, while the `.tex` is the wide layout the page needs.
+
+
 ## Which tree a script reads
 
 Every script that reads RAW score files takes `--scores_root` and resolves

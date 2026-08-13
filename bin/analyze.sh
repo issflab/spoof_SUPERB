@@ -7,6 +7,11 @@
 #   3. TTS systems           Sections 4.4.3/3.2.3 (builds its view first)
 #   4. verification, level 2  -- a SEPARATE step, see VERIFY below
 #
+# Steps 2 and 3 each run more than one module, because each analysis produces
+# more than one artifact: degradation writes the matrices, then the two
+# heatmaps, then the appendix tables; TTS writes the per-system tables, then
+# the timeline figure, then the model-agreement decomposition.
+#
 # Only the last two build views. Main results reads the raw tree directly, so
 # there is nothing to group it by.
 #
@@ -23,6 +28,8 @@ source "$(dirname "${BASH_SOURCE[0]}")/_common.sh"
 
 # Which analyses to run:  all | main | degradation | tts
 # Space-separated for a subset, e.g. WHICH="degradation tts".
+#
+# "degradation" runs the matched analysis and writes degradation_matched/.
 WHICH="all"
 
 # Where the tables and figures go. Each analysis writes a sub-directory under
@@ -71,8 +78,9 @@ esac
 TABLE_NAMES=""
 for s in $STEPS; do
     case "$s" in
-        main) TABLE_NAMES="$TABLE_NAMES main_results" ;;
-        *)    TABLE_NAMES="$TABLE_NAMES $s" ;;
+        main)        TABLE_NAMES="$TABLE_NAMES main_results" ;;
+        degradation) TABLE_NAMES="$TABLE_NAMES degradation_matched" ;;
+        *)           TABLE_NAMES="$TABLE_NAMES $s" ;;
     esac
 done
 TABLE_NAMES="${TABLE_NAMES# }"
@@ -119,6 +127,21 @@ run() {
     }
 }
 
+# A follow-on step inside one analysis: it takes its own paths, so it gets no
+# --out_dir and none of the shared flags.
+run_plain() {
+    local label="$1" module="$2"; shift 2
+    echo
+    echo "  --- $label"
+    echo "  + python -m $module $*"
+    "$PY" -m "$module" "$@" || {
+        local rc=$?
+        echo >&2
+        echo "bin/analyze.sh: $label FAILED (exit $rc)." >&2
+        exit "$rc"
+    }
+}
+
 for s in $STEPS; do
     case "$s" in
       main)
@@ -126,14 +149,33 @@ for s in $STEPS; do
             spoof_superb.analysis.recompute_main_results main_results
         ;;
       degradation)
-        run "2/3  acoustic degradation (Section 4.4.2)" \
-            spoof_superb.analysis.acoustic_degradation degradation \
-            "${VIEW_ARGS[@]}"
+        # The composition- and coverage-matched analysis. The earlier
+        # spoof_superb.analysis.acoustic_degradation is superseded: it
+        # substituted degraded partitions without holding the corpus mixture
+        # fixed, so its numbers mix the effect of the degradation with the
+        # change in mixture. Section 4.4.2 reports this one.
+        run "2/3  acoustic degradation, matched (Section 4.4.2)" \
+            spoof_superb.analysis.acoustic_degradation_matched degradation_matched
+        DEG_DIR="${OUT_ROOT:+$OUT_ROOT/}degradation_matched"
+        [ -n "$OUT_ROOT" ] || DEG_DIR="$ANALYSIS_DIR/degradation_matched"
+        run_plain "     heatmaps (Figures 1 and 2)" \
+            spoof_superb.analysis.create_heatmap_matched --in_dir "$DEG_DIR"
+        run_plain "     appendix tables (Supplementary S1-S3)" \
+            spoof_superb.analysis.degradation_appendix --in_dir "$DEG_DIR"
         ;;
       tts)
         run "3/3  TTS systems (Sections 4.4.3 / 3.2.3)" \
             spoof_superb.analysis.tts_systems tts \
             "${VIEW_ARGS[@]}"
+        TTS_DIR="${OUT_ROOT:+$OUT_ROOT/}tts"
+        [ -n "$OUT_ROOT" ] || TTS_DIR="$ANALYSIS_DIR/tts"
+        if [ "$FIGURES" = "yes" ]; then
+            run_plain "     detection difficulty against introduction date (Figure 5)" \
+                spoof_superb.analysis.create_mlaad_tts_eer_timeline_figure \
+                --eer_csv "$TTS_DIR/eer_by_tts_system.csv" --out_dir "$TTS_DIR"
+        fi
+        run_plain "     model agreement and variance decomposition (Section 5.3)" \
+            spoof_superb.analysis.tts_model_agreement --in_dir "$TTS_DIR" --out_dir "$TTS_DIR"
         ;;
     esac
 done

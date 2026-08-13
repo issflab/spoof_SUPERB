@@ -301,6 +301,66 @@ def table_variants(per_variant, baselines, out):
     _write(lines, out)
 
 
+# ---------------------------------------------------------------------------
+# CSV twins of the three tables
+#
+# Same numbers, no markup. The .tex fragments go into the paper; these are for
+# reading and for anything downstream that wants the values.
+# ---------------------------------------------------------------------------
+
+def _write_csv(rows, out):
+    with open(out, "w", newline="") as f:
+        csv.writer(f).writerows(rows)
+    print(f"wrote {out}")
+
+
+def csv_composition(out):
+    rows = [["condition", "corpus", "n_variants", "variants"]]
+    for cell, (cond, corpus) in NAMES.items():
+        rows.append([cond, corpus, len(VARIANT_ORDER[cell]), DESCRIPTION[cell]])
+    _write_csv(rows, out)
+
+
+def csv_spread(spread, out):
+    """One row per model, mean and sd kept in separate columns."""
+    by = {}
+    for r in spread:
+        by.setdefault(r["Model"], {})[r["column"]] = r
+    cols = list(NAMES)
+    header = ["model"]
+    for c in cols:
+        cond, corpus = NAMES[c]
+        label = f"{cond or 'Codec'}:{corpus}".replace(" ", "_")
+        header += [f"{label}_mean", f"{label}_sd", f"{label}_n"]
+    rows = [header]
+    for m in (m for m in paper_table_rows() if m in by):
+        row = [m]
+        for c in cols:
+            r = by[m][c]
+            row += [f"{float(r['mean']):.3f}", f"{float(r['sd']):.3f}", r["n"]]
+        rows.append(row)
+    _write_csv(rows, out)
+
+
+def csv_variants(per_variant, baselines, out):
+    """Long form: one row per variant, so it can be filtered and joined."""
+    dee = {}
+    for r in per_variant:
+        b = baselines[r["Model"]]
+        dee.setdefault(r["column"], {}).setdefault(r["variant"], []).append(
+            (float(r["EER"]) - b) / b * 100.0)
+    rows = [["condition", "corpus", "cell", "variant", "variant_label",
+             "delta_eer_percent", "n_models"]]
+    for cell, (cond, corpus) in NAMES.items():
+        for v in VARIANT_ORDER[cell]:
+            vals = dee.get(cell, {}).get(v)
+            if not vals:
+                continue
+            rows.append([cond, corpus, cell, v, VARIANT_LABEL.get(v, v),
+                         f"{float(np.mean(vals)):+.3f}", len(vals)])
+    _write_csv(rows, out)
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(
         prog="python -m spoof_superb.analysis.degradation_appendix",
@@ -329,6 +389,13 @@ def main(argv=None):
     table_composition(d / "tab_degradation_cells.tex")
     table_spread(spread, d / "tab_degradation_spread.tex")
     table_variants(per_variant, baselines, d / "tab_degradation_variants.tex")
+
+    # The .tex fragments are pasted into the manuscript; these carry the same
+    # numbers in a form you can open, diff and load. Neither is derived from
+    # the other -- both are written from the same computed values.
+    csv_composition(d / "tab_degradation_cells.csv")
+    csv_spread(spread, d / "tab_degradation_spread.csv")
+    csv_variants(per_variant, baselines, d / "tab_degradation_variants.csv")
     return 0
 
 

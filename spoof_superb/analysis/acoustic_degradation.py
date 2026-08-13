@@ -1,4 +1,24 @@
-"""Acoustic degradation analysis (Section 4.4.2, tab:acoustic_degradation).
+"""Acoustic degradation analysis -- SUPERSEDED, kept for reference.
+
+    Use `spoof_superb.analysis.acoustic_degradation_matched` instead.
+    `bin/analyze.sh` runs that one; nothing runs this.
+
+This version substitutes degraded partitions into the pool without holding the
+corpus mixture fixed. Because the corpora differ widely in difficulty and in how
+much degraded material each contributes -- ASVLD carries fifteen noise settings
+per utterance while the others contribute one copy each -- the pool's
+composition changes along with the degradation, and the reported change mixes
+the two. Re-mixing the CLEAN partitions in those same proportions, with no
+degradation applied at all, moves the pooled EER by -18% to -44%.
+
+The matched analysis fixes the composition, degrades exactly one corpus per
+cell, and reports nine cells rather than five conditions. Section 4.4.2 of the
+paper reports that one. This module is retained so the earlier numbers can
+still be regenerated and compared, not because it should be used.
+
+Original documentation follows.
+
+Acoustic degradation analysis (Section 4.4.2, tab:acoustic_degradation).
 
 Builds the `acoustic_degradation` view and reports over it, in one command:
 
