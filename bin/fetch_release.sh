@@ -74,12 +74,14 @@ MANIFEST="$REPO/reference/manifest.json"
 [ -f "$MANIFEST" ] || { echo "no manifest at $MANIFEST" >&2; exit 2; }
 
 exec "$PY" - "$MANIFEST" "$DEST" "$WHAT" "$DATASET" "$MODEL" "$FORCE" \
-             "$SCORES_REPO" "$MODELS_REPO" "$BENCH_DIR" "$SCORES_ROOT" "$@" <<'PYEOF'
+             "$SCORES_REPO" "$MODELS_REPO" "$BENCH_DIR" "$SCORES_ROOT" \
+             "$LINEAR_HEAD_PREFIX" "$@" <<'PYEOF'
 import hashlib, json, os, sys, urllib.request, urllib.error
 
 (manifest_path, dest, what, want_ds, want_model, force,
- scores_repo, models_repo, bench_dir, scores_root) = sys.argv[1:11]
-flags = sys.argv[11:]
+ scores_repo, models_repo, bench_dir, scores_root,
+ linear_head_prefix) = sys.argv[1:12]
+flags = sys.argv[12:]
 listing = "--list" in flags
 
 scores_dir = os.path.join(dest, "scores")
@@ -143,6 +145,29 @@ def score_entries():
 
 
 # ------------------------------------------------------------- the checkpoints
+#: The published repository is laid out for a human reading it: one flat
+#: `{slug}.pth` per model. The repo expects the training layout instead --
+#: `{prefix}{slug}/swa.pth`, and the baselines under their run directories --
+#: and that is what `discover_linear_heads()` scans for and what the GMM
+#: back-end opens. Rather than teach three call sites a second layout, the
+#: files are put down here in the shape everything downstream already reads.
+_BASELINE_DIR = "baselines"
+_AASIST_RUN = "model_weighted_CCE_50_64_aasist_raw_ASV19_none"
+
+
+def local_path(published):
+    """Where a published checkpoint goes on disk."""
+    if published.startswith("non_ssl/lfcc_gmm/gmm_"):
+        cls = published.rsplit("gmm_", 1)[1].removesuffix(".pkl")   # bonafide | spoof
+        return os.path.join(_BASELINE_DIR, "lfcc_gmm", cls, "gmm_final.pkl")
+    if published.startswith("non_ssl/aasist_raw"):
+        return os.path.join(_BASELINE_DIR, _AASIST_RUN, "swa.pth")
+    if published.endswith(".pth") and "/" not in published:
+        slug = published.removesuffix(".pth")
+        return os.path.join(f"{linear_head_prefix}{slug}", "swa.pth")
+    return published          # README.md, SHA256SUMS and anything unrecognised
+
+
 def model_entries():
     """Every checkpoint, read from the SHA256SUMS published beside them."""
     url = resolve(models_repo, "SHA256SUMS")
@@ -158,7 +183,7 @@ def model_entries():
         sha, _, path = line.partition("  ")
         path = path.strip().lstrip("./")
         if path and path != "SHA256SUMS":
-            yield sha.strip(), path
+            yield sha.strip(), path, local_path(path)
 
 
 # --------------------------------------------------------------------- listing
@@ -171,8 +196,9 @@ if listing:
             print(f"  {group:22s} {model:34s} {e.get('bytes', 0)/1e6:8.1f} MB  {e['path']}")
     if what in ("all", "models"):
         print("models/")
-        for sha, path in model_entries():
-            print(f"  {path}")
+        for sha, path, local in model_entries():
+            arrow = f"  ->  {local}" if local != path else ""
+            print(f"  {path}{arrow}")
     print(f"\n  {total/1e6:.1f} MB of score files"
           f"{' (checkpoints are ~19 MB in total)' if what in ('all','models') else ''}")
     print(f"  destination: {dest}")
@@ -193,8 +219,8 @@ if what in ("all", "scores"):
 
 if what in ("all", "models"):
     print(f"models -> {models_dir}")
-    for sha, path in model_entries():
-        target = os.path.join(models_dir, path)
+    for sha, path, local in model_entries():
+        target = os.path.join(models_dir, local)
         if force != "yes" and os.path.isfile(target) and digest(target) == sha:
             counts["skipped"] += 1
             continue
@@ -217,7 +243,10 @@ if counts["ok"] or counts["skipped"]:
         print(f"  configs/paths.yaml to follow bench_root, or set it to:")
         print(f"    scores_root: {scores_dir}")
     if what in ("all", "models"):
-        print(f"\n  Checkpoints are in {models_dir}. bin/score.sh takes one through")
-        print(f"  MODEL_PATH; they are not a models_root, which is the training layout.")
+        print(f"\n  Checkpoints are in {models_dir}, laid out as the repo expects:")
+        print(f"    {linear_head_prefix}{{ssl_model}}/swa.pth")
+        print(f"    {_BASELINE_DIR}/  aasist_raw and lfcc_gmm")
+        print(f"  So models_root can point straight at it and bin/orchestrate.sh")
+        print(f"  will discover them.")
 raise SystemExit(1 if counts["failed"] else 0)
 PYEOF

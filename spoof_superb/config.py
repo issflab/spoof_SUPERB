@@ -105,8 +105,13 @@ class Config:
     # blank -- makes it follow the benchmark root rather than falling back to
     # a path that only exists on the machine this was developed on.
     scores_root: str = ''
-    models_root: str = '/data/ssl_anti_spoofing/asd_superb_models/linear_head_models'
-    baseline_models_root: str = '/data/ssl_anti_spoofing/asd_superb_models/baselines'
+    # Empty means {bench_root}/models and {bench_root}/models/baselines.
+    # bin/fetch_release.sh writes the downloaded checkpoints in exactly this
+    # layout -- one directory per model holding swa.pth -- so a fetched set is
+    # usable for scoring and orchestration with no further configuration. Point
+    # these at your own training output instead when you have trained models.
+    models_root: str = ''
+    baseline_models_root: str = ''
     save_dir: str = '/data/ssl_anti_spoofing/asd_superb/'
 
     # Where the analyses write their CSVs and figures, and where verification
@@ -170,6 +175,16 @@ class Config:
         of one directory per model containing ``swa.pth``.
         """
         return os.path.join(self.bench_dir, 'models')
+
+    @property
+    def models_dir(self) -> str:
+        """Checkpoint root. Follows bench_root unless set explicitly."""
+        return self.models_root or self.bench_models_dir
+
+    @property
+    def baselines_dir(self) -> str:
+        """aasist_raw and lfcc_gmm checkpoints."""
+        return self.baseline_models_root or os.path.join(self.bench_models_dir, 'baselines')
 
     @property
     def analysis_dir(self) -> str:
@@ -270,6 +285,10 @@ def load() -> Config:
     # which keeps every existing config working unchanged.
     if not config.scores_root:
         config.scores_root = config.bench_scores_dir
+    if not config.models_root:
+        config.models_root = config.bench_models_dir
+    if not config.baseline_models_root:
+        config.baseline_models_root = config.baselines_dir
 
     return config
 

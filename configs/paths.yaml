@@ -25,7 +25,7 @@ data_root: /data/Data
 # lives under here:
 #
 #     {bench_root}/scores/         raw/  views/  _runs/        <- scores_root
-#     {bench_root}/models/         the published checkpoints
+#     {bench_root}/models/         checkpoints, in the training layout
 #     {bench_root}/analysis/       main_results/ degradation/ tts/ ...
 #     {bench_root}/verification/   analysis/  scores/
 #
@@ -38,7 +38,7 @@ data_root: /data/Data
 # value always wins.
 #
 # Leave empty to use the repo's own bench/ directory.
-bench_root: /data/ssl_anti_spoofing/release
+bench_root: /data/ssl_anti_spoofing/spoof_superb_bench
 
 # --- where score files are read from and written to -------------------------
 # Reproducing the published tables reads from here.
@@ -82,7 +82,7 @@ dev_protocol: ASVspoof2019.LA.cm.dev.trl.txt
 
 # Where the analyses write, and where verification writes. Both follow
 # bench_root when left empty. Set either to send that output elsewhere.
-analysis_root: ./spoof_superb_test_outputs
+# analysis_root: ./spoof_superb_test_outputs
 #verification_root:
 
 # The SSL model whose published score file defines a dataset's trial list.

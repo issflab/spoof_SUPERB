@@ -41,12 +41,25 @@ still match `reference/`?* -- and someone looking for that answer should not
 have to know it lives inside the analysis output. It used to be written to
 `{outputs_root}/verification/`.
 
-### Why models_root does not follow bench_root
+### Checkpoints: published layout vs on-disk layout
 
-`models_root` means the training layout: one directory per model, each holding
-`swa.pth`. The downloaded checkpoints are flat `{slug}.pth` files. Different
-shapes, so different settings -- pass a downloaded checkpoint to `bin/score.sh`
-through `MODEL_PATH`.
+The published repository is laid out for a human reading it, one flat
+`{slug}.pth` per model. The repo expects the training layout instead:
+
+```
+{models_root}/{linear_head_prefix}{ssl_model}/swa.pth
+{baseline_models_root}/model_weighted_CCE_50_64_aasist_raw_ASV19_none/swa.pth
+{baseline_models_root}/lfcc_gmm/{bonafide,spoof}/gmm_final.pkl
+```
+
+`bin/fetch_release.sh` writes the second shape, so a fetched set works with
+`bin/score.sh` and `bin/orchestrate.sh` unchanged -- `discover_linear_heads()`
+finds all 19, and the GMM back-end finds its two mixtures. `--list` shows the
+mapping.
+
+`models_root` and `baseline_models_root` therefore follow `bench_root` like
+everything else. Set them explicitly when you have trained your own models and
+want to score those instead.
 
 ### Former names
 

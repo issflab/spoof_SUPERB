@@ -179,3 +179,27 @@ def test_former_key_names_still_work(tmp_path, monkeypatch):
     c = config_module.load()
     assert c.bench_root == "/data/old"
     assert c.analysis_dir == "/data/old_outputs"
+
+
+def test_model_roots_follow_the_bench_root(tmp_path, monkeypatch):
+    """A fetched checkpoint set must be usable without wiring models_root by
+    hand -- bin/fetch_release.sh writes the training layout under it."""
+    import spoof_superb.config as config_module
+    f = tmp_path / "paths.yaml"
+    f.write_text("bench_root: /data/bench\n")
+    monkeypatch.setenv("SPOOF_SUPERB_CONFIG", str(f))
+    for v in ("SPOOF_SUPERB_MODELS_ROOT", "SPOOF_SUPERB_BASELINE_MODELS_ROOT"):
+        monkeypatch.delenv(v, raising=False)
+    c = config_module.load()
+    assert c.models_root == "/data/bench/models"
+    assert c.baseline_models_root == "/data/bench/models/baselines"
+
+
+def test_explicit_models_root_is_not_overridden(tmp_path, monkeypatch):
+    """Training output must not be redirected at the download."""
+    import spoof_superb.config as config_module
+    f = tmp_path / "paths.yaml"
+    f.write_text("bench_root: /data/bench\nmodels_root: /data/my_training_run\n")
+    monkeypatch.setenv("SPOOF_SUPERB_CONFIG", str(f))
+    monkeypatch.delenv("SPOOF_SUPERB_MODELS_ROOT", raising=False)
+    assert config_module.load().models_root == "/data/my_training_run"
